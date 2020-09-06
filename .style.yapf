@@ -1,3 +1,47 @@
 [style]
+
+blank_line_before_nested_class_or_def = True
+# class IsLikeATitle:
+#
+#     def add_a_new_line_to_highlight_it():
+#         pass
+#
+#     def and_also_gives_consistency_in_new_line_before_def():
+#         pass
+#
+
 based_on_style = pep8
+# Default Python3 style.
+
+coalesce_brackets = True
+# allow_consecutive_brackets([
+#     to_save_both_horizontal_and_vertical_spaces,
+#     especially_in_edge_cases_with_lots_of_brackets,
+#     when_each_bracket_would_indent_one_level,
+# ])
+
 column_limit = 73
+# Personal preference.
+
+dedent_closing_brackets = True
+# this_function(
+#     closes_bracket,
+#     with_this_function_indent_level,
+#     rather_than_argument_indent_level,
+# )
+# 'so we can tell what the bracket is closing'
+
+indent_dictionary_value = True
+# {
+#     'if dictionary key and value does not fit on the same line':
+#         'and if value is allowed to go on a second line,'
+#         'then indent the value after the line break.',
+#     'this lets the reader know visually': 'where the value is',
+# }
+
+split_arguments_when_comma_terminated = True
+# one_line_per_argument(
+#     if_there_are_multiple,
+#     and_ends_with_a_comma,
+# )
+# 'Allows for override, when one line per item is preferred.'
