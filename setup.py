@@ -13,6 +13,9 @@ setup(
     entry_points={'console_scripts': [
         'phile = phile.__main__:main',
     ]},
+    extras_require={
+        'dev': ['mypy', 'tox', 'yapf'],
+    },
     # Requires Python 3.6 because Python is dropping support
     # for version 3.5 after September 2020 (as for 2020-09-05).
     # Reference: https://www.python.org/dev/peps/pep-0478/
