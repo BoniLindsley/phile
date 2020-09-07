@@ -11,6 +11,7 @@ class TestMain(unittest.TestCase):
     """
     Unit test for :func:`main`.
     """
+
     def __init__(self, *args, **kwargs):
         """
         """

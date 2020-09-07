@@ -10,9 +10,7 @@ setup(
     author_email='boni.lindsley@gmail.com',
     packages=['phile'],
     license='MIT',
-    entry_points={'console_scripts': [
-        'phile = phile.__main__:main',
-    ]},
+    entry_points={'console_scripts': ['phile = phile.__main__:main', ]},
     extras_require={
         'dev': ['coverage', 'mypy', 'tox', 'yapf'],
     },
