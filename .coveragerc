@@ -1,0 +1,7 @@
+[run]
+branch = True
+command_line = -m unittest discover test_phile
+source = phile
+
+[report]
+fail_under = 100
