@@ -28,21 +28,22 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         content: str
     ):
         super().__init__()
-        self._is_read = False
         content_widget = QTextEdit()
-        content_widget.setPlainText(content)
         content_widget.setReadOnly(True)
         self.setWidget(content_widget)
         # Set the size now so that parent QMdiArea
         # can use it to position sub-windows in resize events.
         self.adjustSize()
-        self.mark_as_read(self._is_read)
         # By default, clicking the close window button hides it.
         # This makes sure it gets "closed" properly.
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setWindowTitle(
-            name + '--' + creation_datetime.strftime('%c')
-        )
+        # Create variables for storing properties,
+        # so that setups, such as window title modification, can use it.
+        self._creation_datetime = creation_datetime
+        # Remember remaining given properties.
+        self.content = content
+        self.is_read = False
+        self.name = name
 
     def closeEvent(self, close_event: QCloseEvent):
         _logger.debug('Sub-window closed.')
@@ -55,6 +56,23 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         self.hide()
         super().closeEvent(close_event)
 
+    @property
+    def content(self) -> str:
+        return self.widget().toPlainText()
+
+    @content.setter
+    def content(self, new_content: str) -> None:
+        self.widget().setPlainText(new_content)
+
+    @property
+    def creation_datetime(self) -> datetime.datetime:
+        return self._creation_datetime
+
+    @creation_datetime.setter
+    def creation_datetime(self, new_create_datetime) -> None:
+        self._creation_datetime = new_create_datetime
+        self.refresh_window_title()
+
     def hideEvent(self, hide_event: QHideEvent):
         # When a sub-window is hidden, a re-tile is necessary
         # to fill any gaps left by the hidden widget.
@@ -64,21 +82,42 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         self.hidden.emit()  # type: ignore
         super().hideEvent(hide_event)
 
-    def is_marked_as_read(self) -> bool:
-        return self._is_read
+    @property
+    def is_read(self) -> bool:
+        content_widget = self.widget()
+        content_palette = content_widget.palette()
+        text_color = content_palette.color(QPalette.Text)
+        disabled_text_color = content_palette.color(
+            QPalette.Disabled, QPalette.WindowText
+        )
+        return text_color == disabled_text_color
 
-    def mark_as_read(self, is_read: bool):
-        self._is_read = is_read
+    @is_read.setter
+    def is_read(self, new_is_read: bool) -> None:
         content_widget = self.widget()
         content_palette = content_widget.palette()
         base_color = content_palette.color(QPalette.Window)
         text_color = content_palette.color(
-            QPalette.Disabled if is_read else QPalette.Active,
+            QPalette.Disabled if new_is_read else QPalette.Active,
             QPalette.WindowText
         )
         content_palette.setColor(QPalette.Text, text_color)
         content_palette.setColor(QPalette.Base, base_color)
         content_widget.setPalette(content_palette)
+
+    @property
+    def name(self) -> str:
+        return self.widget().documentTitle()
+
+    @name.setter
+    def name(self, new_name: str) -> None:
+        self.widget().setDocumentTitle(new_name)
+        self.refresh_window_title()
+
+    def refresh_window_title(self) -> None:
+        self.setWindowTitle(
+            self.name + '--' + self.creation_datetime.strftime('%c')
+        )
 
     def showEvent(self, show_event: QShowEvent):
         # Showing a widget typically also activates it by default.

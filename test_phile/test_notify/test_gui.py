@@ -46,21 +46,24 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         would interfere with each other.
         """
         self.app = QTestApplication()
+        self.content = 'You have 123 friends.\n'
+        'You have 456 unread messages.\n'
+        'New security settings has been added.\n'
+        'Log in to review them.',
+        self.creation_datetime = datetime.datetime(
+            year=2000,
+            month=11,
+            day=2,
+            hour=10,
+            minute=3,
+            second=58,
+            microsecond=4,
+        )
+        self.name = 'VaceBook'
         self.notification_sub_window = NotificationMdiSubWindow(
-            name='VaceBook',
-            creation_datetime=datetime.datetime(
-                year=2000,
-                month=11,
-                day=2,
-                hour=10,
-                minute=3,
-                second=58,
-                microsecond=4,
-            ),
-            content='You have 123 friends.\n'
-            'You have 456 unread messages.\n'
-            'New security settings has been added.\n'
-            'Log in to review them.',
+            content=self.content,
+            creation_datetime=self.creation_datetime,
+            name=self.name,
         )
 
     def tearDown(self) -> None:
@@ -77,23 +80,50 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         """Create a NotificationMdiSubWindow object."""
         # The object is created in `setUp`.
         # This tests flags up whether the constructor itself fails.
-
+        notification_sub_window = self.notification_sub_window
+        # Check the parameters given in the constructor.
+        self.assertEqual(notification_sub_window.content, self.content)
+        self.assertEqual(
+            notification_sub_window.creation_datetime,
+            self.creation_datetime
+        )
+        self.assertEqual(notification_sub_window.name, self.name)
         # It should not be marked as read by default.
-        self.assertTrue(
-            not self.notification_sub_window.is_marked_as_read()
+        self.assertTrue(not notification_sub_window.is_read)
+
+    def test_content(self) -> None:
+        """Check that content set requests are processed."""
+        notification_sub_window = self.notification_sub_window
+        new_content = 'This is not content.'
+        notification_sub_window.content = new_content
+        self.assertEqual(notification_sub_window.content, new_content)
+
+    def test_creation_datetime(self) -> None:
+        """Check that creation datetime set requests are processed."""
+        notification_sub_window = self.notification_sub_window
+        new_creation_datetime = datetime.datetime(
+            year=1999, month=9, day=9
+        )
+        notification_sub_window.creation_datetime = new_creation_datetime
+        self.assertEqual(
+            notification_sub_window.creation_datetime,
+            new_creation_datetime
         )
 
-    def test_mark_as_read(self) -> None:
-        """Check that mark as read request is processed."""
-        self.assertTrue(
-            not self.notification_sub_window.is_marked_as_read()
-        )
-        self.notification_sub_window.mark_as_read(True)
-        self.assertTrue(self.notification_sub_window.is_marked_as_read())
-        self.notification_sub_window.mark_as_read(False)
-        self.assertTrue(
-            not self.notification_sub_window.is_marked_as_read()
-        )
+    def test_is_read(self) -> None:
+        """Check that mark as read requests are processed."""
+        notification_sub_window = self.notification_sub_window
+        notification_sub_window.is_read = True
+        self.assertTrue(notification_sub_window.is_read)
+        notification_sub_window.is_read = False
+        self.assertTrue(not notification_sub_window.is_read)
+
+    def test_name(self) -> None:
+        """Check that content path set requests are processed."""
+        notification_sub_window = self.notification_sub_window
+        new_name = 'What title?'
+        notification_sub_window.name = new_name
+        self.assertEqual(notification_sub_window.name, new_name)
 
 
 class TestNotificationMdi(unittest.TestCase):
