@@ -158,6 +158,7 @@ class TestNotificationMdi(unittest.TestCase):
         Any previous instances must be shutdown
         before a new one can be created.
         """
+        self.notification_mdi.deleteLater()
         self.app.tear_down()
 
     def test_initialisation(self) -> None:
