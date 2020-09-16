@@ -110,6 +110,12 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
             new_creation_datetime
         )
 
+    def test_event_handling_without_parent_mdi(self) -> None:
+        """Check that basic events are processed without issues."""
+        notification_sub_window = self.notification_sub_window
+        notification_sub_window.showMaximized()
+        notification_sub_window.hide()
+
     def test_is_read(self) -> None:
         """Check that mark as read requests are processed."""
         notification_sub_window = self.notification_sub_window
