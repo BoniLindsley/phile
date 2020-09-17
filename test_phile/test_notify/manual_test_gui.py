@@ -32,60 +32,44 @@ def main(argv) -> int:  # pragma: no cover
     notification_mdi.show()
 
     _logger.debug('Adding sub-window 1.')
-    sub_window = notification_mdi.addSubWindow(
-        NotificationMdiSubWindow(
-            name='Skip',
-            creation_datetime=datetime.datetime(
-                year=2003, month=8, day=29
-            ),
-            content='What is MSN messenger? Lync?'
-            ' Or rather, what is Linux? Actually what is Firefox?'
-        )
+    sub_window = notification_mdi.add_notification(
+        name='Skip',
+        creation_datetime=datetime.datetime(year=2003, month=8, day=29),
+        content='What is MSN messenger? Lync?'
+        ' Or rather, what is Linux? Actually what is Firefox?'
     )
     _logger.debug('Showing sub-window 1.')
     sub_window.show()
 
     _logger.debug('Adding sub-window 2.')
-    sub_window = notification_mdi.addSubWindow(
-        NotificationMdiSubWindow(
-            name='VaseBroke',
-            creation_datetime=datetime.datetime(
-                year=2004, month=2, day=4
-            ),
-            content='You have 0 unread message(s).\n'
-            'You have 1 friend(s). Probably.\n'
-            'New ad, I mean, security settings had been added.\n'
-            'Log in to review them.',
-        )
+    sub_window = notification_mdi.add_notification(
+        name='VaseBroke',
+        creation_datetime=datetime.datetime(year=2004, month=2, day=4),
+        content='You have 0 unread message(s).\n'
+        'You have 1 friend(s). Probably.\n'
+        'New ad, I mean, security settings had been added.\n'
+        'Log in to review them.',
     )
     _logger.debug('Showing sub-window 2.')
     sub_window.show()
 
     _logger.debug('Adding sub-window 3.')
-    sub_window = notification_mdi.addSubWindow(
-        NotificationMdiSubWindow(
-            name='VeCat',
-            creation_datetime=datetime.datetime(
-                year=2011, month=1, day=21
-            ),
-            content='We have everything!\n'
-            'VeBlank, VeEat, VeLive and VeMon!\n'
-            'And, we are banned.'
-        )
+    sub_window = notification_mdi.add_notification(
+        name='VeCat',
+        creation_datetime=datetime.datetime(year=2011, month=1, day=21),
+        content='We have everything!\n'
+        'VeBlank, VeEat, VeLive and VeMon!\n'
+        'And, we are banned.'
     )
     _logger.debug('Showing sub-window 3.')
     sub_window.show()
 
     _logger.debug('Adding sub-window 4.')
-    sub_window = notification_mdi.addSubWindow(
-        NotificationMdiSubWindow(
-            name='MissChord',
-            creation_datetime=datetime.datetime(
-                year=2015, month=5, day=13
-            ),
-            content='Skype? Is this 2005?\n'
-            'Trying to be Steam? I do not know what you mean.'
-        )
+    sub_window = notification_mdi.add_notification(
+        name='MissChord',
+        creation_datetime=datetime.datetime(year=2015, month=5, day=13),
+        content='Skype? Is this 2005?\n'
+        'Trying to be Steam? I do not know what you mean.'
     )
     _logger.debug('Showing sub-window 4.')
     sub_window.show()

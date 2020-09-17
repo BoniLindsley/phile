@@ -177,21 +177,19 @@ class TestNotificationMdi(unittest.TestCase):
         notification_mdi = self.notification_mdi
 
         _logger.debug('Creating sub-window 1.')
-        notification_sub_window = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                    hour=11,
-                    minute=4,
-                    second=59,
-                    microsecond=5,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+                hour=11,
+                minute=4,
+                second=59,
+                microsecond=5,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 1)
 
@@ -228,21 +226,19 @@ class TestNotificationMdi(unittest.TestCase):
         notification_mdi = self.notification_mdi
 
         _logger.debug('Creating sub-window 1.')
-        notification_sub_window = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                    hour=11,
-                    minute=4,
-                    second=59,
-                    microsecond=5,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+                hour=11,
+                minute=4,
+                second=59,
+                microsecond=5,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 1)
 
@@ -266,17 +262,15 @@ class TestNotificationMdi(unittest.TestCase):
         # Adding another sub-window should trigger a re-tile
         # and move the first sub-window back to the top left.
         _logger.debug('Creating sub-window 2.')
-        notification_sub_window_2 = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window_2 = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 2)
         _logger.debug('Showing sub-window 2.')
@@ -301,34 +295,30 @@ class TestNotificationMdi(unittest.TestCase):
         notification_mdi = self.notification_mdi
 
         _logger.debug('Creating sub-window 1.')
-        notification_sub_window = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                    hour=11,
-                    minute=4,
-                    second=59,
-                    microsecond=5,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+                hour=11,
+                minute=4,
+                second=59,
+                microsecond=5,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         _logger.debug('Creating sub-window 2.')
-        notification_sub_window_2 = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window_2 = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 2)
 
@@ -360,37 +350,33 @@ class TestNotificationMdi(unittest.TestCase):
     def test_maximise_and_minimise_sub_window(self) -> None:
         """Maximising and minimising a sub-window should re-tile."""
         notification_mdi = self.notification_mdi
-        notification_sub_window = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                    hour=11,
-                    minute=4,
-                    second=59,
-                    microsecond=5,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+                hour=11,
+                minute=4,
+                second=59,
+                microsecond=5,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 1)
 
         # Create a second window to check that it will later get re-tiled
         # when the first one will be maximised.
-        notification_sub_window_2 = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window_2 = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 2)
 
@@ -430,21 +416,19 @@ class TestNotificationMdi(unittest.TestCase):
     def test_resizeEvent(self) -> None:
         """Resizing should retile sub-windows."""
         notification_mdi = self.notification_mdi
-        notification_sub_window = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='WatZap',
-                creation_datetime=datetime.datetime(
-                    year=2001,
-                    month=12,
-                    day=3,
-                    hour=11,
-                    minute=4,
-                    second=59,
-                    microsecond=5,
-                ),
-                content='You have 234 friends.\n'
-                'You have 5678 messages.'
-            )
+        notification_sub_window = notification_mdi.add_notification(
+            name='WatZap',
+            creation_datetime=datetime.datetime(
+                year=2001,
+                month=12,
+                day=3,
+                hour=11,
+                minute=4,
+                second=59,
+                microsecond=5,
+            ),
+            content='You have 234 friends.\n'
+            'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 1)
 
@@ -478,16 +462,14 @@ class TestNotificationMdi(unittest.TestCase):
         _logger.debug('Changing the MDI to tabbed view.')
         notification_mdi.setViewMode(QMdiArea.TabbedView)
         _logger.debug('Creating sub-window.')
-        notification_sub_window = notification_mdi.addSubWindow(
-            NotificationMdiSubWindow(
-                name='VeeCat',
-                creation_datetime=datetime.datetime(
-                    year=2002,
-                    month=1,
-                    day=5,
-                ),
-                content='You have 1 friend(s).\n'
-            )
+        notification_sub_window = notification_mdi.add_notification(
+            name='VeeCat',
+            creation_datetime=datetime.datetime(
+                year=2002,
+                month=1,
+                day=5,
+            ),
+            content='You have 1 friend(s).\n'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 1)
 

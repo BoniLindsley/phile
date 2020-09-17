@@ -154,12 +154,14 @@ class NotificationMdi(QMdiArea):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-    def addSubWindow(self, *args, **kwargs) -> QMdiSubWindow:
+    def add_notification(self, *args, **kwargs) -> QMdiSubWindow:
         _logger.debug(
-            'Adding sub-window. Total will be %s.',
+            'Adding notification sub-window. Total will be %s.',
             len(self.subWindowList()) + 1
         )
-        return super().addSubWindow(*args, **kwargs)
+        return super().addSubWindow(
+            NotificationMdiSubWindow(*args, **kwargs)
+        )
 
     def resizeEvent(self, resize_event: QResizeEvent):
         _logger.debug('Resized: default handling.')
