@@ -6,6 +6,7 @@ import logging
 
 # External dependencies.
 from PySide2.QtCore import QEvent, Qt
+from PySide2.QtCore import Signal  # type: ignore
 from PySide2.QtGui import (
     QCloseEvent, QHideEvent, QResizeEvent, QShowEvent, QPalette
 )
@@ -18,6 +19,9 @@ _logger = logging.getLogger(
 
 
 class NotificationMdiSubWindow(QMdiSubWindow):
+
+    closed = Signal(str)
+    """Emitted when the sub-window is closed."""
 
     def __init__(
         self, *, name: str, creation_datetime: datetime.datetime,
@@ -61,6 +65,10 @@ class NotificationMdiSubWindow(QMdiSubWindow):
             return
         _logger.debug('Sub-window min-maximized: re-tiling parent.')
         self._retile_parent()
+
+    def closeEvent(self, close_event: QCloseEvent) -> None:
+        """Internal method to handle the sub-window being closed. """
+        self.closed.emit(self.name)  # type: ignore
 
     @property
     def content(self) -> str:

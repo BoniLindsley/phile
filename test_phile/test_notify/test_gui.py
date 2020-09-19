@@ -9,9 +9,10 @@ Test phile.trigger GUI
 import datetime
 import logging
 import unittest
+import unittest.mock
 
 # External dependencies.
-from PySide2.QtCore import QEventLoop, Qt
+from PySide2.QtCore import QEventLoop, QObject, Qt
 from PySide2.QtWidgets import QMdiArea
 
 # Internal packages.
@@ -130,6 +131,17 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         new_name = 'What title?'
         notification_sub_window.name = new_name
         self.assertEqual(notification_sub_window.name, new_name)
+
+    def test_closed_signal(self) -> None:
+        """Check that closing emits a closed signal."""
+        listener = QObject()
+        listener.on_closed_slot = unittest.mock.Mock()
+        self.notification_sub_window.closed.connect(  # type: ignore
+            listener.on_closed_slot
+        )
+        self.notification_sub_window.show()
+        self.notification_sub_window.close()
+        self.assertTrue(listener.on_closed_slot.called)
 
 
 class TestNotificationMdi(unittest.TestCase):
