@@ -10,7 +10,7 @@ setup(
     author_email='boni.lindsley@gmail.com',
     packages=['phile'],
     license='MIT',
-    install_requires=['PySide2'],
+    install_requires=['PySide2', 'watchdog'],
     entry_points={'console_scripts': ['phile = phile.__main__:main', ]},
     extras_require={
         'dev': ['coverage', 'mypy', 'tox', 'yapf'],
