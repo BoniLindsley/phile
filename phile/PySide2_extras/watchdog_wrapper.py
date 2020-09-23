@@ -117,9 +117,9 @@ class Observer(watchdog.observers.Observer):
 class FileSystemSignalEmitter(QObject):
     """Forwards watchdog events as singals in PySide2 event loop."""
 
-    _watchdog_event_dispatch = QEvent.Type(
+    _watchdog_event_dispatch = QEvent.Type(  # type: ignore
         QEvent.registerEventType()
-    )  # type: ignore
+    )
     """Internal. An event wrapping watchdog dispatched events."""
     file_system_event_detected = Signal(watchdog.events.FileSystemEvent)
     """Signals there are changes in the monitored path."""
