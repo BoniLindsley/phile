@@ -8,10 +8,18 @@ setup(
     description='A file-based notification management',
     author='Boni Lindsley',
     author_email='boni.lindsley@gmail.com',
-    packages=['phile'],
+    packages=[
+        'phile',
+        'phile.notify',
+    ],
     license='MIT',
     install_requires=['PySide2', 'watchdog'],
-    entry_points={'console_scripts': ['phile = phile.__main__:main', ]},
+    entry_points={
+        'console_scripts': [
+            'phile = phile.__main__:main',
+            'phile-notify = phile.notify.__main__:main',
+        ]
+    },
     extras_require={
         'dev': ['coverage', 'mypy', 'tox', 'yapf'],
     },

@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+"""
+---------------------
+Test phile.notify CLI
+---------------------
+"""
+
+# Standard library.
+import argparse
+import io
+import logging
+import pathlib
+import tempfile
+import unittest
+import unittest.mock
+
+# Internal packages.
+from phile.notify.cli import (
+    Configuration, create_argument_parser, process_arguments
+)
+
+_logger = logging.getLogger(
+    __loader__.name  # type: ignore  # mypy issue #1422
+)
+"""Logger whose name is the module name."""
+
+
+class TestConfiguration(unittest.TestCase):
+    """Unit test for :class:`~phile.notify.cli.Configuration`."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        """
+        # This method is created purely to overwrite default docstring.
+        super().__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        """
+        Create a directory to use as a notification directory.
+
+        The directories are recreated for each test
+        to make sure no leftover files from tests
+        would interfere with each other.
+        """
+        self.notification_directory = tempfile.TemporaryDirectory()
+        self.notification_directory_path = pathlib.Path(
+            self.notification_directory.name
+        )
+
+    def tearDown(self) -> None:
+        """Remove notification directory."""
+        self.notification_directory.cleanup()
+
+    def test_default(self) -> None:
+        """Default constructor should fill in expected members."""
+        configuration = Configuration()
+        self.assertIsInstance(
+            configuration.notification_directory, pathlib.Path
+        )
+        self.assertIsInstance(configuration.notification_suffix, str)
+
+    def test_arguments(self) -> None:
+        """Accepted configurations."""
+        suffix = '.notification'
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix=suffix
+        )
+        self.assertEqual(
+            configuration.notification_directory,
+            self.notification_directory_path
+        )
+        self.assertEqual(configuration.notification_suffix, suffix)
+
+    def test_notification_name_to_path(self) -> None:
+        """Use configuration data to create notification paths."""
+        suffix = '.notification'
+        name = 'VeCat'
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix=suffix
+        )
+        notification_name = configuration.notification_name_to_path(name)
+        self.assertEqual(
+            notification_name,
+            self.notification_directory_path / (name + suffix)
+        )
+
+
+class TestCreateArgumentParser(unittest.TestCase):
+    """Unit test for :func:`~phile.notify.cli.create_argument_parser`."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        """
+        # This method is created purely to overwrite default docstring.
+        super().__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        self.argument_parser = create_argument_parser()
+
+    def test_without_argument(self) -> None:
+        """The CLI should be runnable without arguments."""
+        # Just make sure it does not cause issues.
+        argument_namespace = self.argument_parser.parse_args([])
+        self.assertEqual(argument_namespace.command, None)
+
+    def test_append(self) -> None:
+        """The CLI can be given an append command."""
+        command = 'append'
+        name = 'VeCat'
+        content = 'There is a kitty.'
+        arguments = [command, name, content]
+        argument_namespace = self.argument_parser.parse_args(arguments)
+        self.assertEqual(argument_namespace.command, command)
+        self.assertEqual(argument_namespace.name, name)
+        self.assertEqual(argument_namespace.content, content)
+
+    def test_list(self) -> None:
+        """The CLI can be given a list command."""
+        command = 'list'
+        arguments = [command]
+        argument_namespace = self.argument_parser.parse_args(arguments)
+        self.assertEqual(argument_namespace.command, command)
+
+    def test_read(self) -> None:
+        """The CLI can be given a read command."""
+        command = 'read'
+        name = 'VeCat'
+        arguments = [command, name]
+        argument_namespace = self.argument_parser.parse_args(arguments)
+        self.assertEqual(argument_namespace.command, command)
+        self.assertEqual(argument_namespace.name, name)
+
+    def test_write(self) -> None:
+        """The CLI can be given an write command."""
+        command = 'write'
+        name = 'VeCat'
+        content = 'There is a kitty.'
+        arguments = [command, name, content]
+        argument_namespace = self.argument_parser.parse_args(arguments)
+        self.assertEqual(argument_namespace.command, command)
+        self.assertEqual(argument_namespace.name, name)
+        self.assertEqual(argument_namespace.content, content)
+
+
+class TestProcessArguments(unittest.TestCase):
+    """Unit test for :func:`~phile.notify.cli.process_arguments`."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        """
+        # This method is created purely to overwrite default docstring.
+        super().__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        """
+        Create a directory to use as a notification directory.
+
+        The directories are recreated for each test
+        to make sure no leftover files from tests
+        would interfere with each other.
+        """
+        self.notification_directory = tempfile.TemporaryDirectory()
+        self.notification_directory_path = pathlib.Path(
+            self.notification_directory.name
+        )
+
+    def tearDown(self) -> None:
+        """Remove notification directory."""
+        self.notification_directory.cleanup()
+
+    def test_default(self) -> None:
+        """Fail if no arguments are given."""
+        argument_namespace = argparse.Namespace(command=None)
+        with self.assertRaises(ValueError):
+            return_value = process_arguments(
+                argument_namespace=argument_namespace
+            )
+
+    def test_unknown_command(self) -> None:
+        """Fail if an unknown command is given."""
+        argument_namespace = argparse.Namespace(command='gobbledygook')
+        with self.assertRaises(ValueError):
+            return_value = process_arguments(
+                argument_namespace=argument_namespace
+            )
+
+    def test_append(self) -> None:
+        """Process append request."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix='.notification'
+        )
+        argument_namespace = argparse.Namespace(
+            command='append',
+            name='VeCat',
+            content='There is a kitty.',
+        )
+        notificaton_file = configuration.notification_name_to_path(
+            argument_namespace.name
+        )
+        original_text = 'Once up a time.\n'
+        notificaton_file.write_text(original_text)
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration
+        )
+        self.assertEqual(return_value, 0)
+        self.assertEqual(
+            notificaton_file.read_text(),
+            original_text + argument_namespace.content + '\n'
+        )
+
+    def test_list(self) -> None:
+        """Process list request."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix='.notification'
+        )
+        names = [
+            'file_with.bad_extension',
+            'this_is_a' + configuration.notification_suffix,
+            'another' + configuration.notification_suffix,
+            'not_really_a.notification.just_a_fake_one',
+        ]
+        expected_names = [
+            'another',
+            'this_is_a',
+        ]
+        for name in names:
+            (self.notification_directory_path / name).touch()
+        argument_namespace = argparse.Namespace(command='list')
+        output_stream = io.StringIO()
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration,
+            output_stream=output_stream
+        )
+        self.assertEqual(return_value, 0)
+        self.assertEqual(
+            output_stream.getvalue(), '\n'.join(expected_names) + '\n'
+        )
+
+    def test_list_empty(self) -> None:
+        """Process list request even if directory is empty."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path
+        )
+        argument_namespace = argparse.Namespace(command='list')
+        output_stream = io.StringIO()
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration,
+            output_stream=output_stream
+        )
+        self.assertEqual(return_value, 0)
+        self.assertTrue(not output_stream.getvalue())
+
+    def test_read(self) -> None:
+        """Process append request."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix='.notification'
+        )
+        original_text = 'Once up a time.\n'
+        argument_namespace = argparse.Namespace(
+            command='read', name='VeCat'
+        )
+        notificaton_file = configuration.notification_name_to_path(
+            argument_namespace.name
+        )
+        notificaton_file.write_text(original_text)
+        output_stream = io.StringIO()
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration,
+            output_stream=output_stream
+        )
+        self.assertEqual(return_value, 0)
+        self.assertEqual(output_stream.getvalue(), original_text)
+
+    def test_remove(self) -> None:
+        """Process remove request."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix='.notification'
+        )
+        original_text = 'Once up a time.\n'
+        argument_namespace = argparse.Namespace(
+            command='remove',
+            name='VeCat',
+        )
+        notificaton_file = configuration.notification_name_to_path(
+            argument_namespace.name
+        )
+        notificaton_file.touch()
+        self.assertTrue(notificaton_file.is_file())
+        output_stream = io.StringIO()
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration,
+            output_stream=output_stream
+        )
+        self.assertEqual(return_value, 0)
+        self.assertTrue(not notificaton_file.exists())
+        self.assertEqual(output_stream.getvalue(), '')
+        # Removing a second time should fail.
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration,
+            output_stream=output_stream
+        )
+        self.assertEqual(return_value, 1)
+        self.assertEqual(
+            output_stream.getvalue(), 'Notification not found.\n'
+        )
+
+    def test_write(self) -> None:
+        """Process write request."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix='.notification'
+        )
+        argument_namespace = argparse.Namespace(
+            command='write',
+            name='VeCat',
+            content='There is a kitty.',
+        )
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration
+        )
+        self.assertEqual(return_value, 0)
+        notificaton_file = configuration.notification_name_to_path(
+            argument_namespace.name
+        )
+        self.assertEqual(
+            notificaton_file.read_text(),
+            argument_namespace.content + '\n'
+        )
+
+    def test_make_notification_directory(self) -> None:
+        """Create notification directory if missing."""
+        configuration = Configuration(
+            notification_directory=self.notification_directory_path /
+            'subdirectory'
+        )
+        argument_namespace = argparse.Namespace(command='list')
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration
+        )
+        self.assertEqual(return_value, 0)
+        self.assertTrue(configuration.notification_directory.is_dir())
+
+
+if __name__ == '__main__':  # type: ignore
+    unittest.main()
