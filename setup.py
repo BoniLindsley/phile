@@ -11,6 +11,7 @@ setup(
     packages=[
         'phile',
         'phile.notify',
+        'phile.PySide2_extras',
     ],
     license='MIT',
     install_requires=['PySide2', 'watchdog'],
@@ -18,7 +19,8 @@ setup(
         'console_scripts': [
             'phile = phile.__main__:main',
             'phile-notify = phile.notify.__main__:main',
-        ]
+        ],
+        'gui_scripts': ['phile-notify-gui = phile.notify.gui:main', ],
     },
     extras_require={
         'dev': ['coverage', 'mypy', 'tox', 'yapf'],

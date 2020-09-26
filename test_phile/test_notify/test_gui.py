@@ -8,6 +8,8 @@ Test phile.trigger GUI
 # Standard library.
 import datetime
 import logging
+import pathlib
+import tempfile
 import unittest
 import unittest.mock
 
@@ -16,13 +18,145 @@ from PySide2.QtCore import QEventLoop, QObject, Qt
 from PySide2.QtWidgets import QMdiArea
 
 # Internal packages.
-from phile.notify.gui import NotificationMdi, NotificationMdiSubWindow
+from phile.notify.cli import Configuration
+from phile.notify.gui import (
+    MainWindow, Notification, NotificationMdi, NotificationMdiSubWindow
+)
+from phile.PySide2_extras.watchdog_wrapper import Observer
 from test_phile.pyside2_test_tools import QTestApplication
+from test_phile.watchdog_test_tools import EventSetter
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
 )
 """Logger whose name is the module name."""
+
+
+class TestNotification(unittest.TestCase):
+    """Unit test for :class:`~phile.notify.cli.Notification`."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        """
+        # This method is created purely to overwrite default docstring.
+        super().__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        """
+        Create a directory to use as a notification directory.
+
+        The directories are recreated for each test
+        to make sure no leftover files from tests
+        would interfere with each other.
+        """
+        self.notification_directory = tempfile.TemporaryDirectory()
+        self.notification_directory_path = pathlib.Path(
+            self.notification_directory.name
+        )
+        self.configuration = Configuration(
+            notification_directory=self.notification_directory_path
+        )
+        self.name = 'VeCat'
+        self.content = 'Happy New Year!'
+        self.path = self.configuration.notification_directory / (
+            self.name + self.configuration.notification_suffix
+        )
+        self.notification = Notification(
+            name=self.name, configuration=self.configuration
+        )
+
+    def tearDown(self) -> None:
+        """Remove notification directory."""
+        self.notification_directory.cleanup()
+
+    def test_construct_with_name(self) -> None:
+        """Constructing with name must come with a configuration."""
+        # A successful construction in `setUp()`.
+        self.assertEqual(self.notification.name, self.name)
+        self.assertEqual(self.notification.path, self.path)
+        self.path.touch()
+        self.assertIsInstance(
+            self.notification.creation_datetime, datetime.datetime
+        )
+        # It should fail without a configuration give.
+        with self.assertRaises(ValueError):
+            Notification(name=self.name)
+
+    def test_construct_with_path(self) -> None:
+        """Constructing with just path should be possible."""
+        notification = Notification(
+            path=self.configuration.notification_directory /
+            (self.name + self.configuration.notification_suffix)
+        )
+        self.assertEqual(self.notification.path, self.path)
+
+    def test_construct_with_path_with_wrong_parent(self) -> None:
+        """Constructing with path must be in configured directory."""
+        with self.assertRaises(Notification.ParentError):
+            notification = Notification(
+                configuration=self.configuration,
+                path=self.configuration.notification_directory /
+                'subdir' /
+                (self.name + self.configuration.notification_suffix)
+            )
+
+    def test_construct_with_path_with_wrong_suffix(self) -> None:
+        """Constructing with path must be in configured suffix."""
+        with self.assertRaises(Notification.SuffixError):
+            notification = Notification(
+                configuration=self.configuration,
+                path=self.configuration.notification_directory /
+                (self.name + '.wrong_suffix')
+            )
+
+    def test_hash(self) -> None:
+        """Can be used as keys in dictionaries."""
+        number = 1
+        notificaion_key_dictionary = {self.notification: number}
+        self.assertEqual(
+            notificaion_key_dictionary[self.notification], number
+        )
+
+    def test_remove_file(self) -> None:
+        """Notifications can be removed."""
+        self.notification.path.touch()
+        self.assertTrue(self.notification.path.is_file())
+        self.notification.remove()
+        self.assertTrue(not self.notification.path.is_file())
+
+    def test_remove_non_existent_file(self) -> None:
+        """Removing notifications that do not exist should be fine."""
+        self.assertTrue(not self.notification.path.is_file())
+        self.notification.remove()
+        self.assertTrue(not self.notification.path.is_file())
+
+    def test_read_file(self) -> None:
+        """Notifications can be read from."""
+        self.notification.path.write_text(self.content)
+        actual_content = self.notification.read()
+        self.assertEqual(actual_content, self.content)
+
+    def test_write_file(self) -> None:
+        """Notifications can be written to."""
+        self.notification.write(self.content)
+        self.assertEqual(
+            self.notification.path.read_text(), self.content + '\n'
+        )
+
+    def test_append_file(self) -> None:
+        """Notifications can be appended to."""
+        self.notification.write(self.content)
+        self.notification.append(self.content)
+        actual_content = self.notification.read()
+        self.assertEqual(
+            actual_content, self.content + '\n' + self.content + '\n'
+        )
+
+    def test_append_to_empty_file(self) -> None:
+        """Notifications can be appended to even if empty."""
+        self.notification.append(self.content)
+        actual_content = self.notification.read()
+        self.assertEqual(actual_content, self.content + '\n')
 
 
 class TestNotificationMdiSubWindow(unittest.TestCase):
@@ -500,6 +634,311 @@ class TestNotificationMdi(unittest.TestCase):
         _logger.debug('Showing the MDI.')
         notification_mdi.show()
         self.assertEqual(notification_sub_window.pos().x(), 1)
+
+
+class TestMainWindow(unittest.TestCase):
+    """
+    Unit test for :class:`~phile.notify.gui.MainWindow`.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        """
+        # This method is created purely to overwrite default docstring.
+        super().__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        """
+        Create a PySide2 application before each method test.
+
+        It has to be created to do initialisation
+        for GUI widgets to work.
+        A new one is created for each test
+        to make sure no application state information
+        would interfere with each other.
+        """
+        self.notification_directory = tempfile.TemporaryDirectory()
+        self.notification_directory_path = pathlib.Path(
+            self.notification_directory.name
+        )
+        self.configuration = Configuration(
+            notification_directory=self.notification_directory_path
+        )
+        self.observer = Observer()
+        self.app = QTestApplication()
+        self.main_window = MainWindow(
+            configuration=self.configuration, observer=self.observer
+        )
+
+    def tearDown(self) -> None:
+        """
+        Shutdown PySide2 application after each method test.
+
+        PySide2 Applications act as singletons.
+        Any previous instances must be shutdown
+        before a new one can be created.
+        """
+        self.main_window.deleteLater()
+        self.app.tear_down()
+        self.notification_directory.cleanup()
+
+    def test_initialisation(self) -> None:
+        """Create a MainWindow object."""
+        # The object is created in `setUp`.
+        # This tests flags up whether the constructor itself fails.
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        self.assertTrue(
+            not self.main_window._signal_emitter.is_started()
+        )
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_start_called()
+        )
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_stop_called()
+        )
+        # Test also that a main window can be created without arguments.
+        MainWindow().deleteLater()
+
+    def test_show_and_hide_without_notifications(self) -> None:
+        """Showing and hiding should start and stop file monitoring."""
+        # Showing should start monitoring.
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        self.assertTrue(
+            self.main_window._file_system_monitor.was_start_called()
+        )
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_stop_called()
+        )
+        self.assertTrue(self.main_window._signal_emitter.is_started())
+        # Hiding should stop monitoring.
+        # This should be done by stopping the emitter
+        # and not the file system monitor
+        # so that the monitor can be started up again if necessary..
+        self.main_window.hide()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        self.assertTrue(
+            self.main_window._file_system_monitor.was_start_called()
+        )
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_stop_called()
+        )
+        self.assertTrue(
+            not self.main_window._signal_emitter.is_started()
+        )
+        # Try to show again to ensure toggling works.
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        self.assertTrue(
+            self.main_window._file_system_monitor.was_start_called()
+        )
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_stop_called()
+        )
+
+    def test_hide_without_show(self) -> None:
+        """Calling hide without showing should just not do anything."""
+        self.main_window.hide()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_start_called()
+        )
+        self.assertTrue(
+            not self.main_window._file_system_monitor.was_stop_called()
+        )
+        self.assertTrue(
+            not self.main_window._signal_emitter.is_started()
+        )
+
+    def test_show_with_notifications(self) -> None:
+        """Showing should list existing notifications."""
+        # Create a notification.
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        content = 'Happy birthday!'
+        notification.write(content)
+        # Show all notifications. Pretend there are more than one.
+        notification_2 = Notification(
+            name='Disco', configuration=self.configuration
+        )
+        content_2 = 'Happy April Fools\' Day!'
+        notification_2.write(content_2)
+        # Throw in a file with a wrong suffix.
+        (
+            self.configuration.notification_directory /
+            ('file' + self.configuration.notification_suffix + '_not')
+        ).touch()
+        # Also throw in a directory that should be ignored.
+        (
+            self.configuration.notification_directory /
+            ('subdirectory' + self.configuration.notification_suffix)
+        ).mkdir()
+        # Check that they are all detected when showing the main window.
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 2)
+        self.assertEqual(
+            self.main_window._sub_windows[notification].content,
+            content + '\n'
+        )
+        self.assertEqual(
+            self.main_window._sub_windows[notification_2].content,
+            content_2 + '\n'
+        )
+
+    def test_close_notification_sub_window(self) -> None:
+        """Closing sub-window should delete notification."""
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        content = 'Happy birthday!'
+        notification.write(content)
+        self.assertTrue(notification.path.is_file())
+        self.main_window.show()
+        self.main_window._sub_windows[notification].close()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        self.assertTrue(not notification.path.is_file())
+
+    def test_new_notification_creates_sub_window(self) -> None:
+        """Writing a new notification creates a sub-window."""
+        # There should be no sub-window at the beginning.
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+        # Use another watchdog handler to receive creation event.
+        # Current watchdog implementation dispatches to handlers
+        # in the order the hanlers were added.
+        # So by the time the new handler is dispatched,
+        # the handler for the MainWindow would be dispatched too.
+        setter = EventSetter()
+        setter_watch = self.observer.add_handler(
+            setter, self.configuration.notification_directory
+        )
+        # Create the notification and wait for watchdog to find it.
+        self.assertTrue(not notification.path.is_file())
+        content = 'Happy birthday!'
+        notification.write(content)
+        self.assertTrue(notification.path.is_file())
+        wait_time = datetime.timedelta(seconds=2)
+        self.assertTrue(setter.wait(wait_time.total_seconds()))
+        self.observer.remove_handler(setter, setter_watch)
+        # The Qt event should be posted by now.
+        # Handle it to create the sub-window.
+        self.app.process_events()
+        self.assertEqual(len(self.main_window._sub_windows), 1)
+        self.assertEqual(
+            self.main_window._sub_windows[notification].content,
+            content + '\n'
+        )
+
+    def test_deleting_notification_destroys_sub_window(self) -> None:
+        """Removing a notification destroys its sub-window."""
+        # There should be no sub-window at the beginning.
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        content = 'Happy birthday!'
+        notification.write(content)
+        self.assertTrue(notification.path.is_file())
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 1)
+        # Use another watchdog handler to receive creation event.
+        # Current watchdog implementation dispatches to handlers
+        # in the order the hanlers were added.
+        # So by the time the new handler is dispatched,
+        # the handler for the MainWindow would be dispatched too.
+        setter = EventSetter()
+        setter_watch = self.observer.add_handler(
+            setter, self.configuration.notification_directory
+        )
+        # Remove the notification and wait for watchdog to notice.
+        notification.remove()
+        self.assertTrue(not notification.path.is_file())
+        wait_time = datetime.timedelta(seconds=2)
+        self.assertTrue(setter.wait(wait_time.total_seconds()))
+        self.observer.remove_handler(setter, setter_watch)
+        # The Qt event should be posted by now.
+        # Handle it to create the sub-window.
+        self.app.process_events()
+        self.assertEqual(len(self.main_window._sub_windows), 0)
+
+    def test_modifying_notification_updates_sub_window(self) -> None:
+        """Modifying a notification updates sub-window content."""
+        # There should be no sub-window at the beginning.
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        content = 'Happy birthday!'
+        notification.write(content)
+        self.assertTrue(notification.path.is_file())
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 1)
+        # Use another watchdog handler to receive creation event.
+        # Current watchdog implementation dispatches to handlers
+        # in the order the hanlers were added.
+        # So by the time the new handler is dispatched,
+        # the handler for the MainWindow would be dispatched too.
+        setter = EventSetter()
+        setter_watch = self.observer.add_handler(
+            setter, self.configuration.notification_directory
+        )
+        # Remove the notification and wait for watchdog to notice.
+        new_content = 'Happy New Year!'
+        notification.append(new_content)
+        self.assertTrue(notification.path.is_file())
+        wait_time = datetime.timedelta(seconds=2)
+        self.assertTrue(setter.wait(wait_time.total_seconds()))
+        self.observer.remove_handler(setter, setter_watch)
+        # The Qt event should be posted by now.
+        # Handle it to create the sub-window.
+        self.app.process_events()
+        self.assertEqual(len(self.main_window._sub_windows), 1)
+        self.assertEqual(
+            self.main_window._sub_windows[notification].content,
+            content + '\n' + new_content + '\n'
+        )
+
+    def test_moving_notification_recreates_sub_window(self) -> None:
+        """Moving a notification is treated as delete and create."""
+        # There should be no sub-window at the beginning.
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        content = 'Happy birthday!'
+        notification.write(content)
+        self.assertTrue(notification.path.is_file())
+        self.main_window.show()
+        self.assertEqual(len(self.main_window._sub_windows), 1)
+        # Use another watchdog handler to receive creation event.
+        # Current watchdog implementation dispatches to handlers
+        # in the order the hanlers were added.
+        # So by the time the new handler is dispatched,
+        # the handler for the MainWindow would be dispatched too.
+        setter = EventSetter()
+        setter_watch = self.observer.add_handler(
+            setter, self.configuration.notification_directory
+        )
+        # Remove the notification and wait for watchdog to notice.
+        new_name = 'Disco'
+        new_notification = Notification(
+            name=new_name, configuration=self.configuration
+        )
+        notification.path.rename(new_notification.path)
+        self.assertTrue(not notification.path.is_file())
+        self.assertTrue(new_notification.path.is_file())
+        wait_time = datetime.timedelta(seconds=2)
+        self.assertTrue(setter.wait(wait_time.total_seconds()))
+        self.observer.remove_handler(setter, setter_watch)
+        # The Qt event should be posted by now.
+        # Handle it to create the sub-window.
+        self.app.process_events()
+        self.assertEqual(len(self.main_window._sub_windows), 1)
+        self.assertEqual(
+            self.main_window._sub_windows[new_notification].content,
+            content + '\n'
+        )
 
 
 if __name__ == '__main__':

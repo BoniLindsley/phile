@@ -3,19 +3,111 @@
 # Standard library.
 import datetime
 import logging
+import pathlib
+import sys
+import typing
 
 # External dependencies.
 from PySide2.QtCore import QEvent, Qt
-from PySide2.QtCore import Signal  # type: ignore
+from PySide2.QtCore import Signal, Slot  # type: ignore
 from PySide2.QtGui import (
     QCloseEvent, QHideEvent, QResizeEvent, QShowEvent, QPalette
 )
-from PySide2.QtWidgets import QMdiArea, QMdiSubWindow, QTextEdit
+from PySide2.QtWidgets import (
+    QApplication, QMainWindow, QMdiArea, QMdiSubWindow, QTextEdit
+)
+import watchdog.events  # type: ignore
+
+# Internal packages.
+import phile.default_paths
+from phile.notify.cli import Configuration
+from phile.PySide2_extras.watchdog_wrapper import (
+    FileSystemMonitor, FileSystemSignalEmitter, Observer
+)
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
 )
 """Logger whose name is the module name."""
+
+
+class Notification:
+
+    class ParentError(ValueError):
+        pass
+
+    class SuffixError(ValueError):
+        pass
+
+    def __init__(
+        self,
+        *,
+        configuration: Configuration = None,
+        name: str = None,
+        path: pathlib.Path = None
+    ) -> None:
+        if path is None:
+            if configuration is None or name is None:
+                raise ValueError(
+                    'Notification is constructed from path'
+                    ' or from both configuration and name'
+                )
+            path = configuration.notification_directory / (
+                name + configuration.notification_suffix
+            )
+        else:
+            if configuration is not None:
+                path_parent = path.parent
+                directory = configuration.notification_directory
+                if path_parent != directory:
+                    raise Notification.ParentError(
+                        'Path parent ({}) is not {}'.format(
+                            path_parent, directory
+                        )
+                    )
+                path_suffix = path.suffix
+                notification_suffix = configuration.notification_suffix
+                if path_suffix != notification_suffix:
+                    raise Notification.SuffixError(
+                        'Path suffix ({}) is not {}'.format(
+                            path_suffix, notification_suffix
+                        )
+                    )
+        self.path = path
+
+    def __hash__(self):
+        return hash(self.path)
+
+    def __eq__(self, other):
+        return self.path == other.path
+
+    def append(self, additional_content: str):
+        with self.path.open('a') as notification_file:
+            # End with a new line
+            # so that appending again would not jumble up the text.
+            notification_file.write(additional_content + '\n')
+
+    @property
+    def creation_datetime(self) -> datetime.datetime:
+        return datetime.datetime.fromtimestamp(self.path.stat().st_mtime)
+
+    @property
+    def name(self) -> str:
+        return self.path.stem
+
+    def read(self) -> str:
+        return self.path.read_text()
+
+    def remove(self):
+        try:
+            self.path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def write(self, new_content: str):
+        # End with a new line
+        # so that appending would not jumble up the text.
+        self.path.write_text(new_content + '\n')
 
 
 class NotificationMdiSubWindow(QMdiSubWindow):
@@ -217,3 +309,171 @@ class NotificationMdi(QMdiArea):
             window.resize(window_width, height)
             vertical_offset += height
         _logger.debug('Finished tiling.')
+
+
+class MainWindow(QMainWindow):
+
+    def __init__(
+        self,
+        *args,
+        configuration: Configuration = None,
+        observer: Observer = None,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        # Create the GUI for displaying notifications.
+        mdi_area = NotificationMdi()
+        self.setCentralWidget(mdi_area)
+        # Attach a file monitor to it as a child
+        # for automatic life-time management.
+        if observer is None:
+            observer = Observer()
+        self._file_system_monitor = FileSystemMonitor(
+            mdi_area, _watchdog_observer=observer
+        )
+        # Figure out where notifications are and their suffix.
+        if configuration is None:
+            configuration = Configuration()
+        self._configuration = configuration
+        # Let the file monitor know which directory we are interested in.
+        self._signal_emitter = FileSystemSignalEmitter(
+            monitored_path=self._configuration.notification_directory,
+            parent=self._file_system_monitor,
+        )
+        signal = self._signal_emitter.file_system_event_detected
+        signal.connect(  # type: ignore
+            self.on_file_system_event_detected
+        )
+        # Keep track of sub-windows by name
+        # so that we know which ones to modify when files are changed.
+        self._sub_windows: typing.Dict[Notification,
+                                       NotificationMdiSubWindow] = {}
+
+    def hideEvent(self, hide_event: QHideEvent) -> None:
+        # Start the file monitor first to not miss events.
+        if self._signal_emitter.is_started():  # pragma: no branch
+            self._signal_emitter.stop()
+
+    def showEvent(self, show_event: QShowEvent) -> None:
+        # Start the file monitor first to not miss events.
+        if not self._file_system_monitor.was_start_called():
+            self._file_system_monitor.start()
+        if not self._signal_emitter.is_started():
+            self._signal_emitter.start()
+        # Initialise by filling in existing notifications.
+        # There is a possibility of race condition
+        # between the file monitor starting
+        # and fetching a list of existing files,
+        # I am not sure if there is much that can be done about it,
+        # other than making sure the the listing occurs
+        # as soon as possible after starting the file monitor.
+        # There is cooperative locking,
+        # but that seems over-engineered for the task at hand.
+        configuration = self._configuration
+        notification_directory = configuration.notification_directory
+        for notification_path in notification_directory.iterdir():
+            if notification_path.is_file():
+                self.on_file_system_event_detected(
+                    watchdog.events.FileCreatedEvent(notification_path)
+                )
+
+    @Slot(watchdog.events.FileSystemEvent)  # type: ignore
+    def on_file_system_event_detected(
+        self, watchdog_event: watchdog.events.FileSystemEvent
+    ) -> None:
+        _logger.debug('Watchdog event received.')
+        # Notifications are files. Directory changes do not matter.
+        if watchdog_event.is_directory:
+            _logger.debug('Watchdog event: not using directory events.')
+            return
+        # Consider a move event as a delete and create.
+        event_type = watchdog_event.event_type
+        if event_type == watchdog.events.EVENT_TYPE_MOVED:
+            _logger.debug('Watchdog event: notification moved.')
+            for new_event in [
+                watchdog.events.FileDeletedEvent(
+                    watchdog_event.src_path
+                ),
+                watchdog.events.FileCreatedEvent(
+                    watchdog_event.dest_path
+                )
+            ]:
+                self.on_file_system_event_detected(new_event)
+            return
+        # Only files of a specific extension is a notification.
+        try:
+            notification = Notification(
+                configuration=self._configuration,
+                path=pathlib.Path(watchdog_event.src_path)
+            )
+        except Notification.SuffixError as error:
+            _logger.debug('Watchdog event: %s', error)
+            return
+        # Determine what to do based on the event type.
+        if event_type == watchdog.events.EVENT_TYPE_CREATED:
+            _logger.debug('Watchdog event: notification created.')
+            self.update_notification_sub_window(notification)
+        elif event_type == watchdog.events.EVENT_TYPE_DELETED:
+            _logger.debug('Watchdog event: notification deleted.')
+            self.remove_notification_sub_window(notification)
+        elif event_type == watchdog.events.EVENT_TYPE_MODIFIED:
+            _logger.debug('Watchdog event: notification modified.')
+            self.update_notification_sub_window(notification)
+        else:  # pragma: no cover
+            assert False
+
+    def on_notification_sub_window_closed(
+        self, notification_name: str
+    ) -> None:
+        notification = Notification(
+            configuration=self._configuration, name=notification_name
+        )
+        self.remove_notification_sub_window(notification)
+        notification.remove()
+
+    def remove_notification_sub_window(
+        self, notification: Notification
+    ) -> None:
+        _logger.debug('Deleting notification sub-window.')
+        sub_window = self._sub_windows.pop(notification, None)
+        if sub_window is None:
+            _logger.debug('Sub-window not found. Ignoring.')
+        else:
+            _logger.debug('Sub-window found. Removing.')
+            sub_window.deleteLater()
+
+    def update_notification_sub_window(
+        self, notification: Notification
+    ) -> None:
+        _logger.debug('Updating notification sub-window.')
+        sub_window = self._sub_windows.get(notification, None)
+        new_data = {
+            "content": notification.read(),
+            "creation_datetime": notification.creation_datetime,
+            "name": notification.name,
+        }
+        if sub_window is None:
+            _logger.debug('Sub-window not found. Creating.')
+            sub_window = self.centralWidget().add_notification(
+                **new_data
+            )
+            sub_window.show()
+            sub_window.closed.connect(  # type: ignore
+                self.on_notification_sub_window_closed
+            )
+            self._sub_windows[notification] = sub_window
+        else:
+            _logger.debug('Sub-window found. Upating.')
+            for key, value in new_data.items():
+                setattr(sub_window, key, value)
+
+
+def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+    app = QApplication(argv)
+    main_window = MainWindow()
+    main_window.show()
+    return app.exec_()
+
+
+if __name__ == '__main__':  # pragma: no cover
+    sys.exit(main())
