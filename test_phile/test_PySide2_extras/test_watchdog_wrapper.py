@@ -24,6 +24,7 @@ from phile.PySide2_extras.watchdog_wrapper import (
     FileSystemMonitor, FileSystemSignalEmitter, Observer
 )
 from test_phile.pyside2_test_tools import QTestApplication
+from test_phile.watchdog_test_tools import EventSetter
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
@@ -31,16 +32,6 @@ _logger = logging.getLogger(
 """Logger whose name is the module name."""
 
 wait_time = datetime.timedelta(seconds=2)
-
-
-class EventSetter(
-    watchdog.events.FileSystemEventHandler, threading.Event
-):
-    """A watchdog event handler that sets a flag when dispatching."""
-
-    def dispatch(self, event: watchdog.events.FileSystemEvent):
-        """Set the member event flag to signal the dispatch."""
-        self.set()
 
 
 class TestObserver(unittest.TestCase):
