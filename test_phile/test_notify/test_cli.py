@@ -12,79 +12,15 @@ import logging
 import pathlib
 import tempfile
 import unittest
-import unittest.mock
 
 # Internal packages.
-from phile.notify.cli import (
-    Configuration, create_argument_parser, process_arguments
-)
+from phile.notify.cli import create_argument_parser, process_arguments
+from phile.notify.notification import Configuration, Notification
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
 )
 """Logger whose name is the module name."""
-
-
-class TestConfiguration(unittest.TestCase):
-    """Unit test for :class:`~phile.notify.cli.Configuration`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
-
-    def setUp(self) -> None:
-        """
-        Create a directory to use as a notification directory.
-
-        The directories are recreated for each test
-        to make sure no leftover files from tests
-        would interfere with each other.
-        """
-        self.notification_directory = tempfile.TemporaryDirectory()
-        self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
-        )
-
-    def tearDown(self) -> None:
-        """Remove notification directory."""
-        self.notification_directory.cleanup()
-
-    def test_default(self) -> None:
-        """Default constructor should fill in expected members."""
-        configuration = Configuration()
-        self.assertIsInstance(
-            configuration.notification_directory, pathlib.Path
-        )
-        self.assertIsInstance(configuration.notification_suffix, str)
-
-    def test_arguments(self) -> None:
-        """Accepted configurations."""
-        suffix = '.notification'
-        configuration = Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix=suffix
-        )
-        self.assertEqual(
-            configuration.notification_directory,
-            self.notification_directory_path
-        )
-        self.assertEqual(configuration.notification_suffix, suffix)
-
-    def test_notification_name_to_path(self) -> None:
-        """Use configuration data to create notification paths."""
-        suffix = '.notification'
-        name = 'VeCat'
-        configuration = Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix=suffix
-        )
-        notification_name = configuration.notification_name_to_path(name)
-        self.assertEqual(
-            notification_name,
-            self.notification_directory_path / (name + suffix)
-        )
 
 
 class TestCreateArgumentParser(unittest.TestCase):
@@ -197,19 +133,19 @@ class TestProcessArguments(unittest.TestCase):
             name='VeCat',
             content='There is a kitty.',
         )
-        notificaton_file = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        original_text = 'Once up a time.\n'
-        notificaton_file.write_text(original_text)
+        original_text = 'Once up a time.'
+        notification.write(original_text)
         return_value = process_arguments(
             argument_namespace=argument_namespace,
             configuration=configuration
         )
         self.assertEqual(return_value, 0)
         self.assertEqual(
-            notificaton_file.read_text(),
-            original_text + argument_namespace.content + '\n'
+            notification.read(),
+            original_text + '\n' + argument_namespace.content + '\n'
         )
 
     def test_list(self) -> None:
@@ -263,14 +199,14 @@ class TestProcessArguments(unittest.TestCase):
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
-        original_text = 'Once up a time.\n'
+        original_text = 'Once up a time.'
         argument_namespace = argparse.Namespace(
             command='read', name='VeCat'
         )
-        notificaton_file = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        notificaton_file.write_text(original_text)
+        notification.write(original_text)
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
@@ -278,7 +214,7 @@ class TestProcessArguments(unittest.TestCase):
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
-        self.assertEqual(output_stream.getvalue(), original_text)
+        self.assertEqual(output_stream.getvalue(), original_text + '\n')
 
     def test_remove(self) -> None:
         """Process remove request."""
@@ -291,11 +227,11 @@ class TestProcessArguments(unittest.TestCase):
             command='remove',
             name='VeCat',
         )
-        notificaton_file = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        notificaton_file.touch()
-        self.assertTrue(notificaton_file.is_file())
+        notification.path.touch()
+        self.assertTrue(notification.path.is_file())
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
@@ -303,18 +239,8 @@ class TestProcessArguments(unittest.TestCase):
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
-        self.assertTrue(not notificaton_file.exists())
+        self.assertTrue(not notification.path.exists())
         self.assertEqual(output_stream.getvalue(), '')
-        # Removing a second time should fail.
-        return_value = process_arguments(
-            argument_namespace=argument_namespace,
-            configuration=configuration,
-            output_stream=output_stream
-        )
-        self.assertEqual(return_value, 1)
-        self.assertEqual(
-            output_stream.getvalue(), 'Notification not found.\n'
-        )
 
     def test_write(self) -> None:
         """Process write request."""
@@ -332,12 +258,11 @@ class TestProcessArguments(unittest.TestCase):
             configuration=configuration
         )
         self.assertEqual(return_value, 0)
-        notificaton_file = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
         self.assertEqual(
-            notificaton_file.read_text(),
-            argument_namespace.content + '\n'
+            notification.read(), argument_namespace.content + '\n'
         )
 
     def test_make_notification_directory(self) -> None:

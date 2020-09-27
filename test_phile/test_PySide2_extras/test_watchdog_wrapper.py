@@ -7,10 +7,9 @@ Test phile.PySide2_extras.watchdog_wrapper
 
 # Standard library.
 import datetime
-import logging
 import pathlib
+import logging
 import tempfile
-import threading
 import unittest
 import unittest.mock
 

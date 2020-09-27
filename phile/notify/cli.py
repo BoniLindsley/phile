@@ -3,40 +3,11 @@
 # Standard library.
 import argparse
 import io
-import logging
-import pathlib
-import urllib.parse
 import sys
 import typing
 
 # Internal packages.
-import phile.default_paths
-
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
-)
-"""Logger whose name is the module name."""
-
-
-class Configuration:
-
-    def __init__(
-        self,
-        *,
-        notification_directory: pathlib.Path = phile.default_paths.
-        notification_directory,
-        notification_suffix: str = '.notify'
-    ) -> None:
-        self.notification_directory = notification_directory
-        self.notification_suffix = notification_suffix
-
-    def notification_name_to_path(
-        self, notification_name: str
-    ) -> pathlib.Path:
-        return self.notification_directory / (
-            urllib.parse.quote(notification_name) +
-            self.notification_suffix
-        )
+from phile.notify.notification import Configuration, Notification
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -68,14 +39,10 @@ def process_arguments(
         parents=True, exist_ok=True
     )
     if command == 'append':
-        notification_path = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        content = argument_namespace.content
-        with notification_path.open('a') as notification_file:
-            # End with a new line
-            # so that appending again would not jumble up the text.
-            notification_file.write(content + '\n')
+        notification.append(argument_namespace.content)
     elif command == 'list':
         notification_directory = configuration.notification_directory
         notification_suffix = configuration.notification_suffix
@@ -83,28 +50,21 @@ def process_arguments(
             if notificaton_file.suffix == notification_suffix:
                 print(notificaton_file.stem, file=output_stream)
     elif command == 'read':
-        notification_path = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        content = notification_path.read_text()
+        content = notification.read()
         print(content, end='', file=output_stream)
     elif command == 'remove':
-        notification_path = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        try:
-            notification_path.unlink()
-        except FileNotFoundError:
-            print('Notification not found.', file=output_stream)
-            return 1
+        notification.remove()
     elif command == 'write':
-        notification_path = configuration.notification_name_to_path(
-            argument_namespace.name
+        notification = Notification(
+            configuration=configuration, name=argument_namespace.name
         )
-        content = argument_namespace.content
-        # End with a new line
-        # so that appending would not jumble up the text.
-        notification_path.write_text(content + '\n')
+        notification.write(argument_namespace.content)
     # The following two scopes should be unreachable,
     # since the commands are filtered by ArgumentParser
     # and "no command" is filtered manually before calling this.
