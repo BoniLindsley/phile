@@ -66,16 +66,72 @@ class TestObserver(unittest.TestCase):
                 self.observer.stop()
         self.monitor_directory.cleanup()
 
-    def test_start_and_stop(self) -> None:
+    def test_was_start_and_stop_called(self) -> None:
         """
-        Start and stop and join the observer.
+        Ensure status methods get updated by start and stop.
 
-        Also ensure status get methods also get updated by these methods.
+        Also checks start and stop behaviours.
         """
         observer = self.observer
-        _logger.debug('Stopping an unstarted observer.')
+        self.assertTrue(not observer.was_start_called())
+        self.assertTrue(not observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Starting observer.')
+        observer.start()
+        self.assertTrue(observer.was_start_called())
+        self.assertTrue(observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Stopping observer.')
+        # Stopping occurs asynchronously.
+        # So we cannot determine whether it is alive or not.
+        observer.stop()
+        self.assertTrue(observer.was_start_called())
+        self.assertTrue(observer.was_stop_called())
+
+    def test_start_observer_twice(self) -> None:
+        """Starting observer twice should fine.."""
+        observer = self.observer
+        self.assertTrue(not observer.was_start_called())
+        self.assertTrue(not observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Starting observer.')
+        observer.start()
+        self.assertTrue(observer.was_start_called())
+        self.assertTrue(observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Re-starting observer.')
         with self.assertRaises(RuntimeError):
-            observer.stop()
+            observer.start()
+
+    def test_stop_observer_twice(self) -> None:
+        """Stopping observer twice should be fine."""
+        observer = self.observer
+        self.assertTrue(not observer.was_start_called())
+        self.assertTrue(not observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Starting observer.')
+        observer.start()
+        self.assertTrue(observer.was_start_called())
+        self.assertTrue(observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Stopping observer.')
+        # Stopping occurs asynchronously.
+        # So we cannot determine whether it is alive or not.
+        observer.stop()
+        self.assertTrue(observer.was_start_called())
+        self.assertTrue(observer.was_stop_called())
+        _logger.debug('Re-stopping observer.')
+        observer.stop()
+        self.assertTrue(observer.was_start_called())
+        self.assertTrue(observer.was_stop_called())
+
+    def test_start_stopped_observer(self) -> None:
+        """
+        Stopping an unstarted observer prevents starting.
+
+        More specifically, it starts, but immediately stops.
+        """
+        observer = self.observer
         self.assertTrue(not observer.was_start_called())
         self.assertTrue(not observer.is_alive())
         self.assertTrue(not observer.was_stop_called())
@@ -95,10 +151,26 @@ class TestObserver(unittest.TestCase):
             observer.start()
         self.assertTrue(observer.was_start_called())
         self.assertTrue(observer.was_stop_called())
-        _logger.debug('Re-stopping observer.')
-        with self.assertRaises(RuntimeError):
-            observer.stop()
+
+    def test_stop_unstarted_observer(self) -> None:
+        """
+        Stopping an unstarted observer prevents starting.
+
+        More specifically, it starts, but immediately stops.
+        """
+        observer = self.observer
+        self.assertTrue(not observer.was_start_called())
+        self.assertTrue(not observer.is_alive())
+        self.assertTrue(not observer.was_stop_called())
+        _logger.debug('Stopping an unstarted observer.')
+        observer.stop()
+        self.assertTrue(not observer.was_start_called())
+        self.assertTrue(not observer.is_alive())
+        self.assertTrue(observer.was_stop_called())
+        _logger.debug('Starting observer.')
+        observer.start()
         self.assertTrue(observer.was_start_called())
+        self.assertTrue(not observer.is_alive())
         self.assertTrue(observer.was_stop_called())
 
     def test_add_and_remove_and_has_handlers(self) -> None:
@@ -231,14 +303,15 @@ class TestFileSystemSignalEmitter(unittest.TestCase):
             self.signal_emitter.start()
         fake_parent.deleteLater()
 
-    def test_start_twice_failing(self) -> None:
+    def test_start_twice(self) -> None:
         """
-        Emitters cannot be started twice without stopping first.
+        Emitters can be started twice without stopping first.
         """
         observer = Observer()
         self.signal_emitter.start(_monitoring_observer=observer)
-        with self.assertRaises(RuntimeError):
-            self.signal_emitter.start(_monitoring_observer=observer)
+        self.assertTrue(self.signal_emitter.is_started())
+        self.signal_emitter.start(_monitoring_observer=observer)
+        self.assertTrue(self.signal_emitter.is_started())
 
     def test_start_with_custom_observer(self) -> None:
         """Emitter can be started by giving it an observer."""
@@ -342,14 +415,43 @@ class TestFileSystemMonitor(unittest.TestCase):
 
     def test_was_start_and_stop_called(self) -> None:
         """Calls to `start` and `stop` should change `is_started`."""
-        _logger.debug('Stopping un-started monitor.')
-        with self.assertRaises(RuntimeError):
-            self.monitor.stop()
+        _logger.debug('Starting monitor.')
+        self.monitor.start()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(not self.monitor.was_stop_called())
+        _logger.debug('Stopping monitor.')
+        self.monitor.stop()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(self.monitor.was_stop_called())
 
-        self.monitor._watchdog_observer.add_handler(
-            EventSetter(), self.monitor_directory_path
-        )
+    def test_start_twice(self) -> None:
+        """Starting monitor twice is okay if not stopped yet."""
+        _logger.debug('Starting monitor.')
+        self.monitor.start()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(not self.monitor.was_stop_called())
+        _logger.debug('Re-starting monitor.')
+        self.monitor.start()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(not self.monitor.was_stop_called())
 
+    def test_stop_twice(self) -> None:
+        """Stopping a monitor twice is okay."""
+        _logger.debug('Starting monitor.')
+        self.monitor.start()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(not self.monitor.was_stop_called())
+        _logger.debug('Stopping monitor.')
+        self.monitor.stop()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(self.monitor.was_stop_called())
+        _logger.debug('Re-stopping monitor.')
+        self.monitor.stop()
+        self.assertTrue(self.monitor.was_start_called())
+        self.assertTrue(self.monitor.was_stop_called())
+
+    def test_start_stopped_monitor(self) -> None:
+        """Cannot start monitor if already stopped.."""
         _logger.debug('Starting monitor.')
         self.monitor.start()
         self.assertTrue(self.monitor.was_start_called())
@@ -361,7 +463,10 @@ class TestFileSystemMonitor(unittest.TestCase):
         _logger.debug('Re-starting monitor.')
         with self.assertRaises(RuntimeError):
             self.monitor.start()
-        _logger.debug('Re-stopping monitor.')
+
+    def test_stop_unstarted_monitor(self) -> None:
+        """Cannot stop monitor if not started."""
+        _logger.debug('Stopping monitor.')
         with self.assertRaises(RuntimeError):
             self.monitor.stop()
 

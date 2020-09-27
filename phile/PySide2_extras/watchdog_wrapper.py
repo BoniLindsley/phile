@@ -24,6 +24,9 @@ class Observer(watchdog.observers.Observer):
     The underlying thread is set as a daemon
     as the file monitoring does not require any mandatory clean-up.
 
+    This class provides some convenient addition to make it easier
+    to use in conjunction with PySide2.
+
     The parent class `watchdog.observers.Observer`
     provides `schedule` and `add_handler_for_watch` for registering,
     and `unschedule` and `remove_handler_for_watch` for deregistering,
@@ -58,6 +61,12 @@ class Observer(watchdog.observers.Observer):
     provided mainly for symmetry of operations,
     except that the `path` parameter should be a `Pathlib.Path`,
     for potential type checking purposes.
+
+    This class also introduces `was_start_called` and `was_start_called`
+    to determine the status of the `Observer`.
+    They are sometimes useful in determining
+    whether an `Observer` can be `start`-ed
+    since `start`-ing a `thread` twice raises an exception.
     """
 
     def __init__(self, *args, **kwargs):
@@ -103,15 +112,6 @@ class Observer(watchdog.observers.Observer):
 
     def was_stop_called(self) -> bool:
         return self._stopped_event.is_set()
-
-    def stop(self, ) -> None:
-        """Request the underlying thread to stop asynchronously."""
-        if not self.was_start_called():
-            raise RuntimeError('Observer not stopping. Not started.')
-        if self.was_stop_called():
-            raise RuntimeError('Observer not stopping. Already stopped.')
-        _logger.debug('Observer stopping.')
-        super().stop()
 
 
 class FileSystemSignalEmitter(QObject):
@@ -187,7 +187,8 @@ class FileSystemSignalEmitter(QObject):
         """
         _logger.debug('Emitter starting.')
         if self.is_started():
-            raise RuntimeError('Emitter already started. Not starting.')
+            _logger.debug('Emitter already started. Not starting.')
+            return
         if _monitoring_observer is None:
             parent = self.parent()
             if not isinstance(parent, FileSystemMonitor):
@@ -207,7 +208,8 @@ class FileSystemSignalEmitter(QObject):
     def stop(self) -> None:
         _logger.debug('Emitter stopping.')
         if not self.is_started():
-            raise RuntimeError('Emitter not started. Not stopping.')
+            _logger.debug('Emitter not started. Not stopping.')
+            return
         assert self._monitoring_observer is not None  # For mypy.
         self._monitoring_observer.remove_handler(
             self, self._watchdog_watch
@@ -346,23 +348,23 @@ class FileSystemMonitor(QObject):
 
         A monitor can only be `start`-ed once.
         """
+        if self.was_stop_called():
+            raise RuntimeError('Monitor not starting. Already stopped.')
         if self.was_start_called():
-            raise RuntimeError(
-                'Monitor already started. Not starting again.'
-            )
+            _logger.debug('Monitor not starting. Alredy started.')
+            return
         _logger.debug('Monitor starting children.')
         for child in self.children():
             if isinstance(child, FileSystemSignalEmitter):
-                try:
-                    child.start(
-                        _monitoring_observer=self._watchdog_observer
-                    )
-                except RuntimeError:
-                    pass
-        _logger.debug('Monitor starting observer.')
+                child.start(_monitoring_observer=self._watchdog_observer)
         self._watchdog_observer.start()
 
     def stop(self) -> None:
+        if not self.was_start_called():
+            raise RuntimeError('Monitor not stopping. Not started.')
+        if self.was_stop_called():
+            _logger.debug('Monitor not stopping. Already stopped.')
+            return
         _logger.debug('Monitor stopping observer.')
         self._watchdog_observer.stop()
         # It is technically not necessary to stop the children
@@ -375,7 +377,4 @@ class FileSystemMonitor(QObject):
         _logger.debug('Monitor stopping children.')
         for child in self.children():
             if isinstance(child, FileSystemSignalEmitter):
-                try:
-                    child.stop()
-                except RuntimeError:
-                    pass
+                child.stop()
