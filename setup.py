@@ -23,7 +23,9 @@ setup(
         'gui_scripts': ['phile-notify-gui = phile.notify.gui:main', ],
     },
     extras_require={
-        'dev': ['coverage', 'mypy', 'tox', 'yapf'],
+        'dev': [
+            'coverage', 'mypy', 'recommonmark', 'sphinx', 'tox', 'yapf'
+        ],
     },
     # Requires Python 3.6 because Python is dropping support
     # for version 3.5 after September 2020 (as for 2020-09-05).
