@@ -1,0 +1,8 @@
+[Icon Theme]
+Name=Blank
+Comment=Simple
+Directories=64x64/status
+
+[64x64/status]
+Context=Status
+Size=64
