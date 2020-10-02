@@ -12,6 +12,7 @@ setup(
         'phile',
         'phile.notify',
         'phile.PySide2_extras',
+        'phile.tray',
     ],
     license='MIT',
     install_requires=['PySide2', 'watchdog'],
@@ -20,7 +21,10 @@ setup(
             'phile = phile.__main__:main',
             'phile-notify = phile.notify.__main__:main',
         ],
-        'gui_scripts': ['phile-notify-gui = phile.notify.gui:main', ],
+        'gui_scripts': [
+            'phile-notify-gui = phile.notify.gui:main',
+            'phile-tray-gui = phile.tray.gui:main',
+        ],
     },
     extras_require={
         'dev': [
@@ -31,4 +35,12 @@ setup(
     # for version 3.5 after September 2020 (as for 2020-09-05).
     # Reference: https://www.python.org/dev/peps/pep-0478/
     python_requires='>= 3.6',
+    package_data={
+        'phile.tray': [
+            'resources/icons/blank/64x64/status/phile-tray-empty.png',
+            'resources/icons/blank/64x64/status/phile-tray-new.png',
+            'resources/icons/blank/64x64/status/phile-tray-read.png',
+            'resources/icons/blank/index.theme',
+        ],
+    },
 )

@@ -4,6 +4,7 @@
 import datetime
 import logging
 import pathlib
+import signal
 import sys
 import typing
 
@@ -20,6 +21,9 @@ import watchdog.events  # type: ignore
 
 # Internal packages.
 from phile.notify.notification import Configuration, Notification
+from phile.PySide2_extras.posix_signal import (
+    install_noop_signal_handler, PosixSignal
+)
 from phile.PySide2_extras.watchdog_wrapper import (
     FileSystemMonitor, FileSystemSignalEmitter, Observer
 )
@@ -392,6 +396,9 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     app = QApplication(argv)
     main_window = MainWindow()
     main_window.show()
+    posix_signal = PosixSignal(main_window)
+    posix_signal.signal_received.connect(app.quit)  # type: ignore
+    install_noop_signal_handler(signal.SIGINT)
     return app.exec_()
 
 

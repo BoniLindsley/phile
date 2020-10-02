@@ -7,6 +7,7 @@ import logging
 import os
 import pathlib
 import pkg_resources
+import signal
 import sys
 import typing
 
@@ -18,6 +19,9 @@ from PySide2.QtWidgets import QApplication, QSystemTrayIcon, QWidget
 import watchdog.events  # type: ignore
 
 # Internal packages.
+from phile.PySide2_extras.posix_signal import (
+    install_noop_signal_handler, PosixSignal
+)
 from phile.PySide2_extras.watchdog_wrapper import (
     FileSystemMonitor, FileSystemSignalEmitter, Observer
 )
@@ -437,6 +441,9 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
         _logger.critical('Unable to create tray icons: %s', e)
         return 1
     gui_icon_list.show()
+    posix_signal = PosixSignal(gui_icon_list)
+    posix_signal.signal_received.connect(app.quit)  # type: ignore
+    install_noop_signal_handler(signal.SIGINT)
     return app.exec_()
 
 
