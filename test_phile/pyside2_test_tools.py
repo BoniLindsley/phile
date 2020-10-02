@@ -143,24 +143,26 @@ class QTestApplication(PySide2.QtWidgets.QApplication):
 
     def __init__(
         self,
+        *args,
         process_event_wait_time: datetime.timedelta = datetime.timedelta(
             seconds=2
         ),
-        set_xdg_runtime_dir: bool = True,
-        set_qt_qpa_platform: bool = True,
-        *args,
+        qt_qpa_platform: typing.Optional[str] = 'offscreen',
+        use_temporary_xdg_runtime_dir: bool = True,
         **kwargs
     ):
         self.__process_event_wait_time_ = process_event_wait_time
         environ_backup = EnvironBackup()
         self.__xdg_runtime_dir_ = None
-        if set_xdg_runtime_dir:
+        if use_temporary_xdg_runtime_dir:
             self.__xdg_runtime_dir_ = tempfile.TemporaryDirectory()
             environ_backup.backup_and_set(
                 XDG_RUNTIME_DIR=self.__xdg_runtime_dir_.name
             )
-        if set_qt_qpa_platform:
-            environ_backup.backup_and_set(QT_QPA_PLATFORM='offscreen')
+        if qt_qpa_platform is not None:
+            environ_backup.backup_and_set(
+                QT_QPA_PLATFORM=qt_qpa_platform
+            )
         self.__environ_backup_ = environ_backup
         super().__init__(*args, **kwargs)
 
