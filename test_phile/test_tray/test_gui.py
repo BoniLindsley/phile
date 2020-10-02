@@ -19,10 +19,9 @@ from PySide2.QtCore import QEventLoop, QObject, Qt
 from PySide2.QtGui import QIcon
 
 # Internal packages.
-from phile.tray.gui import (
-    Configuration, GuiIconList, set_icon_paths, TrayFile
-)
+from phile.configuration import Configuration
 from phile.PySide2_extras.watchdog_wrapper import Observer
+from phile.tray.gui import GuiIconList, set_icon_paths, TrayFile
 from test_phile.pyside2_test_tools import (
     QTestApplication, q_icon_from_theme, SystemTrayIcon
 )
@@ -32,72 +31,6 @@ _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
 )
 """Logger whose name is the module name."""
-
-
-class TestConfiguration(unittest.TestCase):
-    """Unit test for :class:`~phile.tray.Configuration`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
-
-    def setUp(self) -> None:
-        """
-        Create directories to use as configuration directories.
-
-        The directories are recreated for each test
-        to make sure no leftover files from tests
-        would interfere with each other.
-        """
-        self.notification_directory = tempfile.TemporaryDirectory()
-        self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
-        )
-        self.tray_directory = tempfile.TemporaryDirectory()
-        self.tray_directory_path = pathlib.Path(self.tray_directory.name)
-
-    def tearDown(self) -> None:
-        """Remove notification directory."""
-        self.tray_directory.cleanup()
-        self.notification_directory.cleanup()
-
-    def test_default(self) -> None:
-        """Default constructor should fill in expected members."""
-        configuration = Configuration()
-        self.assertIsInstance(
-            configuration.notification_directory, pathlib.Path
-        )
-        self.assertIsInstance(configuration.notification_suffix, str)
-        self.assertIsInstance(configuration.tray_directory, pathlib.Path)
-        self.assertIsInstance(configuration.tray_icon_name, str)
-        self.assertIsInstance(configuration.tray_suffix, str)
-
-    def test_arguments(self) -> None:
-        """Accepted configurations."""
-        notification_suffix = '.notification'
-        tray_suffix = '.tray_file'
-        tray_icon_name = 'default_icon'
-        configuration = Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix=notification_suffix,
-            tray_directory=self.tray_directory_path,
-            tray_icon_name=tray_icon_name,
-            tray_suffix=tray_suffix
-        )
-        self.assertEqual(
-            configuration.notification_directory,
-            self.notification_directory_path
-        )
-        self.assertEqual(
-            configuration.notification_suffix, notification_suffix
-        )
-        self.assertEqual(
-            configuration.tray_directory, self.tray_directory_path
-        )
-        self.assertEqual(configuration.tray_icon_name, tray_icon_name)
-        self.assertEqual(configuration.tray_suffix, tray_suffix)
 
 
 class TestTrayFile(unittest.TestCase):

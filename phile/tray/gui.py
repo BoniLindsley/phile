@@ -19,36 +19,18 @@ from PySide2.QtWidgets import QApplication, QSystemTrayIcon, QWidget
 import watchdog.events  # type: ignore
 
 # Internal packages.
+from phile.configuration import Configuration
 from phile.PySide2_extras.posix_signal import (
     install_noop_signal_handler, PosixSignal
 )
 from phile.PySide2_extras.watchdog_wrapper import (
     FileSystemMonitor, FileSystemSignalEmitter, Observer
 )
-import phile.notify.notification
-from phile.notify.notification import _app_dir_paths
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
 )
 """Logger whose name is the module name."""
-
-
-class Configuration(phile.notify.notification.Configuration):
-
-    def __init__(
-        self,
-        *args,
-        tray_directory: pathlib.Path = _app_dir_paths.user_state /
-        "tray",
-        tray_icon_name: str = 'phile-tray-empty',
-        tray_suffix: str = '.tray',
-        **kwargs
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.tray_directory = tray_directory
-        self.tray_icon_name = tray_icon_name
-        self.tray_suffix = tray_suffix
 
 
 class TrayFile:

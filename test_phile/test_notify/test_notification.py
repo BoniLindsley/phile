@@ -12,55 +12,8 @@ import tempfile
 import unittest
 
 # Internal packages.
-from phile.notify.notification import Configuration, Notification
-
-
-class TestConfiguration(unittest.TestCase):
-    """Unit test for :class:`~phile.notify.cli.Configuration`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
-
-    def setUp(self) -> None:
-        """
-        Create a directory to use as a notification directory.
-
-        The directories are recreated for each test
-        to make sure no leftover files from tests
-        would interfere with each other.
-        """
-        self.notification_directory = tempfile.TemporaryDirectory()
-        self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
-        )
-
-    def tearDown(self) -> None:
-        """Remove notification directory."""
-        self.notification_directory.cleanup()
-
-    def test_default(self) -> None:
-        """Default constructor should fill in expected members."""
-        configuration = Configuration()
-        self.assertIsInstance(
-            configuration.notification_directory, pathlib.Path
-        )
-        self.assertIsInstance(configuration.notification_suffix, str)
-
-    def test_arguments(self) -> None:
-        """Accepted configurations."""
-        suffix = '.notification'
-        configuration = Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix=suffix
-        )
-        self.assertEqual(
-            configuration.notification_directory,
-            self.notification_directory_path
-        )
-        self.assertEqual(configuration.notification_suffix, suffix)
+from phile.configuration import Configuration
+from phile.notify.notification import Notification
 
 
 class TestNotification(unittest.TestCase):
