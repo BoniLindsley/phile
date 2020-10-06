@@ -124,6 +124,7 @@ autodoc_default_options = {
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'pyside2': ('https://doc.qt.io/qtforpython/', None),
+    'watchdog': ('https://watchdog.readthedocs.io/en/latest/', None),
 }
 """
 The locations and names of other projects

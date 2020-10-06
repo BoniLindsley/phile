@@ -28,7 +28,13 @@ setup(
     },
     extras_require={
         'dev': [
-            'coverage', 'mypy', 'recommonmark', 'sphinx', 'tox', 'yapf'
+            'coverage',
+            'mypy',
+            'psutil',
+            'recommonmark',
+            'sphinx',
+            'tox',
+            'yapf',
         ],
     },
     # Requires Python 3.6 because Python is dropping support
