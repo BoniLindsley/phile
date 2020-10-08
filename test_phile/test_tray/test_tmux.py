@@ -499,6 +499,24 @@ class TestIconList(unittest.TestCase):
         self.icon_list.load(year_tray_file)
         self.control_mode.send_command.assert_not_called()
 
+    def test_dispatch_with_bad_file(self) -> None:
+        """
+        Dispatch ignores badly structured files.
+
+        There is not much we can do about it as a reader.
+        """
+        tray_file = TrayFile(
+            configuration=self.configuration, name='month'
+        )
+        tray_file.text_icon = 'ABC'
+        tray_file.save()
+        with tray_file.path.open('a+') as file_stream:
+            file_stream.write('\nNot JSON.')
+        with self.assertWarns(UserWarning):
+            self.icon_list.dispatch(
+                watchdog.events.FileCreatedEvent(tray_file.path)
+            )
+
     def test_show_with_existing_files(self) -> None:
         """
         Showing should display existing tray files.

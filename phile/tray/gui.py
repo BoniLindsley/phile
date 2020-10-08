@@ -2,14 +2,17 @@
 
 # Standard library.
 import bisect
+import io
 import json
 import logging
 import os
 import pathlib
 import pkg_resources
+import shutil
 import signal
 import sys
 import typing
+import warnings
 
 # External dependencies.
 from PySide2.QtCore import QObject
@@ -98,6 +101,12 @@ class TrayFile:
         """
         Parse tray file for a tray icon to be displayed.
 
+        :raises ~FileNotFoundError:
+            If the file to load cannot be found.
+        :raises ~json.decoder.JSONDecodeError:
+            If the JSON string part of the tray file to load
+            cannot be decode properly.
+
         The input file should start with a single line
         that can be displayed in a text tray environment such as `tmux`.
 
@@ -110,29 +119,28 @@ class TrayFile:
         It should not contan any other keys,
         and may be ignored, subject to implementation details.
         """
-
-        with self.path.open() as file_stream:
-
-            self.text_icon = file_stream.readline().rstrip('\r\n')
-            _logger.debug("Using text icon: %s", self.text_icon)
-
-            # Make sure there are content to read by reading one byte
-            # and then resetting the offset before decoding.
-            current_offset = file_stream.tell()
-            if file_stream.read(1):
-                file_stream.seek(current_offset)
-                json_content = json.load(file_stream)
-            else:
-                json_content = {}
-
-            self.icon_name = json_content.get('icon_name')
-            _logger.debug("Using icon name: %s", self.icon_name)
-            icon_path = json_content.get('icon_path')
-            if icon_path is not None:
-                self.icon_path = pathlib.Path(icon_path)
-            else:
-                self.icon_path = None
-            _logger.debug("Using icon path: %s", self.icon_path)
+        # Buffer the file content to reduce the chance of file changes
+        # introducing a race condition.
+        content_stream = io.StringIO(self.path.read_text())
+        # First line is the text icon.
+        # Do not write content yet in case JSON decoding fails.
+        text_icon = content_stream.readline().rstrip('\r\n')
+        # Make sure there are content to read by reading one byte
+        # and then resetting the offset before decoding.
+        current_offset = content_stream.tell()
+        if content_stream.read(1):
+            content_stream.seek(current_offset)
+            json_content = json.load(content_stream)
+        else:
+            json_content = {}
+        # Get properties from the decoded structure.
+        self.text_icon = text_icon
+        self.icon_name = json_content.get('icon_name')
+        icon_path = json_content.get('icon_path')
+        if icon_path is not None:
+            self.icon_path = pathlib.Path(icon_path)
+        else:
+            self.icon_path = None
 
     def remove(self):
         try:
@@ -141,19 +149,26 @@ class TrayFile:
             pass
 
     def save(self):
+        # Buffer for data to be written.
+        content_stream = io.StringIO()
+        # First line is the text icon.
+        if self.text_icon is not None:
+            content_stream.write(self.text_icon)
+        # Only copy over values that are filled in.
+        json_content: typing.Dict[str, str] = {}
+        for key in ['icon_name', 'icon_path']:
+            value = getattr(self, key, None)
+            if value is not None:
+                json_content[key] = str(value)
+        # If there is content to write, end the text icon line
+        # before writing the JSON string.
+        if json_content:
+            content_stream.write('\n')
+            json.dump(json_content, content_stream)
+        # Copy over the buffer.
         with self.path.open('w+') as file_stream:
-            if self.text_icon is not None:
-                file_stream.write(self.text_icon)
-            # End with a new line
-            # so that appending would not jumble up the text.
-            json_content: typing.Dict[str, str] = {}
-            for key in ['icon_name', 'icon_path']:
-                value = getattr(self, key, None)
-                if value is not None:
-                    json_content[key] = str(value)
-            if json_content:
-                file_stream.write('\n')
-                json.dump(json_content, file_stream)
+            content_stream.seek(0)
+            shutil.copyfileobj(content_stream, file_stream)
 
 
 def set_icon_paths() -> None:
@@ -282,7 +297,22 @@ class GuiIconList(QObject):
         # Determine what to do base on existence of the actual file.
         # There might be a delay between the file operation
         # and the event being received here.
-        self.load(tray_file)
+        # If the `load` fails, there is not much we can do about it.
+        # So just ignore.
+        # JSON string decoding error is likely to be
+        # a tray file modification in the middle of a read.
+        # In that case, a future file modification event is expected
+        # and this method will receive it, and we can handle it then.
+        # So ignoring is okay in that case.
+        try:
+            self.load(tray_file)
+        except json.decoder.JSONDecodeError:
+            warnings.warn(
+                'Unable to decode a tray file: {}'.format(
+                    tray_file.path
+                )
+            )
+            return
 
     def load(self, tray_file: TrayFile) -> None:
         # Figure out the position of the tray icon is in

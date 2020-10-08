@@ -15,6 +15,7 @@ in control mode.
 # Standard libraries.
 import bisect
 import datetime
+import json
 import logging
 import os
 import pathlib
@@ -24,6 +25,7 @@ import shlex
 import subprocess
 import sys
 import typing
+import warnings
 
 # External dependencies.
 import watchdog.events  # type: ignore
@@ -528,7 +530,22 @@ class IconList(watchdog.events.FileSystemEventHandler):
         # Determine what to do base on existence of the actual file.
         # There might be a delay between the file operation
         # and the event being received here.
-        self.load(tray_file)
+        # If the `load` fails, there is not much we can do about it.
+        # So just ignore.
+        # JSON string decoding error is likely to be
+        # a tray file modification in the middle of a read.
+        # In that case, a future file modification event is expected
+        # and this method will receive it, and we can handle it then.
+        # So ignoring is okay in that case.
+        try:
+            self.load(tray_file)
+        except json.decoder.JSONDecodeError:
+            warnings.warn(
+                'Unable to decode a tray file: {}'.format(
+                    tray_file.path
+                )
+            )
+            return
 
     def load(self, tray_file: TrayFile) -> None:
         """
