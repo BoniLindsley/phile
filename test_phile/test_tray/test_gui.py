@@ -411,6 +411,28 @@ class TestGuiIconList(unittest.TestCase):
         _logger.debug('End of test.')
 
     @unittest.mock.patch(
+        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
+    )
+    def test_show_with_bad_file(self) -> None:
+        """
+        Show ignores badly structured files.
+
+        There is not much we can do about it as a reader.
+        """
+        # Create a tray.
+        tray = TrayFile(name='VeCat', configuration=self.configuration)
+        tray.icon_name = 'phile-tray-empty'
+        tray.text_icon = 'A'
+        tray.save()
+        with tray.path.open('a+') as file_stream:
+            file_stream.write('Extra text.')
+        # Check that they are all detected when showing the tray icons.
+        gui_icon_list = self.gui_icon_list
+        with self.assertWarns(UserWarning):
+            gui_icon_list.show()
+        self.assertEqual(len(gui_icon_list.tray_children()), 0)
+
+    @unittest.mock.patch(
         'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
     )
     @unittest.mock.patch(
