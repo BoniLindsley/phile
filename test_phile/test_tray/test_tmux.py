@@ -14,6 +14,7 @@ import psutil  # type: ignore
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 import unittest.mock
@@ -30,7 +31,7 @@ from phile.tray.tmux import (
 )
 from phile.tray.gui import TrayFile
 from test_phile.pyside2_test_tools import EnvironBackup
-from test_phile.watchdog_test_tools import EventSetter
+from test_phile.threaded_mock import ThreadedMock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
@@ -373,6 +374,7 @@ class TestIconList(unittest.TestCase):
             tray_directory=self.tray_dir_path
         )
         self.control_mode = unittest.mock.Mock()
+        self.control_mode.send_command = ThreadedMock()
         self.observer = Observer()
         self.icon_list = IconList(
             configuration=self.configuration,
@@ -394,7 +396,7 @@ class TestIconList(unittest.TestCase):
     def test_refresh_status_line_with_no_tray_files(self) -> None:
         """Change tmux status line to reflect currently tracked files."""
         self.icon_list.refresh_status_line()
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(''),
         )
 
@@ -406,7 +408,7 @@ class TestIconList(unittest.TestCase):
         )
         year_tray_file.text_icon = '2345'
         self.icon_list.insert(0, year_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(
                 year_tray_file.text_icon
             )
@@ -414,7 +416,7 @@ class TestIconList(unittest.TestCase):
         _logger.debug('Setting year tray file.')
         year_tray_file.text_icon = '1234'
         self.icon_list.set(0, year_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(
                 year_tray_file.text_icon
             )
@@ -425,21 +427,21 @@ class TestIconList(unittest.TestCase):
         )
         month_tray_file.text_icon = '01'
         self.icon_list.insert(0, month_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(
                 month_tray_file.text_icon + year_tray_file.text_icon
             )
         )
         _logger.debug('Removing year tray file.')
         self.icon_list.remove(1)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(
                 month_tray_file.text_icon
             )
         )
         _logger.debug('Removing month tray file.')
         self.icon_list.remove(0)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(''),
         )
 
@@ -458,7 +460,7 @@ class TestIconList(unittest.TestCase):
         year_tray_file.text_icon = '2345'
         year_tray_file.save()
         self.icon_list.load(year_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('2345'),
         )
         self.control_mode.send_command.reset_mock()
@@ -469,7 +471,7 @@ class TestIconList(unittest.TestCase):
         month_tray_file.text_icon = '01'
         month_tray_file.save()
         self.icon_list.load(month_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('012345'),
         )
         self.control_mode.send_command.reset_mock()
@@ -477,21 +479,21 @@ class TestIconList(unittest.TestCase):
         month_tray_file.text_icon = '12'
         month_tray_file.save()
         self.icon_list.load(month_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('122345'),
         )
         self.control_mode.send_command.reset_mock()
         _logger.debug('Removing month tray file.')
         month_tray_file.remove()
         self.icon_list.load(month_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('2345'),
         )
         self.control_mode.send_command.reset_mock()
         _logger.debug('Removing year tray file.')
         year_tray_file.remove()
         self.icon_list.load(year_tray_file)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(''),
         )
         self.control_mode.send_command.reset_mock()
@@ -525,11 +527,6 @@ class TestIconList(unittest.TestCase):
         Wrong suffix should be ignored.
         Moves are treated as delete and create.
         """
-        _logger.debug('Inserting event setter to monitor events.')
-        event_setter = EventSetter()
-        self.icon_list._observer.add_handler(
-            event_setter, self.configuration.tray_directory
-        )
         _logger.debug('Adding a tray file.')
         year_tray_file = TrayFile(
             configuration=self.configuration, name='year'
@@ -554,19 +551,11 @@ class TestIconList(unittest.TestCase):
         wrong_tray_file.touch()
         _logger.debug('Showing tray.')
         self.icon_list.show()
-        expected_status_right = CommandBuilder.set_global_status_right(
-            month_tray_file.text_icon + year_tray_file.text_icon
-        )
-        while event_setter.wait(wait_time.total_seconds()):
-            event_setter.clear()
-            call_args = self.control_mode.send_command.call_args
-            if call_args == unittest.mock.call(expected_status_right):
-                break
-        else:
-            event_setter.clear()
-            self.control_mode.send_command.assert_called_with(
-                expected_status_right
+        self.control_mode.send_command.assert_called_with_soon(
+            CommandBuilder.set_global_status_right(
+                month_tray_file.text_icon + year_tray_file.text_icon
             )
+        )
 
     def test_file_changes_after_show_and_then_hide(self) -> None:
         """
@@ -578,104 +567,64 @@ class TestIconList(unittest.TestCase):
         """
         _logger.debug('Showing empty tray.')
         self.icon_list.show()
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('')
         )
         self.assertIsNotNone(self.icon_list._watchdog_watch)
         _logger.debug('Inserting event setter to monitor events.')
-        event_setter = EventSetter()
-        self.icon_list._observer.add_handler(
-            event_setter, self.configuration.tray_directory
-        )
         _logger.debug('Adding a tray file.')
         year_tray_file = TrayFile(
             configuration=self.configuration, name='year'
         )
         year_tray_file.text_icon = '2345'
         year_tray_file.save()
-        expected_status_right = CommandBuilder.set_global_status_right(
-            year_tray_file.text_icon
-        )
-        while event_setter.wait(wait_time.total_seconds()):
-            event_setter.clear()
-            call_args = self.control_mode.send_command.call_args
-            if call_args == unittest.mock.call(expected_status_right):
-                break
-        else:
-            event_setter.clear()
-            self.control_mode.send_command.assert_called_with(
-                expected_status_right
+        self.control_mode.send_command.assert_called_with_soon(
+            CommandBuilder.set_global_status_right(
+                year_tray_file.text_icon
             )
+        )
         _logger.debug('Adding a second tray file.')
         month_tray_file = TrayFile(
             configuration=self.configuration, name='month'
         )
         month_tray_file.text_icon = '12/'
         month_tray_file.save()
-        expected_status_right = CommandBuilder.set_global_status_right(
-            month_tray_file.text_icon + year_tray_file.text_icon
-        )
-        while event_setter.wait(wait_time.total_seconds()):
-            event_setter.clear()
-            call_args = self.control_mode.send_command.call_args
-            if call_args == unittest.mock.call(expected_status_right):
-                break
-        else:
-            event_setter.clear()
-            self.control_mode.send_command.assert_called_with(
-                expected_status_right
+        self.control_mode.send_command.assert_called_with_soon(
+            CommandBuilder.set_global_status_right(
+                month_tray_file.text_icon + year_tray_file.text_icon
             )
+        )
         _logger.debug('Changing a tray file.')
         year_tray_file.text_icon = '1234'
         year_tray_file.save()
-        expected_status_right = CommandBuilder.set_global_status_right(
-            month_tray_file.text_icon + year_tray_file.text_icon
-        )
-        while event_setter.wait(wait_time.total_seconds()):
-            event_setter.clear()
-            call_args = self.control_mode.send_command.call_args
-            if call_args == unittest.mock.call(expected_status_right):
-                break
-        else:
-            event_setter.clear()
-            self.control_mode.send_command.assert_called_with(
-                expected_status_right
+        self.control_mode.send_command.assert_called_with_soon(
+            CommandBuilder.set_global_status_right(
+                month_tray_file.text_icon + year_tray_file.text_icon
             )
+        )
         _logger.debug('Moving a tray file.')
         new_year_tray_file = TrayFile(
-            configuration=self.configuration, name='new_year'
+            configuration=self.configuration, name='a_year'
         )
         year_tray_file.path.rename(new_year_tray_file.path)
         year_tray_file.path = new_year_tray_file.path
-        expected_status_right = CommandBuilder.set_global_status_right(
-            month_tray_file.text_icon + year_tray_file.text_icon
-        )
-        while event_setter.wait(wait_time.total_seconds()):
-            event_setter.clear()
-            call_args = self.control_mode.send_command.call_args
-            if call_args == unittest.mock.call(expected_status_right):
-                break
-        else:
-            event_setter.clear()
-            self.control_mode.send_command.assert_called_with(
-                expected_status_right
+        self.control_mode.send_command.assert_called_with_soon(
+            CommandBuilder.set_global_status_right(
+                year_tray_file.text_icon + month_tray_file.text_icon
             )
+        )
         _logger.debug('Removing a tray file.')
         year_tray_file.text_icon = ''
         year_tray_file.remove()
-        expected_call_args = unittest.mock.call(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(
                 month_tray_file.text_icon
             )
         )
-        send_command = self.control_mode.send_command
-        while send_command.call_args != expected_call_args:
-            self.assertTrue(event_setter.wait(wait_time.total_seconds()))
-            event_setter.clear()
         _logger.debug('Hiding system tray.')
         self.icon_list.hide()
         self.assertIsNone(self.icon_list._watchdog_watch)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('')
         )
 
@@ -691,7 +640,7 @@ class TestIconList(unittest.TestCase):
         _logger.debug('Hiding  empty tray.')
         self.icon_list.show()
         self.assertIsNotNone(self.icon_list._watchdog_watch)
-        self.control_mode.send_command.assert_called_with(
+        self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('')
         )
         self.control_mode.send_command.reset_mock()

@@ -25,7 +25,7 @@ from phile.tray.gui import GuiIconList, set_icon_paths, TrayFile
 from test_phile.pyside2_test_tools import (
     QTestApplication, q_icon_from_theme, SystemTrayIcon
 )
-from test_phile.watchdog_test_tools import EventSetter
+from test_phile.threaded_mock import ThreadedMock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
@@ -518,17 +518,13 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the handlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the icon list would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.tray_directory
-        )
         # Need icon paths to test icon loading.
         set_icon_paths()
+        # Detect when the handler from gui_icon_list will be dispatched.
+        signal_emitter = self.gui_icon_list._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
+        )
         # Create the tray file.
         tray_file = TrayFile(
             name='VeCat', configuration=self.configuration
@@ -538,9 +534,7 @@ class TestGuiIconList(unittest.TestCase):
         tray_file.save()
         self.assertTrue(tray_file.path.is_file())
         # Wait for watchdog to find it.
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -564,20 +558,14 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the handlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the icon list would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.tray_directory
+        # Detect when the handler from gui_icon_list will be dispatched.
+        signal_emitter = self.gui_icon_list._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Wait for watchdog to notice the tray file is gone now.
         tray_file.remove()
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -605,21 +593,15 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the handlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the icon list would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.tray_directory
+        # Detect when the handler from gui_icon_list will be dispatched.
+        signal_emitter = self.gui_icon_list._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Wait for watchdog to notice the tray file has been changed.
         tray_file.icon_name = 'phile-tray-empty'
         tray_file.save()
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -643,14 +625,10 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the handlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the icon list would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.tray_directory
+        # Detect when the handler from gui_icon_list will be dispatched.
+        signal_emitter = self.gui_icon_list._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Wait for watchdog to notice the tray file is moved now.
         new_name = 'Disco'
@@ -658,9 +636,7 @@ class TestGuiIconList(unittest.TestCase):
             name=new_name, configuration=self.configuration
         )
         tray_file.path.rename(new_tray_file.path)
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -678,14 +654,10 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the handlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the icon list would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.tray_directory
+        # Detect when the handler from gui_icon_list will be dispatched.
+        signal_emitter = self.gui_icon_list._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Create the tray file.
         tray_file = TrayFile(
@@ -696,16 +668,12 @@ class TestGuiIconList(unittest.TestCase):
         tray_file.save()
         self.assertTrue(tray_file.path.is_file())
         # Wait for watchdog to notice it.
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        setter.clear()
+        signal_emitter.dispatch.assert_called_soon()
         # Remove the tray file.
         tray_file.remove()
         self.assertTrue(not tray_file.path.is_file())
         # Wait for watchdog to notice it.
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
