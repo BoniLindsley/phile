@@ -23,7 +23,7 @@ from phile.PySide2_extras.watchdog_wrapper import (
     FileSystemMonitor, FileSystemSignalEmitter, Observer
 )
 from test_phile.pyside2_test_tools import QTestApplication
-from test_phile.watchdog_test_tools import EventSetter
+from test_phile.threaded_mock import ThreadedMock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
@@ -177,9 +177,13 @@ class TestObserver(unittest.TestCase):
         """Adding and removing handlers do add handlers."""
 
         self.assertTrue(not self.observer.has_handlers())
+        # Detect when the handler will be dispatched.
+        event_handler = watchdog.events.FileSystemEventHandler()
+        event_handler.dispatch = ThreadedMock(  # type: ignore
+            target=event_handler.dispatch
+        )
         # Creating a file inside the monitored directory
         # triggers an event dispatch to the handler.
-        event_handler = EventSetter()
         watch = self.observer.add_handler(
             event_handler, self.monitor_directory_path
         )
@@ -187,9 +191,7 @@ class TestObserver(unittest.TestCase):
         self.observer.start()
         new_file_path = self.monitor_directory_path / 'new_file'
         new_file_path.touch()
-        self.assertTrue(
-            event_handler.wait(timeout=wait_time.total_seconds())
-        )
+        event_handler.dispatch.assert_called_soon()
 
         # Try removing it.
         # Check that it is removed
@@ -199,20 +201,21 @@ class TestObserver(unittest.TestCase):
         # This uses the implementation detail that
         # handlers are called in the order they were added.
         old_event_handler = event_handler
-        old_event_handler.clear()
+        old_event_handler.dispatch.reset_mock()
         self.observer.remove_handler(old_event_handler, watch)
         self.assertTrue(not self.observer.has_handlers())
-        event_handler = EventSetter()
+        event_handler = watchdog.events.FileSystemEventHandler()
+        event_handler.dispatch = ThreadedMock(  # type: ignore
+            target=event_handler.dispatch
+        )
         watch = self.observer.add_handler(
             event_handler, self.monitor_directory_path
         )
         self.assertTrue(self.observer.has_handlers())
         new_file_path = self.monitor_directory_path / 'new_file'
         new_file_path.unlink()
-        self.assertTrue(
-            event_handler.wait(timeout=wait_time.total_seconds())
-        )
-        self.assertTrue(not old_event_handler.is_set())
+        event_handler.dispatch.assert_called_soon()
+        old_event_handler.dispatch.assert_not_called()
 
         # Clean-up.
         self.observer.remove_handler(event_handler, watch)
@@ -326,24 +329,17 @@ class TestFileSystemSignalEmitter(unittest.TestCase):
         signal.connect(signal_catcher)  # type: ignore
         # Let the observer know about the emitter.
         self.signal_emitter.start(_monitoring_observer=observer)
-        # Connect with a fake handler to determine
-        # when the signal should be ready.
-        # This reduces the chance of a race condition
-        # that Qt event loop may remain empty and return immediately
-        # before observer dispatches to the emitter.
-        # This uses implementation detail that handlers are dispatched
-        # in the order added.
-        event_setter = EventSetter()
-        observer.add_handler(event_setter, monitor_directory_path)
+        # Detect when the handler from main window will be dispatched.
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
+        )
         # Dispatch an event to both handlers.
         # Wait until the second handler is called.
         # We can be reasonably sure the first handler is dispatched
         # at that point.
         new_file_path = monitor_directory_path / 'new_file'
         new_file_path.touch()
-        self.assertTrue(
-            event_setter.wait(timeout=wait_time.total_seconds())
-        )
+        signal_emitter.dispatch.assert_called_soon()
         # Check that the first handler is dispatched
         # which should emit a signal
         # which is connected to the signal catcher mock.

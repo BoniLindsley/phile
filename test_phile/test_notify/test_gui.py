@@ -24,7 +24,7 @@ from phile.notify.gui import (
 from phile.notify.notification import Configuration, Notification
 from phile.PySide2_extras.watchdog_wrapper import Observer
 from test_phile.pyside2_test_tools import QTestApplication
-from test_phile.watchdog_test_tools import EventSetter
+from test_phile.threaded_mock import ThreadedMock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422
@@ -680,23 +680,17 @@ class TestMainWindow(unittest.TestCase):
         )
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 0)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the hanlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the MainWindow would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.notification_directory
+        # Detect when the handler from main window will be dispatched.
+        signal_emitter = self.main_window._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Create the notification and wait for watchdog to find it.
         self.assertTrue(not notification.path.is_file())
         content = 'Happy birthday!'
         notification.write(content)
         self.assertTrue(notification.path.is_file())
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -717,21 +711,15 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the hanlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the MainWindow would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.notification_directory
+        # Detect when the handler from main window will be dispatched.
+        signal_emitter = self.main_window._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Remove the notification and wait for watchdog to notice.
         notification.remove()
         self.assertTrue(not notification.path.is_file())
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -748,22 +736,16 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the hanlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the MainWindow would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.notification_directory
+        # Detect when the handler from main window will be dispatched.
+        signal_emitter = self.main_window._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Remove the notification and wait for watchdog to notice.
         new_content = 'Happy New Year!'
         notification.append(new_content)
         self.assertTrue(notification.path.is_file())
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -784,14 +766,10 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
-        # Use another watchdog handler to receive creation event.
-        # Current watchdog implementation dispatches to handlers
-        # in the order the hanlers were added.
-        # So by the time the new handler is dispatched,
-        # the handler for the MainWindow would be dispatched too.
-        setter = EventSetter()
-        setter_watch = self.observer.add_handler(
-            setter, self.configuration.notification_directory
+        # Detect when the handler from main window will be dispatched.
+        signal_emitter = self.main_window._signal_emitter
+        signal_emitter.dispatch = ThreadedMock(  # type: ignore
+            target=signal_emitter.dispatch
         )
         # Remove the notification and wait for watchdog to notice.
         new_name = 'Disco'
@@ -801,9 +779,7 @@ class TestMainWindow(unittest.TestCase):
         notification.path.rename(new_notification.path)
         self.assertTrue(not notification.path.is_file())
         self.assertTrue(new_notification.path.is_file())
-        wait_time = datetime.timedelta(seconds=2)
-        self.assertTrue(setter.wait(wait_time.total_seconds()))
-        self.observer.remove_handler(setter, setter_watch)
+        signal_emitter.dispatch.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
