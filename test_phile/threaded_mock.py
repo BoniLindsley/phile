@@ -59,7 +59,7 @@ class ThreadedMock(unittest.mock.Mock):
         super().__init__(*args, **kwargs)
         self._call_found = threading.Event()
         """Set when an :data:`_expected_call` had been found."""
-        self._expected_call: typing.Optional[unittest.mock.call] = None
+        self._expected_call: typing.Optional[unittest.mock._Call] = None
         """Call object to compare with in :meth:`_side_effect`"""
         self._mock_lock = threading.Lock()
         """Guards against changes to :data:`_expected_call`."""
