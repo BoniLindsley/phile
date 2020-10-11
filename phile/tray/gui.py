@@ -27,7 +27,7 @@ from phile.PySide2_extras.posix_signal import (
     install_noop_signal_handler, PosixSignal
 )
 from phile.PySide2_extras.watchdog_wrapper import (
-    FileSystemMonitor, FileSystemSignalEmitter, Observer
+    FileSystemMonitor, FileSystemSignalEmitter
 )
 
 _logger = logging.getLogger(
@@ -209,7 +209,7 @@ class GuiIconList(QObject):
         self,
         *args,
         configuration: Configuration = None,
-        observer: Observer = None,
+        file_system_monitor: FileSystemMonitor = None,
         **kwargs
     ) -> None:
 
@@ -221,13 +221,10 @@ class GuiIconList(QObject):
         super().__init__(*args, **kwargs)
         # Keep track of GUI icons created.
         self.tray_files: typing.List[TrayFile] = []
-        # Attach a file monitor to it as a child
-        # for automatic life-time management.
-        if observer is None:
-            observer = Observer()
-        self._file_system_monitor = FileSystemMonitor(
-            self, _watchdog_observer=observer
-        )
+        # Use a monitor get file system events.
+        if file_system_monitor is None:
+            file_system_monitor = FileSystemMonitor(self)
+        self._file_system_monitor = file_system_monitor
         # Figure out where tray files are and their suffix.
         if configuration is None:
             configuration = Configuration()
