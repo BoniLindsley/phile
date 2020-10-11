@@ -22,7 +22,7 @@ from phile.notify.gui import (
     MainWindow, Notification, NotificationMdi, NotificationMdiSubWindow
 )
 from phile.notify.notification import Configuration, Notification
-from phile.PySide2_extras.watchdog_wrapper import Observer
+from phile.PySide2_extras.watchdog_wrapper import FileSystemMonitor
 from test_phile.pyside2_test_tools import QTestApplication
 from test_phile.threaded_mock import ThreadedMock
 
@@ -537,11 +537,8 @@ class TestMainWindow(unittest.TestCase):
         self.configuration = Configuration(
             notification_directory=self.notification_directory_path
         )
-        self.observer = Observer()
         self.app = QTestApplication()
-        self.main_window = MainWindow(
-            configuration=self.configuration, observer=self.observer
-        )
+        self.main_window = MainWindow(configuration=self.configuration)
 
     def tearDown(self) -> None:
         """
@@ -571,6 +568,32 @@ class TestMainWindow(unittest.TestCase):
         )
         # Test also that a main window can be created without arguments.
         MainWindow().deleteLater()
+
+    def test_initialisation_with_custom_monitor(self) -> None:
+        """
+        Create a :class:`phile.notify.MainWindow` object with a
+        :class:`phile.PySide2_extras.watchdog_wrapper.FileSystemMonitor`.
+        """
+        # Create another instance of `MainWindow`
+        # and ignore the one created in `setUp`.
+        # Use the monitor from it though,
+        # so we don't have to create another one.
+        file_system_monitor = self.main_window._file_system_monitor
+        main_window = MainWindow(
+            configuration=self.configuration,
+            file_system_monitor=file_system_monitor
+        )
+        # Test for the same properties.
+        self.assertEqual(
+            main_window._file_system_monitor, file_system_monitor
+        )
+        self.assertEqual(len(main_window._sub_windows), 0)
+        self.assertTrue(not main_window._signal_emitter.is_started())
+        self.assertTrue(not file_system_monitor.was_start_called())
+        self.assertTrue(not file_system_monitor.was_stop_called())
+        # Clean-up.
+        main_window.deleteLater()
+        self.app.process_deferred_delete_events()
 
     def test_show_and_hide_without_notifications(self) -> None:
         """Showing and hiding should start and stop file monitoring."""

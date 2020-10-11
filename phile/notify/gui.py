@@ -25,7 +25,7 @@ from phile.PySide2_extras.posix_signal import (
     install_noop_signal_handler, PosixSignal
 )
 from phile.PySide2_extras.watchdog_wrapper import (
-    FileSystemMonitor, FileSystemSignalEmitter, Observer
+    FileSystemMonitor, FileSystemSignalEmitter
 )
 
 _logger = logging.getLogger(
@@ -241,20 +241,17 @@ class MainWindow(QMainWindow):
         self,
         *args,
         configuration: Configuration = None,
-        observer: Observer = None,
+        file_system_monitor: FileSystemMonitor = None,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         # Create the GUI for displaying notifications.
         mdi_area = NotificationMdi()
         self.setCentralWidget(mdi_area)
-        # Attach a file monitor to it as a child
-        # for automatic life-time management.
-        if observer is None:
-            observer = Observer()
-        self._file_system_monitor = FileSystemMonitor(
-            mdi_area, _watchdog_observer=observer
-        )
+        # Use a monitor get file system events.
+        if file_system_monitor is None:
+            file_system_monitor = FileSystemMonitor(mdi_area)
+        self._file_system_monitor = file_system_monitor
         # Figure out where notifications are and their suffix.
         if configuration is None:
             configuration = Configuration()

@@ -20,7 +20,6 @@ from PySide2.QtGui import QIcon
 
 # Internal packages.
 from phile.configuration import Configuration
-from phile.PySide2_extras.watchdog_wrapper import Observer
 from phile.tray.gui import GuiIconList, set_icon_paths, TrayFile
 from test_phile.pyside2_test_tools import (
     QTestApplication, q_icon_from_theme, SystemTrayIcon
@@ -244,10 +243,9 @@ class TestGuiIconList(unittest.TestCase):
         self.configuration = Configuration(
             tray_directory=self.tray_directory_path
         )
-        self.observer = Observer()
         self.app = QTestApplication()
         self.gui_icon_list = GuiIconList(
-            configuration=self.configuration, observer=self.observer
+            configuration=self.configuration
         )
 
     def tearDown(self) -> None:
@@ -277,6 +275,32 @@ class TestGuiIconList(unittest.TestCase):
         )
         # Test also that the icon list can be created without arguments.
         GuiIconList().deleteLater()
+
+    def test_initialisation_with_custom_monitor(self) -> None:
+        """
+        Create a :class:`phile.tray.gui.GuiIconList` object with a
+        :class:`phile.PySide2_extras.watchdog_wrapper.FileSystemMonitor`.
+        """
+        # Create another instance of `GuiIconList`
+        # and ignore the one created in `setUp`.
+        # Use the monitor from it though,
+        # so we don't have to create another one.
+        file_system_monitor = self.gui_icon_list._file_system_monitor
+        gui_icon_list = GuiIconList(
+            configuration=self.configuration,
+            file_system_monitor=file_system_monitor
+        )
+        # Test for the same properties.
+        self.assertEqual(
+            gui_icon_list._file_system_monitor, file_system_monitor
+        )
+        self.assertEqual(len(gui_icon_list.tray_children()), 0)
+        self.assertTrue(not gui_icon_list._signal_emitter.is_started())
+        self.assertTrue(not file_system_monitor.was_start_called())
+        self.assertTrue(not file_system_monitor.was_stop_called())
+        # Clean-up.
+        gui_icon_list.deleteLater()
+        self.app.process_deferred_delete_events()
 
     def test_show_and_hide_without_tray_icones(self) -> None:
         """Showing and hiding should start and stop file monitoring."""
