@@ -33,7 +33,7 @@ import watchdog.events  # type: ignore
 # Internal packages.
 from phile.configuration import Configuration
 from phile.PySide2_extras.watchdog_wrapper import Observer
-from phile.tray.gui import TrayFile
+from phile.tray.tray_file import TrayFile
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore  # mypy issue #1422

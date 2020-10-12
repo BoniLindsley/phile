@@ -14,8 +14,6 @@ import psutil  # type: ignore
 import signal
 import subprocess
 import tempfile
-import threading
-import time
 import unittest
 import unittest.mock
 
@@ -29,7 +27,7 @@ from phile.tray.tmux import (
     CommandBuilder, ControlMode, get_server_pid, IconList, kill_server,
     timedelta_to_seconds
 )
-from phile.tray.gui import TrayFile
+from phile.tray.tray_file import TrayFile
 from test_phile.pyside2_test_tools import EnvironBackup
 from test_phile.threaded_mock import ThreadedMock
 
