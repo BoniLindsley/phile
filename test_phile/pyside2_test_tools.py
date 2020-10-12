@@ -67,9 +67,7 @@ def q_icon_from_specified_theme(name: str, theme_name: str) -> QIcon:
             theme_directory.rglob(icon_search_pattern)
         )
         for icon_path in possible_icons:
-            print(icon_path)
             current_icon = QIcon(str(icon_path))
-            print(current_icon)
             if not current_icon.isNull():
                 current_icon.name = lambda: name  # type: ignore
                 return current_icon
