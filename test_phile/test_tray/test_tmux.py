@@ -22,12 +22,12 @@ import watchdog.events  # type: ignore
 
 # Internal packages.
 from phile.configuration import Configuration
-from phile.PySide2_extras.watchdog_wrapper import Observer
 from phile.tray.tmux import (
     CommandBuilder, ControlMode, get_server_pid, IconList, kill_server,
     timedelta_to_seconds
 )
 from phile.tray.tray_file import TrayFile
+from phile.watchdog_extras import Observer
 from test_phile.pyside2_test_tools import EnvironBackup
 from test_phile.threaded_mock import ThreadedMock
 
