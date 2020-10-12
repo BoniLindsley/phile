@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
----------------------
-Test phile.notify CLI
----------------------
+------------------------
+Test phile.configuration
+------------------------
 """
 
 # Standard library.
@@ -31,17 +31,20 @@ class TestConfiguration(unittest.TestCase):
         to make sure no leftover files from tests
         would interfere with each other.
         """
-        self.notification_directory = tempfile.TemporaryDirectory()
-        self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
+        self.user_state_directory = tempfile.TemporaryDirectory()
+        self.user_state_directory_path = pathlib.Path(
+            self.user_state_directory.name
         )
-        self.tray_directory = tempfile.TemporaryDirectory()
-        self.tray_directory_path = pathlib.Path(self.tray_directory.name)
+        self.notification_directory_path = (
+            self.user_state_directory_path / 'nnoottiiffyy'
+        )
+        self.tray_directory_path = (
+            self.user_state_directory_path / 'ttrraayy'
+        )
 
     def tearDown(self) -> None:
         """Remove notification directory."""
-        self.tray_directory.cleanup()
-        self.notification_directory.cleanup()
+        self.user_state_directory.cleanup()
 
     def test_default(self) -> None:
         """Default constructor should fill in expected members."""
@@ -54,6 +57,25 @@ class TestConfiguration(unittest.TestCase):
         self.assertIsInstance(configuration.tray_icon_name, str)
         self.assertIsInstance(configuration.tray_suffix, str)
 
+    def test_initialise_user_state_directory(self) -> None:
+        """Initialise by giving only user state directory."""
+        configuration = Configuration(
+            user_state_directory=self.user_state_directory_path
+        )
+        self.assertIsInstance(
+            configuration.user_state_directory, pathlib.Path
+        )
+        self.assertTrue(
+            configuration.notification_directory.relative_to(
+                configuration.user_state_directory
+            )
+        )
+        self.assertTrue(
+            configuration.tray_directory.relative_to(
+                configuration.user_state_directory
+            )
+        )
+
     def test_arguments(self) -> None:
         """Accepted configurations."""
         notification_suffix = '.notification'
@@ -64,7 +86,7 @@ class TestConfiguration(unittest.TestCase):
             notification_suffix=notification_suffix,
             tray_directory=self.tray_directory_path,
             tray_icon_name=tray_icon_name,
-            tray_suffix=tray_suffix
+            tray_suffix=tray_suffix,
         )
         self.assertEqual(
             configuration.notification_directory,

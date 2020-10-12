@@ -30,6 +30,7 @@ setup(
         'dev': [
             'coverage',
             'mypy',
+            'portalocker',
             'psutil',
             'recommonmark',
             'sphinx',
