@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+-------------------------
+watchdog observer wrapper
+-------------------------
+"""
 
 # Standard library.
 import pathlib
