@@ -25,15 +25,7 @@ _logger = logging.getLogger(
 
 
 class TestObserver(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.PySide2_extras.Observer`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.PySide2_extras.Observer`."""
 
     def setUp(self) -> None:
         """

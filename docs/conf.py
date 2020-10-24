@@ -82,7 +82,7 @@ in `html_static_path` and `html_extra_path`.
 
 # ## Extension: sphinx.ext.autodoc
 
-autoclass_content = 'both'
+autoclass_content = 'class'
 """
 This value selects what content will be inserted
 into the main body of an autoclass directive.
@@ -107,17 +107,41 @@ New in version 1.4.
 """
 
 autodoc_default_options = {
-    #'exclude-members',
+    # Do not show these members.
+    # Note that documentation for `__init__` can still be added
+    # by setting `autoclass_content` to `both` or `init`.
+    'exclude-members': '__dict__, __module__, __weakref__',
+    # Add all documented members. Boolean or 'var1, var2'.
+    'members': True,
+    # Add dunder members.
+    'special-members': True,
+    # Insert list of base classes.
+    'show-inheritance': True,
+    # Include undocumented members
+    'undoc-members': True,
     #'ignore-module-all',
     #'imported-members',
     #'inherited-members',
-    'members': True,
     #'member-order',
     #'private-members',
-    #'special-members':,
-    #'show-inheritance',
-    'undoc-members': True,
 }
+
+autodoc_inherit_docstrings = False
+
+autodoc_typehints = 'description'
+"""
+How to represents typehints.
+
+The setting takes the following values:
+
+-   'signature': Show typehints as its signature (default)
+-   'description': Show typehints as content of function or method
+-   'none': Do not show typehints
+
+New in version 2.1.
+
+New in version 3.0: New option 'description' is added.
+"""
 
 # ## Extension: sphinx.ext.intersphinx
 

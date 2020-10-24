@@ -16,15 +16,7 @@ from phile.tray.tray_file import TrayFile
 
 
 class TestTrayFile(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.notify.tray.TrayFile`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.notify.tray.TrayFile`."""
 
     def setUp(self) -> None:
         """
