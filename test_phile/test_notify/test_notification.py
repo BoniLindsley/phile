@@ -17,13 +17,7 @@ from phile.notify.notification import Notification
 
 
 class TestNotification(unittest.TestCase):
-    """Unit test for :class:`~phile.notify.cli.Notification`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.notify.cli.Notification`."""
 
     def setUp(self) -> None:
         """

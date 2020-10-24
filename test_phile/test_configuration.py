@@ -15,13 +15,7 @@ from phile.configuration import Configuration
 
 
 class TestConfiguration(unittest.TestCase):
-    """Unit test for :class:`~phile.tray.Configuration`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.tray.Configuration`."""
 
     def setUp(self) -> None:
         """

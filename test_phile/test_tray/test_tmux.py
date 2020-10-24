@@ -41,16 +41,11 @@ wait_time = datetime.timedelta(seconds=2)
 
 class TestCommandBuilder(unittest.TestCase):
     """
-    Unit test for :class:`~phile.tray.tmux.CommandBuilder`.
+    Tests :class:`~phile.tray.tmux.CommandBuilder`.
 
     Ensures the tmux command string returned from the class methods
     are as expected.
     """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """"""
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
 
     def test_exit_client(self) -> None:
         self.assertEqual(CommandBuilder.exit_client(), '')
@@ -97,12 +92,7 @@ class TestCommandBuilder(unittest.TestCase):
 
 
 class TestTimedeltaToSeconds(unittest.TestCase):
-    """Unit test for :class:`~phile.tray.tmux.timedelta_to_seconds`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """"""
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.tray.tmux.timedelta_to_seconds`."""
 
     def test_timedelta(self) -> None:
         """Convert :class:`~datetime.timedelta` to seconds."""
@@ -118,7 +108,7 @@ class TestTimedeltaToSeconds(unittest.TestCase):
 
 class TestControlMode(unittest.TestCase):
     """
-    Unit test for :class:`~phile.tray.tmux.ControlMode`.
+    Tests :class:`~phile.tray.tmux.ControlMode`.
 
     Also tests the functions :meth:`~phile.tray.tmux.get_server_pid`
     and :meth:`~phile.tray.tmux.kill_server`,
@@ -131,11 +121,6 @@ class TestControlMode(unittest.TestCase):
     tests for them are implicitly done
     in :meth:`~TestControlMode.test_initialisation` as well.
     """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """"""
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
 
     def setUp(self) -> None:
         """
@@ -351,12 +336,7 @@ class TestControlMode(unittest.TestCase):
 
 
 class TestIconList(unittest.TestCase):
-    """Unit test for :class:`~phile.tray.tmux.IconList`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """"""
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.tray.tmux.IconList`."""
 
     def setUp(self) -> None:
         """

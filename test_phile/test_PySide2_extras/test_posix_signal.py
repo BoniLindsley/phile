@@ -43,14 +43,9 @@ def get_wakeup_fd() -> int:
 
 class TestInstallNoopSignalHandler(unittest.TestCase):
     """
-    Unit test for
+    Tests
     :class:`~phile.PySide2_extras.posix_signal.install_noop_signal_handler`.
     """
-
-    def __init__(self, *args, **kwargs):
-        """"""
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
 
     def setUp(self) -> None:
         """Remember the current signal handler to be restored later."""
@@ -80,15 +75,7 @@ class TestInstallNoopSignalHandler(unittest.TestCase):
     platform_can_handle_sigint, 'Cannot handle SIGINT on this platform.'
 )
 class TestPosixSignal(unittest.TestCase):
-    """
-    Unit test for
-    :class:`~phile.PySide2_extras.posix_signal.PosixSignal`.
-    """
-
-    def __init__(self, *args, **kwargs):
-        """"""
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.PySide2_extras.posix_signal.PosixSignal`."""
 
     def setUp(self) -> None:
         """

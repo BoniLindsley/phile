@@ -32,13 +32,7 @@ _logger = logging.getLogger(
 
 
 class TestSetIconPaths(unittest.TestCase):
-    """Unit test for :class:`~phile.tray.set_icon_paths`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.tray.set_icon_paths`."""
 
     def setUp(self) -> None:
         """
@@ -79,15 +73,7 @@ class TestSetIconPaths(unittest.TestCase):
 
 
 class TestGuiIconList(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.tray.gui.GuiIconList`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.tray.gui.GuiIconList`."""
 
     def setUp(self) -> None:
         """

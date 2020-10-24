@@ -32,15 +32,7 @@ _logger = logging.getLogger(
 
 
 class TestFileSystemSignalEmitter(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.PySide2_extras.FileSystemSignalEmitter`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.PySide2_extras.FileSystemSignalEmitter`."""
 
     def setUp(self) -> None:
         """
@@ -161,13 +153,7 @@ class TestFileSystemSignalEmitter(unittest.TestCase):
 
 
 class TestFileSystemMonitor(unittest.TestCase):
-    """Unit test for :class:`~phile.PySide2_extras.FileSystemMonitor."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.PySide2_extras.FileSystemMonitor."""
 
     def setUp(self) -> None:
         """

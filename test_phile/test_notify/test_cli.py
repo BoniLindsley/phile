@@ -24,13 +24,7 @@ _logger = logging.getLogger(
 
 
 class TestCreateArgumentParser(unittest.TestCase):
-    """Unit test for :func:`~phile.notify.cli.create_argument_parser`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :func:`~phile.notify.cli.create_argument_parser`."""
 
     def setUp(self) -> None:
         self.argument_parser = create_argument_parser()
@@ -81,13 +75,7 @@ class TestCreateArgumentParser(unittest.TestCase):
 
 
 class TestProcessArguments(unittest.TestCase):
-    """Unit test for :func:`~phile.notify.cli.process_arguments`."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :func:`~phile.notify.cli.process_arguments`."""
 
     def setUp(self) -> None:
         """

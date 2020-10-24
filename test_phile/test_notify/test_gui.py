@@ -33,15 +33,7 @@ _logger = logging.getLogger(
 
 
 class TestNotificationMdiSubWindow(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.notify.gui.NotificationMdiSubWindow`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.notify.gui.NotificationMdiSubWindow`."""
 
     def setUp(self) -> None:
         """
@@ -152,15 +144,7 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
 
 
 class TestNotificationMdi(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.notify.gui.NotificationMdi`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests :class:`~phile.notify.gui.NotificationMdi`."""
 
     def setUp(self) -> None:
         """
@@ -510,15 +494,7 @@ class TestNotificationMdi(unittest.TestCase):
 
 
 class TestMainWindow(unittest.TestCase):
-    """
-    Unit test for :class:`~phile.notify.gui.MainWindow`.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """
-        """
-        # This method is created purely to overwrite default docstring.
-        super().__init__(*args, **kwargs)
+    """Tests for :class:`~phile.notify.gui.MainWindow`."""
 
     def setUp(self) -> None:
         """
