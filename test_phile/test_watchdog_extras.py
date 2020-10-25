@@ -70,6 +70,8 @@ class TestObserver(unittest.TestCase):
         Stopping an unstarted observer prevents starting.
 
         More specifically, it starts, but immediately stops.
+        The ``was_*_called`` methods should still report appropriately,
+        as their names suggest.
         """
         observer = self.observer
         self.assertTrue(not observer.was_start_called())

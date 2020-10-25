@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-----------------------
-test_phile.PySide2.QtWidgts
-----------------------
+------------------
+PySide2 test tools
+------------------
 """
 
 # Standard libraries.
