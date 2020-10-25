@@ -653,7 +653,7 @@ class TestMainWindow(unittest.TestCase):
         # Detect when the handler from main window will be dispatched.
         signal_emitter = self.main_window._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Create the notification and wait for watchdog to find it.
         self.assertTrue(not notification.path.is_file())
@@ -684,7 +684,7 @@ class TestMainWindow(unittest.TestCase):
         # Detect when the handler from main window will be dispatched.
         signal_emitter = self.main_window._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Remove the notification and wait for watchdog to notice.
         notification.remove()
@@ -709,7 +709,7 @@ class TestMainWindow(unittest.TestCase):
         # Detect when the handler from main window will be dispatched.
         signal_emitter = self.main_window._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Remove the notification and wait for watchdog to notice.
         new_content = 'Happy New Year!'
@@ -739,7 +739,7 @@ class TestMainWindow(unittest.TestCase):
         # Detect when the handler from main window will be dispatched.
         signal_emitter = self.main_window._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Remove the notification and wait for watchdog to notice.
         new_name = 'Disco'

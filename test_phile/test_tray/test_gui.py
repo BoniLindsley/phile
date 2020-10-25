@@ -376,7 +376,7 @@ class TestGuiIconList(unittest.TestCase):
         # Detect when the handler from gui_icon_list will be dispatched.
         signal_emitter = self.gui_icon_list._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Create the tray file.
         tray_file = TrayFile(
@@ -414,7 +414,7 @@ class TestGuiIconList(unittest.TestCase):
         # Detect when the handler from gui_icon_list will be dispatched.
         signal_emitter = self.gui_icon_list._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Wait for watchdog to notice the tray file is gone now.
         tray_file.remove()
@@ -449,7 +449,7 @@ class TestGuiIconList(unittest.TestCase):
         # Detect when the handler from gui_icon_list will be dispatched.
         signal_emitter = self.gui_icon_list._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Wait for watchdog to notice the tray file has been changed.
         tray_file.icon_name = 'phile-tray-empty'
@@ -481,7 +481,7 @@ class TestGuiIconList(unittest.TestCase):
         # Detect when the handler from gui_icon_list will be dispatched.
         signal_emitter = self.gui_icon_list._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Wait for watchdog to notice the tray file is moved now.
         new_name = 'Disco'
@@ -510,7 +510,7 @@ class TestGuiIconList(unittest.TestCase):
         # Detect when the handler from gui_icon_list will be dispatched.
         signal_emitter = self.gui_icon_list._signal_emitter
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Create the tray file.
         tray_file = TrayFile(
