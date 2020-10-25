@@ -22,8 +22,8 @@ class ThreadedMock(unittest.mock.Mock):
         # This will be called in a thread.
         callee = ThreadedMock()
         # Threads that will call the mock object.
-        bad_thread = threading.Thread(target=callee, args=(42, ))
-        call_thread = threading.Thread(target=callee)
+        bad_thread = threading.Thread(wraps=callee, args=(42, ))
+        call_thread = threading.Thread(wraps=callee)
         # Call, eventually.
         bad_thread.start()
         call_thread.start()
@@ -40,21 +40,13 @@ class ThreadedMock(unittest.mock.Mock):
     def __init__(
         self,
         *args,
-        target: typing.Callable = lambda *args, **kwargs: unittest.mock.
-        DEFAULT,
         timeout: datetime.timedelta = datetime.timedelta(seconds=2),
         **kwargs
-    ):
+    ) -> None:
         """
         :param ~datetime.timedelta timeout:
             Initialses :attr:`timeout`,
             to two seconds by default for now.
-        :param target:
-            When ``self`` is called,
-            arguments are forwarded to ``target``.
-            The :attr:`~unittest.mock.Mock.return_value` is ignored,
-            unless ``target`` returns :data:`~unittest.mock.DEFAULT`.
-        :type target: :data:`~typing.Callable`
         """
         super().__init__(*args, **kwargs)
         self._call_found = threading.Event()
@@ -63,20 +55,17 @@ class ThreadedMock(unittest.mock.Mock):
         """Call object to compare with in :meth:`_side_effect`"""
         self._mock_lock = threading.Lock()
         """Guards against changes to :data:`_expected_call`."""
-        self._target = target
-        """A callable to forward to when ``self`` is called."""
         self.timeout = timeout
         """Timeout duration when `self` is waiting to be called."""
-        self.side_effect = self._side_effect
 
-    def _side_effect(self, *args, **kwargs) -> typing.Any:
+    def __call__(self, *args, **kwargs) -> typing.Any:
         """
         Checks if the given arguments are as expected when called.
 
         Sets :data:`_call_found` event
         to notify :meth:`assert_called_with_soon` it succeeded.
         """
-        return_value = self._target(*args, **kwargs)
+        return_value = super().__call__(*args, **kwargs)
         new_call = unittest.mock.call(*args, **kwargs)
         with self._mock_lock:
             expected_call = self._expected_call
@@ -92,15 +81,21 @@ class ThreadedMock(unittest.mock.Mock):
         That is, this does not fail if called with the wrong arguments.
         Due to the threaded nature of this assertion,
         it is not always possible to line up calls.
-        So this waits for the expected call,
-        allowing for other arguments before then.
+        So this method checks
+        whether the expected call had been called before,
+        and then wait for the expected call,
+        and also allowing for other arguments before then.
+
+        To ensure arguments came from an expected source,
+        use :meth:`unittest.mock.Mock.reset_mock`
+        before doing operations that would produce the expected call.
         """
         with self._mock_lock:
             # Enable comparison in `_side_effect`.
             self._expected_call = unittest.mock.call(*args, **kwargs)
             self._call_found.clear()
             # Check the last call to see if assert is already satisfied.
-            if self.call_args == self._expected_call:
+            if self._expected_call in self.call_args_list:
                 self._call_found.set()
         # Temporarily release
         # to allow `_side_effect` acquire the lock.
@@ -139,10 +134,13 @@ if __name__ == '__main__':
     class TestThreadedMock(unittest.TestCase):
 
         def setUp(self) -> None:
-            self.callee = ThreadedMock()
+            self.callee = ThreadedMock(
+                timeout=datetime.timedelta(milliseconds=250),
+            )
             self.call_thread = threading.Thread(target=self.callee)
+            self.addCleanup(self.join_thread)
 
-        def tearDown(self) -> None:
+        def join_thread(self) -> None:
             try:
                 self.call_thread.join(
                     timeout=datetime.timedelta(seconds=2).total_seconds()

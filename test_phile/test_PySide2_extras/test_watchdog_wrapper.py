@@ -124,7 +124,7 @@ class TestFileSystemSignalEmitter(unittest.TestCase):
         self.signal_emitter.start(_monitoring_observer=observer)
         # Detect when the handler from main window will be dispatched.
         signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            target=signal_emitter.dispatch
+            wraps=signal_emitter.dispatch
         )
         # Dispatch an event to both handlers.
         # Wait until the second handler is called.

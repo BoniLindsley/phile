@@ -93,7 +93,7 @@ class TestObserver(unittest.TestCase):
         # Detect when the handler will be dispatched.
         event_handler = watchdog.events.FileSystemEventHandler()
         event_handler.dispatch = ThreadedMock(  # type: ignore
-            target=event_handler.dispatch
+            wraps=event_handler.dispatch
         )
         # Creating a file inside the monitored directory
         # triggers an event dispatch to the handler.
@@ -119,7 +119,7 @@ class TestObserver(unittest.TestCase):
         self.assertTrue(not self.observer.has_handlers())
         event_handler = watchdog.events.FileSystemEventHandler()
         event_handler.dispatch = ThreadedMock(  # type: ignore
-            target=event_handler.dispatch
+            wraps=event_handler.dispatch
         )
         watch = self.observer.add_handler(
             event_handler, self.monitor_directory_path
