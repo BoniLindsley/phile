@@ -142,16 +142,18 @@ class TestControlMode(unittest.TestCase):
         so that tmux does not use the OS default nor the user one.
         """
         _logger.debug('Creating $TMUX_TMPDIR directory.')
-        self.tmux_tmpdir = tempfile.TemporaryDirectory()
-        self.tmux_tmpdir_path = pathlib.Path(self.tmux_tmpdir.name)
+        tmux_tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmux_tmpdir.cleanup)
+        tmux_tmpdir_path = pathlib.Path(tmux_tmpdir.name)
         _logger.debug('Creating tmux.conf.')
-        tmux_config_path = self.tmux_tmpdir_path / 'tmux.conf'
+        tmux_config_path = tmux_tmpdir_path / 'tmux.conf'
         tmux_config_path.touch()
         _logger.debug('Setting environment variables.')
-        self.environ_backup = EnvironBackup()
-        self.environ_backup.backup_and_set(
+        environ_backup = EnvironBackup()
+        self.addCleanup(environ_backup.restore)
+        environ_backup.backup_and_set(
             TMUX=None,
-            TMUX_TMPDIR=str(self.tmux_tmpdir_path),
+            TMUX_TMPDIR=str(tmux_tmpdir_path),
         )
         _logger.debug('Creating control mode.')
         self.control_mode = ControlMode(
@@ -191,10 +193,6 @@ class TestControlMode(unittest.TestCase):
                         'Unable to kill tmux server (PID: %s).\n',
                         tmux_server_pid
                     )
-        _logger.debug('Restoring environment variables.')
-        self.environ_backup.restore()
-        _logger.debug('Removing $TMUX_TMPDIR directory.')
-        self.tmux_tmpdir.cleanup()
 
     def test_initialisation(self) -> None:
         """
@@ -345,8 +343,9 @@ class TestIconList(unittest.TestCase):
         This will be used to test for file change responses.
         """
         _logger.debug('Creating tray file directory.')
-        self.tray_dir = tempfile.TemporaryDirectory()
-        self.tray_dir_path = pathlib.Path(self.tray_dir.name)
+        tray_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(tray_dir.cleanup)
+        self.tray_dir_path = pathlib.Path(tray_dir.name)
         _logger.debug('Creating icon list.')
         self.configuration = Configuration(
             tray_directory=self.tray_dir_path
@@ -360,13 +359,7 @@ class TestIconList(unittest.TestCase):
             observer=self.observer,
         )
         self.observer.start()
-
-    def tearDown(self) -> None:
-        """Clean up the created tray file directory."""
-        _logger.debug('Removing $TMUX_TMPDIR directory.')
-        self.observer.stop()
-        self.assertTrue(self.observer.was_stop_called())
-        self.tray_dir.cleanup()
+        self.addCleanup(self.observer.stop)
 
     def test_initialisation(self) -> None:
         """Creates a :class:`~phile.tray.tmux.IconList`."""

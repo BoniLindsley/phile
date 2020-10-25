@@ -44,26 +44,17 @@ class TestFileSystemSignalEmitter(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.monitor_directory = tempfile.TemporaryDirectory()
+        monitor_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(monitor_directory.cleanup)
         self.monitor_directory_path = pathlib.Path(
-            self.monitor_directory.name
+            monitor_directory.name
         )
         self.app = QTestApplication()
+        self.addCleanup(self.app.tear_down)
         self.signal_emitter = FileSystemSignalEmitter(
             monitored_path=self.monitor_directory_path
         )
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.signal_emitter.deleteLater()
-        self.app.tear_down()
-        self.monitor_directory.cleanup()
+        self.addCleanup(self.signal_emitter.deleteLater)
 
     def test_constructor(self) -> None:
         """
@@ -165,24 +156,17 @@ class TestFileSystemMonitor(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.monitor_directory = tempfile.TemporaryDirectory()
+        monitor_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(monitor_directory.cleanup)
         self.monitor_directory_path = pathlib.Path(
-            self.monitor_directory.name
+            monitor_directory.name
         )
         self.app = QTestApplication()
+        self.addCleanup(self.app.tear_down)
         self.monitor = FileSystemMonitor()
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.monitor.deleteLater()
-        self.app.tear_down()
-        self.monitor_directory.cleanup()
+        # Allow posix_signal to be deleted in unit tests.
+        # They can create an arbitrary QObject to fake a clean-up.
+        self.addCleanup(lambda: self.monitor.deleteLater())
 
     def test_construct_and_delete(self) -> None:
         """

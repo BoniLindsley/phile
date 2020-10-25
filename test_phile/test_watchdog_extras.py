@@ -36,18 +36,12 @@ class TestObserver(unittest.TestCase):
         would interfere with each other.
         """
         monitor_directory = tempfile.TemporaryDirectory()
-        self.monitor_directory = monitor_directory
+        self.addCleanup(monitor_directory.cleanup)
         self.monitor_directory_path = pathlib.Path(
             monitor_directory.name
         )
         self.observer = Observer()
-
-    def tearDown(self) -> None:
-        """Stop observers and remove directories created for them."""
-        if not self.observer.was_stop_called():
-            if self.observer.is_alive():
-                self.observer.stop()
-        self.monitor_directory.cleanup()
+        self.addCleanup(self.observer.stop)
 
     def test_was_start_and_stop_called(self) -> None:
         """

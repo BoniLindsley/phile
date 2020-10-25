@@ -45,7 +45,8 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.app = QTestApplication()
+        app = QTestApplication()
+        self.addCleanup(app.tear_down)
         self.content = 'You have 123 friends.\n'
         'You have 456 unread messages.\n'
         'New security settings has been added.\n'
@@ -65,16 +66,6 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
             creation_datetime=self.creation_datetime,
             name=self.name,
         )
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.app.tear_down()
 
     def test_initialisation(self) -> None:
         """Create a NotificationMdiSubWindow object."""
@@ -157,18 +148,9 @@ class TestNotificationMdi(unittest.TestCase):
         would interfere with each other.
         """
         self.app = QTestApplication()
+        self.addCleanup(self.app.tear_down)
         self.notification_mdi = NotificationMdi()
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.notification_mdi.deleteLater()
-        self.app.tear_down()
+        self.addCleanup(self.notification_mdi.deleteLater)
 
     def test_initialisation(self) -> None:
         """Create a NotificationMdiSubWindow object."""
@@ -506,27 +488,16 @@ class TestMainWindow(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.notification_directory = tempfile.TemporaryDirectory()
-        self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
-        )
+        notification_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(notification_directory.cleanup)
         self.configuration = Configuration(
-            notification_directory=self.notification_directory_path
+            notification_directory=pathlib.
+            Path(notification_directory.name)
         )
         self.app = QTestApplication()
+        self.addCleanup(self.app.tear_down)
         self.main_window = MainWindow(configuration=self.configuration)
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.main_window.deleteLater()
-        self.app.tear_down()
-        self.notification_directory.cleanup()
+        self.addCleanup(self.main_window.deleteLater)
 
     def test_initialisation(self) -> None:
         """Create a MainWindow object."""

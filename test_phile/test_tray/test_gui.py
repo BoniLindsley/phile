@@ -44,17 +44,8 @@ class TestSetIconPaths(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.app = QTestApplication()
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.app.tear_down()
+        app = QTestApplication()
+        self.addCleanup(app.tear_down)
 
     def test_call(self) -> None:
         """Just call it."""
@@ -85,27 +76,18 @@ class TestGuiIconList(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.tray_directory = tempfile.TemporaryDirectory()
-        self.tray_directory_path = pathlib.Path(self.tray_directory.name)
+        tray_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(tray_directory.cleanup)
+        self.tray_directory_path = pathlib.Path(tray_directory.name)
         self.configuration = Configuration(
             tray_directory=self.tray_directory_path
         )
         self.app = QTestApplication()
+        self.addCleanup(self.app.tear_down)
         self.gui_icon_list = GuiIconList(
             configuration=self.configuration
         )
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.gui_icon_list.deleteLater()
-        self.app.tear_down()
-        self.tray_directory.cleanup()
+        self.addCleanup(self.gui_icon_list.deleteLater)
 
     def test_initialisation(self) -> None:
         """Create a MainWindow object."""
