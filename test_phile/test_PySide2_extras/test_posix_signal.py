@@ -122,9 +122,7 @@ class TestPosixSignal(unittest.TestCase):
 
         # Figure out whether the signal will be called.
         slot_mock = unittest.mock.Mock()
-        self.posix_signal.signal_received.connect(
-            slot_mock
-        )  # type: ignore
+        self.posix_signal.signal_received.connect(slot_mock)
         # Make sure `posix_signal` receives SIGINT.
         # Normal usage would use `install_noop_signal_handler` here,
         # but we want to use a `signal` to ensure the signal

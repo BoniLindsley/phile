@@ -134,5 +134,5 @@ class TestNotification(unittest.TestCase):
         self.assertEqual(actual_content, self.content + '\n')
 
 
-if __name__ == '__main__':  # type: ignore
+if __name__ == '__main__':
     unittest.main()

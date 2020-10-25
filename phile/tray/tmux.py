@@ -28,7 +28,7 @@ import typing
 import warnings
 
 # External dependencies.
-import watchdog.events  # type: ignore
+import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.configuration import Configuration
@@ -36,7 +36,7 @@ from phile.tray.tray_file import TrayFile
 from phile.watchdog_extras import Observer
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 

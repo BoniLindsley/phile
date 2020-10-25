@@ -9,8 +9,8 @@ watchdog observer wrapper
 import pathlib
 
 # External dependencies.
-import watchdog.events  # type: ignore
-import watchdog.observers  # type: ignore
+import watchdog.events  # type: ignore[import]
+import watchdog.observers  # type: ignore[import]
 
 
 class Observer(watchdog.observers.Observer):

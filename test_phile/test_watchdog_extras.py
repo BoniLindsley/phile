@@ -12,14 +12,14 @@ import tempfile
 import unittest
 
 # External dependencies.
-import watchdog.events  # type: ignore
+import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.watchdog_extras import Observer
 from test_phile.threaded_mock import ThreadedMock
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 

@@ -15,7 +15,7 @@ import unittest.mock
 # External dependencies.
 from PySide2.QtCore import QObject
 from PySide2.QtGui import QShowEvent
-import watchdog.events  # type: ignore
+import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.PySide2_extras.watchdog_wrapper import (
@@ -26,7 +26,7 @@ from test_phile.pyside2_test_tools import QTestApplication
 from test_phile.threaded_mock import ThreadedMock
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 

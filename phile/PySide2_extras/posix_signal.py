@@ -95,11 +95,11 @@ import typing
 import warnings
 
 # External dependencies.
-from PySide2.QtCore import QObject, Signal
+from PySide2.QtCore import QObject, Signal, SignalInstance
 from PySide2.QtNetwork import QAbstractSocket
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 
@@ -258,7 +258,7 @@ class PosixSignal(QAbstractSocket):
        In the worst case scenario, the fd might be a reused ID.
     """
 
-    signal_received = Signal(int)
+    signal_received = typing.cast(SignalInstance, Signal(int))
     """
     PySide2 signal emitted when a POSIX signal is received.
 
