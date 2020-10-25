@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+--------
+Tray GUI
+--------
+"""
 
 # Standard library.
 import bisect

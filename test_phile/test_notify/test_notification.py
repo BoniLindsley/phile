@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
----------------------
-Test phile.notify CLI
----------------------
+------------------------------
+Test phile.notify notification
+------------------------------
 """
 
 # Standard library.

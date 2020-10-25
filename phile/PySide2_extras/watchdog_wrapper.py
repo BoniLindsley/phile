@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+----------------------------------
+Process watchdog events in PySide2
+----------------------------------
+"""
 
 # Standard library.
 import logging

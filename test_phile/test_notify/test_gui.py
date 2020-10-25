@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-----------------------
-Test phile.trigger GUI
-----------------------
+---------------------
+Test phile.notify GUI
+---------------------
 """
 
 # Standard library.
