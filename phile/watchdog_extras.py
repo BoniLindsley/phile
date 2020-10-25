@@ -7,10 +7,17 @@ watchdog observer wrapper
 
 # Standard library.
 import pathlib
+import typing
 
 # External dependencies.
 import watchdog.events  # type: ignore[import]
 import watchdog.observers  # type: ignore[import]
+
+EventHandler = typing.Callable[[watchdog.events.FileSystemEvent], None]
+"""
+Signature of callables
+receiveing :class:`~watchdog.events.FileSystemEvent`-s.
+"""
 
 
 class Observer(watchdog.observers.Observer):
@@ -133,3 +140,217 @@ class Observer(watchdog.observers.Observer):
 
     def was_stop_called(self) -> bool:
         return self._stopped_event.is_set()
+
+
+class Dispatcher(watchdog.events.FileSystemEventHandler):
+    """
+    Forwards watchdog events to a callable.
+
+    The :attr:`~watchdog.observers.Observer`
+    gives :class:`~watchdog.events.FileSystemEvent`-s
+    to :class:`~watchdog.events.FileSystemEventHandler`
+    by :meth:`~watchdog.events.FileSystemEventHandler.dispatch`-ing them.
+    This :meth:`~dispatch`-es to a ``event_handler``
+    for a more flexible event handling.
+
+    Example::
+
+        from datetime import timedelta
+        from phile.watchdog_extras import Dispatcher, Observer
+
+        observer = Observer()
+        dispatcher = Dispatcher(event_handler=lambda x: print(x))
+        observer.add_handler(
+            event_handler=dispatcher,
+            path=pathlib.Path(),  # Current directory.
+        )
+        observer.start()
+        try:
+            while observer.is_alive():
+                observer.join(timedelta(seconds=1).total_seconds())
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()
+    """
+
+    def __init__(
+        self, *args, event_handler: EventHandler, **kwargs
+    ) -> None:
+        """
+        :param event_handler: Callable to dispatch events to.
+        :type event_handler: :data:`EventHandler`
+        """
+        super().__init__(*args, **kwargs)
+        self._event_handler = event_handler
+
+    def dispatch(self, event: watchdog.events.FileSystemEvent) -> None:
+        """Internal. Forward given event to ``event_handler``."""
+        self._event_handler(event)
+
+
+class Scheduler:
+    """
+    Represents whether a :class:`~watchdog.events.FileSystemEventHandler`
+    is :meth:`~watchdog.observers.api.BaseObserver.schedule`-d
+    in an :attr:`~watchdog.observers.Observer`.
+
+    Remembers infomation necessary to start watching a directory or file
+    so that starting requires only a single method call.
+
+    Example::
+
+        import cmd
+        import pathlib
+        from datetime import timedelta
+        from phile.watchdog_extras import (
+            Dispatcher, Observer, Scheduler
+        )
+
+        observer = Observer()
+
+        class MonitoringCmd(cmd.Cmd):
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._scheduler = Scheduler(
+                    watchdog_handler=Dispatcher(
+                        event_handler=lambda x: print(x)
+                    ),
+                    watched_path=pathlib.Path(),
+                    watching_observer=observer,
+                )
+
+            def do_is_scheduled(self, arg: str):
+                self._scheduler.is_scheduled()
+
+            def do_schedule(self, arg: str):
+                self._scheduler.schedule()
+
+            def do_touch(self, arg: str):
+                pathlib.Path(arg).touch()
+
+            def do_unschedule(self, arg: str):
+                self._scheduler.unschedule()
+
+            def do_EOF(self, arg: str):
+                return True
+
+            def emptyline(self):
+                pass
+
+        observer.start()
+        MonitoringCmd().cmdloop()
+        # (Cmd) touch a.txt  # Creates a file.
+        # (Cmd) schedule     # Start monitoring for changes.
+        # (Cmd) touch b.txt  # Create another file. Prints out events.
+        # (Cmd) <FileCreatedEvent: src_path='./b.txt'>
+        # <DirModifiedEvent: src_path='.'>
+        #
+        # (Cmd) unschedule   # Stop monitoring.
+        # (Cmd) touch c.txt  # Creates a file. No more printing.
+        # (Cmd) EOF          # Exit.
+        observer.stop()
+        observer.join()
+    """
+
+    def __init__(
+        self,
+        *args,
+        watch_recursive: bool = False,
+        watchdog_handler: watchdog.events.FileSystemEventHandler,
+        watched_path: pathlib.Path,
+        watching_observer: watchdog.observers.Observer,
+        **kwargs,
+    ) -> None:
+        """
+        :param bool watch_recursive:
+            Whether to watch subdirectories of ``watched_path``
+            if ``watched_path`` is a directory.
+        :param ~watchdog.events.FileSystemEventHandler watchdog_handler:
+            Handler to dispatched events to
+            when there are changes to ``watched_path``.
+        :param ~pathlib.Path watched_path:
+            Path to watch for changes.
+        :param watching_observer:
+            The instance that dispatches events to ``watchdog_handler``.
+        :type watching_observer: :attr:`~watchdog.observers.Observer`
+        """
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self._watchdog_handler = watchdog_handler
+        """Callable for forward event dispatch to."""
+        self._is_scheduled = False
+        """
+        Whether ``watching_observer`` has scheduled ``watchdog_handler``.
+        """
+        self._watching_observer = watching_observer
+        """
+        The :attr:`watchdog.observers.Observer` instance
+        to which ``watchdog_handler`` is to be scheduled in.
+        """
+        self._watchdog_watch = watchdog.observers.api.ObservedWatch(
+            path=str(watched_path), recursive=watch_recursive
+        )
+        """Description of watch data from :mod:`watchdog`."""
+
+    def is_scheduled(self) -> bool:
+        """
+        Return whether ``watching_observer``
+        has scheduled ``watchdog_handler``.
+        """
+        return self._is_scheduled
+
+    def schedule(self) -> None:
+        """Schedule events to be dispatched to ``watchdog_handler``."""
+        if self.is_scheduled():
+            return
+        # The returned handle compares equal to the stored handle.
+        # But they are different instances.
+        # We save the returned copy to aid removal
+        # which will compare the handle stored by ``watching_observer``
+        # and the copy we pass to it.
+        # If they happen to be the same instance, comparison is easier.
+        self._watchdog_watch = self._watching_observer.schedule(
+            self._watchdog_handler,
+            self._watchdog_watch.path,
+            self._watchdog_watch.is_recursive,
+        )
+        self._is_scheduled = True
+
+    def unschedule(self) -> None:
+        """Stop dispatching events to ``watchdog_handler``."""
+        if not self.is_scheduled():
+            return
+        watching_observer = self._watching_observer
+        # This should ideally have been just::
+        #
+        #     self._watching_observer.remove_handle_for_watch(
+        #         self._watchdog_handler,
+        #         self._watchdog_watch,
+        #     )
+        #
+        # But there is a potential inotify watch leak
+        # since it does not remove emitters with no handlers.
+        # This is an implementation-specific work-around
+        # as it uses underscore variables.
+        # It merges behaviour of `remove_handler_for_watch`
+        # with that of `unschedule`.
+        # Calling one after the other creates a race condition
+        # since each of them acquire a lock,
+        # and there might be state changes in between their locking.
+        # Alternatively, we can accept only `watchdog_extras.Observer`
+        # but that is not particularly flexible.
+        watchdog_watch = self._watchdog_watch
+        with watching_observer._lock:
+            handlers = watching_observer._handlers.get(watchdog_watch)
+            if handlers is not None:
+                handlers.remove(self._watchdog_handler)
+                if not handlers:
+                    watching_observer._remove_handlers_for_watch(
+                        watchdog_watch
+                    )
+                    emitter = watching_observer._emitter_for_watch[
+                        watchdog_watch]
+                    watching_observer._remove_emitter(emitter)
+                    watching_observer._watches.remove(watchdog_watch)
+        self._is_scheduled = False
