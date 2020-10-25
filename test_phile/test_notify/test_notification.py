@@ -27,9 +27,10 @@ class TestNotification(unittest.TestCase):
         to make sure no leftover files from tests
         would interfere with each other.
         """
-        self.notification_directory = tempfile.TemporaryDirectory()
+        notification_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(notification_directory.cleanup)
         self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
+            notification_directory.name
         )
         self.configuration = Configuration(
             notification_directory=self.notification_directory_path
@@ -42,10 +43,6 @@ class TestNotification(unittest.TestCase):
         self.notification = Notification(
             name=self.name, configuration=self.configuration
         )
-
-    def tearDown(self) -> None:
-        """Remove notification directory."""
-        self.notification_directory.cleanup()
 
     def test_construct_with_name(self) -> None:
         """Constructing with name must come with a configuration."""

@@ -26,8 +26,9 @@ class TestTrayFile(unittest.TestCase):
         to make sure no leftover files from tests
         would interfere with each other.
         """
-        self.tray_directory = tempfile.TemporaryDirectory()
-        self.tray_directory_path = pathlib.Path(self.tray_directory.name)
+        tray_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(tray_directory.cleanup)
+        self.tray_directory_path = pathlib.Path(tray_directory.name)
         self.configuration = Configuration(
             tray_directory=self.tray_directory_path
         )
@@ -38,10 +39,6 @@ class TestTrayFile(unittest.TestCase):
         self.tray = TrayFile(
             name=self.name, configuration=self.configuration
         )
-
-    def tearDown(self) -> None:
-        """Remove tray directory."""
-        self.tray_directory.cleanup()
 
     def test_construct_with_name(self) -> None:
         """Constructing with name must come with a configuration."""

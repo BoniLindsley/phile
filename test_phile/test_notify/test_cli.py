@@ -85,14 +85,11 @@ class TestProcessArguments(unittest.TestCase):
         to make sure no leftover files from tests
         would interfere with each other.
         """
-        self.notification_directory = tempfile.TemporaryDirectory()
+        notification_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(notification_directory.cleanup)
         self.notification_directory_path = pathlib.Path(
-            self.notification_directory.name
+            notification_directory.name
         )
-
-    def tearDown(self) -> None:
-        """Remove notification directory."""
-        self.notification_directory.cleanup()
 
     def test_default(self) -> None:
         """Fail if no arguments are given."""

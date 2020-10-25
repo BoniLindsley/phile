@@ -49,11 +49,10 @@ class TestInstallNoopSignalHandler(unittest.TestCase):
 
     def setUp(self) -> None:
         """Remember the current signal handler to be restored later."""
-        self.sigint_handler = signal.getsignal(signal.SIGINT)
-
-    def tearDown(self) -> None:
-        """Restore the previous signal handler."""
-        signal.signal(signal.SIGINT, self.sigint_handler)
+        sigint_handler = signal.getsignal(signal.SIGINT)
+        self.addCleanup(
+            lambda: signal.signal(signal.SIGINT, sigint_handler)
+        )
 
     def test_call(self) -> None:
         """Replace SIGINT handler."""
@@ -87,23 +86,18 @@ class TestPosixSignal(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.sigint_handler = signal.getsignal(signal.SIGINT)
-        self.wakeup_fd = get_wakeup_fd()
+        sigint_handler = signal.getsignal(signal.SIGINT)
+        self.addCleanup(
+            lambda: signal.signal(signal.SIGINT, sigint_handler)
+        )
+        wakeup_fd = get_wakeup_fd()
+        self.addCleanup(lambda: signal.set_wakeup_fd(wakeup_fd))
         self.app = QTestApplication()
+        self.addCleanup(self.app.tear_down)
         self.posix_signal = PosixSignal()
-
-    def tearDown(self) -> None:
-        """
-        Shutdown PySide2 application after each method test.
-
-        PySide2 Applications act as singletons.
-        Any previous instances must be shutdown
-        before a new one can be created.
-        """
-        self.posix_signal.deleteLater()
-        self.app.tear_down()
-        signal.set_wakeup_fd(self.wakeup_fd)
-        signal.signal(signal.SIGINT, self.sigint_handler)
+        # Allow posix_signal to be deleted in unit tests.
+        # They can create an arbitrary QObject to fake a clean-up.
+        self.addCleanup(lambda: self.posix_signal.deleteLater())
 
     def test_initialisation_and_clean_up(self) -> None:
         """Remove signal fd when deleted."""

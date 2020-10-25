@@ -25,9 +25,10 @@ class TestConfiguration(unittest.TestCase):
         to make sure no leftover files from tests
         would interfere with each other.
         """
-        self.user_state_directory = tempfile.TemporaryDirectory()
+        user_state_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(user_state_directory.cleanup)
         self.user_state_directory_path = pathlib.Path(
-            self.user_state_directory.name
+            user_state_directory.name
         )
         self.notification_directory_path = (
             self.user_state_directory_path / 'nnoottiiffyy'
@@ -35,10 +36,6 @@ class TestConfiguration(unittest.TestCase):
         self.tray_directory_path = (
             self.user_state_directory_path / 'ttrraayy'
         )
-
-    def tearDown(self) -> None:
-        """Remove notification directory."""
-        self.user_state_directory.cleanup()
 
     def test_default(self) -> None:
         """Default constructor should fill in expected members."""
