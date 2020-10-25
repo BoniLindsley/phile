@@ -93,5 +93,5 @@ class TestConfiguration(unittest.TestCase):
         self.assertEqual(configuration.tray_suffix, tray_suffix)
 
 
-if __name__ == '__main__':  # type: ignore
+if __name__ == '__main__':
     unittest.main()

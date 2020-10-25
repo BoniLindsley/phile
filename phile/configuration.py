@@ -10,7 +10,7 @@ import pathlib
 from pathlib import Path as _Path
 
 # External dependencies.
-import appdirs  # type: ignore
+import appdirs  # type: ignore[import]
 
 _app_meta_data = {'appname': 'phile', 'appauthor': 'BoniLindsley'}
 """

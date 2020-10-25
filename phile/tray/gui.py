@@ -19,7 +19,7 @@ from PySide2.QtCore import QObject
 from PySide2.QtCore import Slot  # type: ignore
 from PySide2.QtGui import QIcon
 from PySide2.QtWidgets import QApplication, QSystemTrayIcon, QWidget
-import watchdog.events  # type: ignore
+import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.configuration import Configuration
@@ -32,7 +32,7 @@ from phile.PySide2_extras.watchdog_wrapper import (
 from phile.tray.tray_file import TrayFile
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 
@@ -125,7 +125,7 @@ class GuiIconList(QObject):
             self._file_system_monitor.start()
         self._signal_emitter.start()
 
-    @Slot(watchdog.events.FileSystemEvent)  # type: ignore
+    @Slot(watchdog.events.FileSystemEvent)  # type: ignore[operator]
     def on_file_system_event_detected(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:

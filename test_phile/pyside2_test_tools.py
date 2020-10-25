@@ -19,18 +19,20 @@ from PySide2.QtGui import QIcon
 import PySide2.QtWidgets
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 
 
 class EnvironBackup:
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._source_dict = os.environ
         self._backup_dict: typing.Dict[str, typing.Optional[str]] = {}
 
-    def restore(self):
+    def restore(self) -> None:
         source_dict = self._source_dict
         for key, value in self._backup_dict.items():
             if value is None:
@@ -38,7 +40,7 @@ class EnvironBackup:
             else:
                 source_dict[key] = value
 
-    def backup_and_set(self, **kwargs):
+    def backup_and_set(self, **kwargs) -> None:
         backup_dict = self._backup_dict
         source_dict = self._source_dict
         for key, value in kwargs.items():
@@ -112,7 +114,7 @@ class SystemTrayIcon(PySide2.QtWidgets.QSystemTrayIcon):
     to mimic the system tray icon being set.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.__icon_ = super().icon()
@@ -125,11 +127,11 @@ class SystemTrayIcon(PySide2.QtWidgets.QSystemTrayIcon):
             if isinstance(args[0], QIcon):
                 self.__icon_ = args[0]
 
-    def icon(self):
+    def icon(self) -> QIcon:
         """Returns the last icon set to be used in the system tray."""
         return self.__icon_
 
-    def setIcon(self, new_icon: QIcon):
+    def setIcon(self, new_icon: QIcon) -> None:
         """Sets the icon to be used in the system tray."""
         super().setIcon(new_icon)
         self.__icon_ = super().icon()
@@ -148,7 +150,7 @@ class QTestApplication(PySide2.QtWidgets.QApplication):
         qt_qpa_platform: typing.Optional[str] = 'offscreen',
         use_temporary_xdg_runtime_dir: bool = True,
         **kwargs
-    ):
+    ) -> None:
         self.__process_event_wait_time_ = process_event_wait_time
         environ_backup = EnvironBackup()
         self.__xdg_runtime_dir_ = None
@@ -164,12 +166,12 @@ class QTestApplication(PySide2.QtWidgets.QApplication):
         self.__environ_backup_ = environ_backup
         super().__init__(*args, **kwargs)
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self.__xdg_runtime_dir_ is not None:
             self.__xdg_runtime_dir_.cleanup()
         self.__environ_backup_.restore()
 
-    def process_deferred_delete_events(self):
+    def process_deferred_delete_events(self) -> None:
         # Calling `processEvents`
         # does not process `DeferredDelete` events.
         # Asking `sendPostedEvents` to process all events
@@ -180,7 +182,7 @@ class QTestApplication(PySide2.QtWidgets.QApplication):
             None, PySide2.QtCore.QEvent.DeferredDelete
         )
 
-    def process_events(self):
+    def process_events(self) -> None:
         self.__class__.processEvents(
             PySide2.QtCore.QEventLoop.AllEvents,
             int(
@@ -189,7 +191,7 @@ class QTestApplication(PySide2.QtWidgets.QApplication):
             )
         )
 
-    def tear_down(self):
+    def tear_down(self) -> None:
         # Destructor clean-up process.
         # While it would be great to have this in `__del__`,
         # Python3 does not guarantee when the finaliser is called.

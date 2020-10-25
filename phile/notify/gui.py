@@ -10,14 +10,14 @@ import typing
 
 # External dependencies.
 from PySide2.QtCore import QEvent, Qt
-from PySide2.QtCore import Signal, Slot  # type: ignore
+from PySide2.QtCore import Signal, SignalInstance, Slot
 from PySide2.QtGui import (
     QCloseEvent, QHideEvent, QResizeEvent, QShowEvent, QPalette
 )
 from PySide2.QtWidgets import (
     QApplication, QMainWindow, QMdiArea, QMdiSubWindow, QTextEdit
 )
-import watchdog.events  # type: ignore
+import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.notify.notification import Configuration, Notification
@@ -29,14 +29,14 @@ from phile.PySide2_extras.watchdog_wrapper import (
 )
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 
 
 class NotificationMdiSubWindow(QMdiSubWindow):
 
-    closed = Signal(str)
+    closed = typing.cast(SignalInstance, Signal(str))
     """Emitted when the sub-window is closed."""
 
     def __init__(
@@ -84,7 +84,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
 
     def closeEvent(self, close_event: QCloseEvent) -> None:
         """Internal method to handle the sub-window being closed. """
-        self.closed.emit(self.name)  # type: ignore
+        self.closed.emit(self.name)
 
     @property
     def content(self) -> str:
@@ -298,7 +298,7 @@ class MainWindow(QMainWindow):
                     watchdog.events.FileCreatedEvent(notification_path)
                 )
 
-    @Slot(watchdog.events.FileSystemEvent)  # type: ignore
+    @Slot(watchdog.events.FileSystemEvent)  # type: ignore[operator]
     def on_file_system_event_detected(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:

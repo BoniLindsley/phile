@@ -18,7 +18,7 @@ from phile.notify.cli import create_argument_parser, process_arguments
 from phile.notify.notification import Configuration, Notification
 
 _logger = logging.getLogger(
-    __loader__.name  # type: ignore  # mypy issue #1422
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
 
@@ -265,5 +265,5 @@ class TestProcessArguments(unittest.TestCase):
         self.assertTrue(configuration.notification_directory.is_dir())
 
 
-if __name__ == '__main__':  # type: ignore
+if __name__ == '__main__':
     unittest.main()
