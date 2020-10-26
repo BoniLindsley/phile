@@ -15,15 +15,19 @@ import unittest.mock
 
 # External dependencies.
 from PySide2.QtGui import QIcon
+import watchdog.events  # type: ignore[import]
+from watchdog.observers import Observer  # type: ignore[import]
 
 # Internal packages.
-from phile.configuration import Configuration
-from phile.tray.gui import GuiIconList, set_icon_paths
+import phile.configuration
+import phile.tray.gui
+from phile.tray.gui import set_icon_paths
 from phile.tray.tray_file import TrayFile
+import phile.watchdog_extras
 from test_phile.pyside2_test_tools import (
     QTestApplication, q_icon_from_theme, SystemTrayIcon
 )
-from test_phile.threaded_mock import ThreadedMock
+import test_phile.threaded_mock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -76,110 +80,105 @@ class TestGuiIconList(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        tray_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(tray_directory.cleanup)
-        self.tray_directory_path = pathlib.Path(tray_directory.name)
-        self.configuration = Configuration(
-            tray_directory=self.tray_directory_path
-        )
+        # Unique data directory to not interfere with other tests.
+        user_state_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(user_state_directory.cleanup)
+        # PySide2 app has to be cleaned up properly.
         self.app = QTestApplication()
         self.addCleanup(self.app.tear_down)
-        self.gui_icon_list = GuiIconList(
-            configuration=self.configuration
+        # Unique observers to ensure handlers do not inger.
+        # Start immediately to allow file changes propagate.
+        # Using a custom observer instead of allowing ``GuiIconList``
+        # to automatically create one
+        # because it would try to ``stop`` and ``join``
+        # and we do not care about that for most tests.
+        self.watching_observer = Observer()
+        self.watching_observer.daemon = True
+        self.watching_observer.start()
+        self.addCleanup(self.watching_observer.stop)
+        # Actually create the ``GuiIconList``.
+        self.configuration = phile.configuration.Configuration(
+            user_state_directory=pathlib.Path(user_state_directory.name)
         )
-        self.addCleanup(self.gui_icon_list.deleteLater)
+        self.gui_icon_list = phile.tray.gui.GuiIconList(
+            configuration=self.configuration,
+            watching_observer=self.watching_observer,
+        )
+        # Use a lambda to allow `self.main_window` to be replaced.
+        self.addCleanup(lambda: self.gui_icon_list.deleteLater())
+        # For detecting whether dispatch has been called.
+        dispatcher = self.gui_icon_list._tray_scheduler._watchdog_handler
+        self.dispatch_patch = unittest.mock.patch.object(
+            dispatcher,
+            'dispatch',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=dispatcher.dispatch,
+        )
+        self.trigger_directory = (
+            self.configuration.trigger_root / 'phile-tray-gui'
+        )
 
-    def test_initialisation(self) -> None:
-        """Create a MainWindow object."""
+    def test_setup_and_teardown(self) -> None:
+        """Flags up set up and tear down issues."""
         # The object is created in `setUp`.
         # This tests flags up whether the constructor itself fails.
         gui_icon_list = self.gui_icon_list
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        self.assertTrue(not gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
-        # Test also that the icon list can be created without arguments.
-        GuiIconList().deleteLater()
+        self.assertTrue(gui_icon_list.is_hidden())
+        self.assertTrue((
+            self.configuration.trigger_root / 'phile-tray-gui' /
+            ('close' + self.configuration.trigger_suffix)
+        ).is_file())
+        self.assertTrue((
+            self.configuration.trigger_root / 'phile-tray-gui' /
+            ('show' + self.configuration.trigger_suffix)
+        ).is_file())
 
-    def test_initialisation_with_custom_monitor(self) -> None:
-        """
-        Create a :class:`phile.tray.gui.GuiIconList` object with a
-        :class:`phile.PySide2_extras.watchdog_wrapper.FileSystemMonitor`.
-        """
-        # Create another instance of `GuiIconList`
-        # and ignore the one created in `setUp`.
-        # Use the monitor from it though,
-        # so we don't have to create another one.
-        file_system_monitor = self.gui_icon_list._file_system_monitor
-        gui_icon_list = GuiIconList(
-            configuration=self.configuration,
-            file_system_monitor=file_system_monitor
-        )
-        # Test for the same properties.
-        self.assertEqual(
-            gui_icon_list._file_system_monitor, file_system_monitor
-        )
-        self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        self.assertTrue(not gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(not file_system_monitor.was_start_called())
-        self.assertTrue(not file_system_monitor.was_stop_called())
-        # Clean-up.
-        gui_icon_list.deleteLater()
-        self.app.process_deferred_delete_events()
-
-    def test_show_and_hide_without_tray_icones(self) -> None:
+    def test_show_and_hide_without_tray_icons(self) -> None:
         """Showing and hiding should start and stop file monitoring."""
         # Showing should start monitoring.
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        self.assertTrue(gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(not gui_icon_list.is_hidden())
+        self.assertTrue((
+            self.configuration.trigger_root / 'phile-tray-gui' /
+            ('hide' + self.configuration.trigger_suffix)
+        ).is_file())
         # Hiding should stop monitoring.
         # This should be done by stopping the emitter
         # and not the file system monitor
         # so that the monitor can be started up again if necessary.
         gui_icon_list.hide()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        self.assertTrue(not gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(gui_icon_list.is_hidden())
+        self.assertTrue((
+            self.configuration.trigger_root / 'phile-tray-gui' /
+            ('show' + self.configuration.trigger_suffix)
+        ).is_file())
         # Try to show again to ensure toggling works.
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        self.assertTrue(gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(not gui_icon_list.is_hidden())
+        self.assertTrue((
+            self.configuration.trigger_root / 'phile-tray-gui' /
+            ('hide' + self.configuration.trigger_suffix)
+        ).is_file())
 
     def test_hide_without_show(self) -> None:
         """Calling hide without showing should just not do anything."""
         gui_icon_list = self.gui_icon_list
         gui_icon_list.hide()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        self.assertTrue(not gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(gui_icon_list.is_hidden())
+
+    def test_show_shown_list(self) -> None:
+        """Calling show on a shown list should just do nothing."""
+        gui_icon_list = self.gui_icon_list
+        gui_icon_list.show()
+        self.assertTrue(not gui_icon_list.is_hidden())
+        gui_icon_list.show()
+        self.assertTrue(not gui_icon_list.is_hidden())
 
     @unittest.mock.patch(
         'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
@@ -197,13 +196,7 @@ class TestGuiIconList(unittest.TestCase):
         # Showing should start monitoring.
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
-        self.assertTrue(gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(not gui_icon_list.is_hidden())
         children = gui_icon_list.tray_children()
         self.assertEqual(len(children), 1)
         self.assertTrue(children[0].isVisible())
@@ -212,16 +205,88 @@ class TestGuiIconList(unittest.TestCase):
         # and not the file system monitor
         # so that the monitor can be started up again if necessary.
         gui_icon_list.hide()
-        self.assertTrue(not gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(gui_icon_list.is_hidden())
         children = gui_icon_list.tray_children()
         self.assertEqual(len(children), 1)
         self.assertTrue(not children[0].isVisible())
+
+    def test_triggers(self) -> None:
+        """Tray GUI has show, hide and close triggers."""
+        gui_icon_list = self.gui_icon_list
+        # Use a threaded mock to check when events are queued into Qt.
+        dispatcher = gui_icon_list._trigger_scheduler._watchdog_handler
+        dispatch_patch = unittest.mock.patch.object(
+            dispatcher,
+            'dispatch',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=dispatcher.dispatch,
+        )
+        trigger_directory = self.trigger_directory
+        trigger_suffix = self.configuration.trigger_suffix
+        trigger_path = trigger_directory / ('show' + trigger_suffix)
+        # Respond to a show trigger.
+        with unittest.mock.patch.object(
+            gui_icon_list, 'show', wraps=gui_icon_list.show
+        ) as show_mock, dispatch_patch as dispatch_mock:
+            trigger_path.unlink()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            show_mock.assert_called()
+        # Respond to a hide trigger.
+        trigger_path = trigger_directory / ('hide' + trigger_suffix)
+        with unittest.mock.patch.object(
+            gui_icon_list, 'hide', wraps=gui_icon_list.hide
+        ) as hide_mock, dispatch_patch as dispatch_mock:
+            trigger_path.unlink()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            hide_mock.assert_called()
+        # Do not respond to an unknown trigger.
+        # Cannot really test that it has no side effects.
+        # Just run it for coverage to ensure it does not error.
+        # Cannot mock process_trigger since its reference is given
+        # to a wrapping handler.
+        # So mocking the method does not replace it.
+        trigger_name = 'unknown'
+        trigger_path = trigger_directory / (
+            trigger_name + trigger_suffix
+        )
+        with dispatch_patch as dispatch_mock:
+            # Create the fake trigger.
+            # Make sure appropriate events are processed.
+            trigger_path.touch()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileCreatedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            dispatch_mock.reset_mock()
+            # Activate the fake trigger.
+            # It should still be detected.
+            trigger_path.unlink()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            with self.assertLogs(
+                logger='phile.tray.gui', level=logging.WARNING
+            ) as logs:
+                self.app.process_events()
+        # Respond to a close trigger.
+        trigger_path = trigger_directory / ('close' + trigger_suffix)
+        with unittest.mock.patch.object(
+            gui_icon_list, 'close', wraps=gui_icon_list.close
+        ) as close_mock, dispatch_patch as dispatch_mock:
+            trigger_path.unlink()
+            dispatch_mock.assert_called_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            close_mock.assert_called()
+        # Give cleanup something to delete.
+        self.gui_icon_list = unittest.mock.Mock()
 
     @unittest.mock.patch(
         'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
@@ -281,7 +346,9 @@ class TestGuiIconList(unittest.TestCase):
             file_stream.write('Extra text.')
         # Check that they are all detected when showing the tray icons.
         gui_icon_list = self.gui_icon_list
-        with self.assertWarns(UserWarning):
+        with self.assertLogs(
+            logger='phile.tray.gui', level=logging.WARNING
+        ) as logs:
             gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
 
@@ -319,13 +386,7 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 2)
-        self.assertTrue(gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(not gui_icon_list.is_hidden())
         children = gui_icon_list.tray_children()
         self.assertEqual(children[0].icon().name(), tray_2.icon_name)
         self.assertEqual(children[1].icon().name(), tray.icon_name)
@@ -346,13 +407,7 @@ class TestGuiIconList(unittest.TestCase):
         # Check that they are all detected when showing the tray icons.
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
-        self.assertTrue(gui_icon_list._signal_emitter.is_started())
-        self.assertTrue(
-            gui_icon_list._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not gui_icon_list._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue(not gui_icon_list.is_hidden())
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         children = gui_icon_list.tray_children()
         self.assertEqual(
@@ -373,21 +428,17 @@ class TestGuiIconList(unittest.TestCase):
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
         # Need icon paths to test icon loading.
         set_icon_paths()
-        # Detect when the handler from gui_icon_list will be dispatched.
-        signal_emitter = self.gui_icon_list._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Create the tray file.
         tray_file = TrayFile(
             name='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
-        tray_file.save()
-        self.assertTrue(tray_file.path.is_file())
         # Wait for watchdog to find it.
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            tray_file.save()
+            self.assertTrue(tray_file.path.is_file())
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -411,14 +462,10 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        # Detect when the handler from gui_icon_list will be dispatched.
-        signal_emitter = self.gui_icon_list._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Wait for watchdog to notice the tray file is gone now.
-        tray_file.remove()
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            tray_file.remove()
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -446,15 +493,11 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        # Detect when the handler from gui_icon_list will be dispatched.
-        signal_emitter = self.gui_icon_list._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Wait for watchdog to notice the tray file has been changed.
         tray_file.icon_name = 'phile-tray-empty'
-        tray_file.save()
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            tray_file.save()
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -478,18 +521,14 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        # Detect when the handler from gui_icon_list will be dispatched.
-        signal_emitter = self.gui_icon_list._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Wait for watchdog to notice the tray file is moved now.
         new_name = 'Disco'
         new_tray_file = TrayFile(
             name=new_name, configuration=self.configuration
         )
-        tray_file.path.rename(new_tray_file.path)
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            tray_file.path.rename(new_tray_file.path)
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
@@ -507,26 +546,23 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
-        # Detect when the handler from gui_icon_list will be dispatched.
-        signal_emitter = self.gui_icon_list._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Create the tray file.
         tray_file = TrayFile(
             name='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
-        tray_file.save()
-        self.assertTrue(tray_file.path.is_file())
         # Wait for watchdog to notice it.
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            tray_file.save()
+            self.assertTrue(tray_file.path.is_file())
+            dispatch_mock.assert_called_soon()
         # Remove the tray file.
-        tray_file.remove()
-        self.assertTrue(not tray_file.path.is_file())
         # Wait for watchdog to notice it.
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            tray_file.remove()
+            self.assertTrue(not tray_file.path.is_file())
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()

@@ -21,19 +21,18 @@ import warnings
 
 # External dependencies.
 from PySide2.QtCore import QObject
-from PySide2.QtCore import Slot  # type: ignore
+from PySide2.QtCore import Signal, SignalInstance, Slot
 from PySide2.QtGui import QIcon
 from PySide2.QtWidgets import QApplication, QSystemTrayIcon, QWidget
 import watchdog.events  # type: ignore[import]
+import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
-from phile.configuration import Configuration
-from phile.PySide2_extras.posix_signal import (
-    install_noop_signal_handler, PosixSignal
-)
-from phile.PySide2_extras.watchdog_wrapper import (
-    FileSystemMonitor, FileSystemSignalEmitter
-)
+import phile.configuration
+import phile.PySide2_extras.posix_signal
+import phile.PySide2_extras.watchdog_wrapper
+import phile.trigger
+import phile.watchdog_extras
 from phile.tray.tray_file import TrayFile
 
 _logger = logging.getLogger(
@@ -76,59 +75,173 @@ def set_icon_paths() -> None:
 
 class GuiIconList(QObject):
 
+    _closed = typing.cast(SignalInstance, Signal())
+    """
+    Internal. Emitted when the list is closed.
+
+    Used for cleaning up internal resources.
+    """
+
     def __init__(
-        self,
-        *args,
-        configuration: Configuration = None,
-        file_system_monitor: FileSystemMonitor = None,
-        **kwargs
+        self, *args, configuration: phile.configuration.Configuration,
+        watching_observer: watchdog.observers.Observer, **kwargs
     ) -> None:
-
-        #if not QSystemTrayIcon.isSystemTrayAvailable():
-        #    raise RuntimeError(
-        #        "Tray icon support not found on the current system."
-        #    )
-
+        """
+        :param watching_observer:
+            The :attr:`~watchdog.observers.Observer` instance to use
+            to monitor for tray icon changes.
+            It is up to the caller to ensure the given ``watching_observer``
+            is :meth:`~watchdog.observers.api.BaseObserver.start`-ed
+            and not :meth:`~watchdog.observers.api.BaseObserver.stop`-ped
+            as appropriate.
+            If :data:`None`, a daemon instance is created
+            and :meth:`~watchdog.observers.api.BaseObserver.start`-ed,
+            and :meth:`~watchdog.observers.api.BaseObserver.stop`-ped
+            and :meth:`~watchdog.observers.api.BaseObserver.join`-ped
+            when ``self``
+            is `~PySide2.QtCore.QObject.QtCore.QObject.deleteLater`.
+        :type watching_observer:
+            :attr:`~watchdog.observers.Observer` or :data:`None`
+        """
+        # Create as QObject first to use its methods.
         super().__init__(*args, **kwargs)
         # Keep track of GUI icons created.
         self.tray_files: typing.List[TrayFile] = []
-        # Use a monitor get file system events.
-        if file_system_monitor is None:
-            file_system_monitor = FileSystemMonitor(self)
-        self._file_system_monitor = file_system_monitor
         # Figure out where tray files are and their suffix.
-        if configuration is None:
-            configuration = Configuration()
         self._configuration = configuration
-        # Let the file monitor know which directory we are interested in.
-        self._signal_emitter = FileSystemSignalEmitter(
-            monitored_path=self._configuration.tray_directory,
-            parent=self._file_system_monitor,
+        # Set up tray directory monitoring.
+        self._set_up_tray_event_handler(
+            watching_observer=watching_observer
         )
-        signal = self._signal_emitter.file_system_event_detected
-        signal.connect(  # type: ignore
-            self.on_file_system_event_detected
+        self._set_up_trigger_event_handler(
+            watching_observer=watching_observer
         )
 
-    def hide(self):
-        self._signal_emitter.stop()
+    def _set_up_tray_event_handler(
+        self, *, watching_observer: watchdog.observers.Observer
+    ):
+        # Forward watchdog events into Qt signal and handle it there.
+        signal_emitter = (
+            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+                parent=self,
+                event_handler=self.on_file_system_event_detected,
+            )
+        )
+        # Use a scheduler to toggle the event handling on and off.
+        dispatcher = phile.watchdog_extras.Dispatcher(
+            event_handler=signal_emitter
+        )
+        watched_path = self._configuration.tray_directory
+        watched_path.mkdir(exist_ok=True, parents=True)
+        self._tray_scheduler = phile.watchdog_extras.Scheduler(
+            watchdog_handler=dispatcher,
+            watched_path=watched_path,
+            watching_observer=watching_observer,
+        )
+        # Make sure to remove handler from observer
+        # when ``self`` is destroyed
+        # so the observer would not call non-existence handlers.
+        self.destroyed.connect(self._tray_scheduler.unschedule)
+        self._closed.connect(self._tray_scheduler.unschedule)
+
+    def _set_up_trigger_event_handler(
+        self, *, watching_observer: watchdog.observers.Observer
+    ) -> None:
+        # Take cooperative ownership of the directory
+        # containing trigger file for trays.
+        self._entry_point = phile.trigger.EntryPoint(
+            configuration=self._configuration,
+            trigger_directory=pathlib.Path('phile-tray-gui'),
+        )
+        self._entry_point.bind()
+        self.destroyed.connect(self._entry_point.unbind)
+        # Turn file system events into trigger names to process.
+        event_conveter = phile.trigger.EventConverter(
+            configuration=self._configuration,
+            trigger_handler=self.process_trigger,
+        )
+        # Forward watchdog events into Qt signal and handle it there.
+        signal_emitter = (
+            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+                parent=self,
+                event_handler=event_conveter,
+            )
+        )
+        # Filter out non-trigger activation events
+        # to reduce cross-thread communications.
+        event_filter = phile.trigger.EventFilter(
+            configuration=self._configuration,
+            event_handler=signal_emitter,
+            trigger_directory=self._entry_point.trigger_directory,
+        )
+        # Use a scheduler to toggle the event handling on and off.
+        dispatcher = phile.watchdog_extras.Dispatcher(
+            event_handler=event_filter
+        )
+        self._trigger_scheduler = phile.watchdog_extras.Scheduler(
+            watchdog_handler=dispatcher,
+            watched_path=self._entry_point.trigger_directory,
+            watching_observer=watching_observer,
+        )
+        self._trigger_scheduler.schedule()
+        # Make sure to remove handler from observer
+        # when ``self`` is destroyed
+        # so the observer would not call non-existence handlers.
+        self.destroyed.connect(self._trigger_scheduler.unschedule)
+        self._closed.connect(self._trigger_scheduler.unschedule)
+        # Allow closing with a trigger.
+        self._entry_point.add_trigger('close')
+        self._entry_point.add_trigger('show')
+
+    def process_trigger(self, trigger_name: str) -> None:
+        if trigger_name == 'hide':
+            self.hide()
+        elif trigger_name == 'show':
+            self.show()
+        elif trigger_name == 'close':
+            self.close()
+        else:
+            _logger.warning('Unknown trigger command: %s', trigger_name)
+
+    def close(self) -> None:
+        """Tell the list the icons should not be displayed anymore."""
+        self.hide()
+        self._closed.emit()
+        self.deleteLater()
+
+    def hide(self) -> None:
+        """Hide tray icons if not already hidden."""
+        if self.is_hidden():
+            return
+        self._tray_scheduler.unschedule()
         for tray_icon in self.tray_children():
             tray_icon.hide()
+        self._entry_point.remove_trigger('hide')
+        self._entry_point.add_trigger('show')
 
-    def show(self):
+    def is_hidden(self) -> bool:
+        """Returns whether the tray icon is hidden."""
+        return not self._tray_scheduler.is_scheduled()
+
+    def show(self) -> None:
+        """Show tray icons if not already shown."""
+        if not self.is_hidden():
+            return
+        # Start monitoring to not miss file events.
+        self._tray_scheduler.schedule()
         # Update all existing tray files.
         configuration = self._configuration
-        tray_directory = configuration.tray_directory
+        tray_directory = self._configuration.tray_directory
         for tray_file_path in tray_directory.iterdir():
-            if tray_file_path.is_file():
-                self.on_file_system_event_detected(
-                    watchdog.events.FileCreatedEvent(tray_file_path)
-                )
+            if not tray_file_path.is_file():
+                continue
+            self.on_file_system_event_detected(
+                watchdog.events.FileCreatedEvent(tray_file_path)
+            )
         for tray_icon in self.tray_children():
             tray_icon.show()
-        if not self._file_system_monitor.was_start_called():
-            self._file_system_monitor.start()
-        self._signal_emitter.start()
+        self._entry_point.remove_trigger('show')
+        self._entry_point.add_trigger('hide')
 
     @Slot(watchdog.events.FileSystemEvent)  # type: ignore[operator]
     def on_file_system_event_detected(
@@ -175,10 +288,8 @@ class GuiIconList(QObject):
         try:
             self.load(tray_file)
         except json.decoder.JSONDecodeError:
-            warnings.warn(
-                'Unable to decode a tray file: {}'.format(
-                    tray_file.path
-                )
+            _logger.warning(
+                'Tray file decoding failed: {}'.format(tray_file.path)
             )
             return
 
@@ -315,16 +426,31 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     app = QApplication(argv)
     # Let Qt know where to find icons.
     set_icon_paths()
+    configuration = phile.configuration.Configuration()
+    watching_observer = watchdog.observers.Observer()
+    watching_observer.daemon = True
+    watching_observer.start()
     try:
-        gui_icon_list = GuiIconList()
+        gui_icon_list = GuiIconList(
+            configuration=configuration,
+            watching_observer=watching_observer
+        )
     except RuntimeError as e:
         _logger.critical('Unable to create tray icons: %s', e)
         return 1
     gui_icon_list.show()
-    posix_signal = PosixSignal(gui_icon_list)
-    posix_signal.signal_received.connect(app.quit)  # type: ignore
-    install_noop_signal_handler(signal.SIGINT)
-    return app.exec_()
+    gui_icon_list.destroyed.connect(app.quit)
+    posix_signal = phile.PySide2_extras.posix_signal.PosixSignal(
+        gui_icon_list
+    )
+    posix_signal.signal_received.connect(gui_icon_list.close)
+    phile.PySide2_extras.posix_signal.install_noop_signal_handler(
+        signal.SIGINT
+    )
+    return_value = app.exec_()
+    watching_observer.stop()
+    watching_observer.join()
+    return return_value
 
 
 if __name__ == '__main__':  # pragma: no cover
