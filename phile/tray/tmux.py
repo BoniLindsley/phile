@@ -33,7 +33,7 @@ import watchdog.events  # type: ignore[import]
 # Internal packages.
 from phile.configuration import Configuration
 from phile.tray.tray_file import TrayFile
-from phile.watchdog_extras import Observer
+import phile.watchdog_extras
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -406,19 +406,17 @@ class ControlMode:
         return bool(ready_list)
 
 
-class IconList(watchdog.events.FileSystemEventHandler):
+class IconList:
 
     def __init__(
         self,
         *,
         configuration: Configuration,
         control_mode: ControlMode,
-        observer: Observer,
+        watching_observer: watchdog.observers.Observer,
     ) -> None:
         self._configuration = configuration
         """Information on where tray files are."""
-        self._observer = observer
-        """Monitors for file changes."""
         self._tray_files: typing.List[TrayFile] = []
         """Keeps track of known tray files."""
         self._control_mode = control_mode
@@ -428,9 +426,27 @@ class IconList(watchdog.events.FileSystemEventHandler):
         # to always set the status line.
         self._status_right = '\n'
         """Current status right string for tmux."""
-        self._watchdog_watch: typing.Optional[
-            watchdog.events.ObservedWatch] = None
-        """Describes the monitored path."""
+        # Set up tray directory monitoring.
+        self._set_up_tray_event_handler(
+            watching_observer=watching_observer
+        )
+
+    def _set_up_tray_event_handler(
+        self, *, watching_observer: watchdog.observers.Observer
+    ):
+        # Make sure the directory to be monitored exists.
+        watched_path = self._configuration.tray_directory
+        watched_path.mkdir(exist_ok=True, parents=True)
+        # Set up how to handle the events.
+        dispatcher = phile.watchdog_extras.Dispatcher(
+            event_handler=self.process_tray_event
+        )
+        # Use a scheduler to toggle the event handling on and off.
+        self._tray_scheduler = phile.watchdog_extras.Scheduler(
+            watchdog_handler=dispatcher,
+            watched_path=watched_path,
+            watching_observer=watching_observer,
+        )
 
     def run(self) -> None:
         """
@@ -454,13 +470,9 @@ class IconList(watchdog.events.FileSystemEventHandler):
 
     def hide(self) -> None:
         """Stop updating and reset ``status-right``."""
-        if self._watchdog_watch is None:
-            _logger.debug('Icon list not hiding. Already hidden.')
+        if self.is_hidden():
             return
-        _logger.debug('Icon list removing handler.')
-        self._observer.remove_handler(self, self._watchdog_watch)
-        self._watchdog_watch = None
-        _logger.debug('Icon list untracks all tray files.')
+        self._tray_scheduler.unschedule()
         self._tray_files.clear()
         self.refresh_status_line()
 
@@ -471,26 +483,26 @@ class IconList(watchdog.events.FileSystemEventHandler):
         This is non-blocking.
         Starts thread(s) to monitor for tray file changes.
         """
-        if self._watchdog_watch is not None:
-            _logger.debug('Icon list not showing. Already shown.')
+        if not self.is_hidden():
             return
-        _logger.debug('Icon list updating all existing tray files.')
+        # Start monitoring to not miss file events.
+        self._tray_scheduler.schedule()
+        # Update all existing tray files.
         configuration = self._configuration
         tray_directory = configuration.tray_directory
         for tray_file_path in tray_directory.iterdir():
             if tray_file_path.is_file():
-                self.dispatch(
+                self.process_tray_event(
                     watchdog.events.FileCreatedEvent(tray_file_path)
                 )
+        # Refresh the status line even if there are no tray files.
         self.refresh_status_line()
-        assert self._observer.was_start_called()
-        assert not self._observer.was_stop_called()
-        _logger.debug('Icon list adding handler.')
-        self._watchdog_watch = self._observer.add_handler(
-            self, self._configuration.tray_directory
-        )
 
-    def dispatch(
+    def is_hidden(self) -> bool:
+        """Returns whether the tray icon is hidden."""
+        return not self._tray_scheduler.is_scheduled()
+
+    def process_tray_event(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:
         """
@@ -516,7 +528,7 @@ class IconList(watchdog.events.FileSystemEventHandler):
                     watchdog_event.dest_path
                 )
             ]:
-                self.dispatch(new_event)
+                self.process_tray_event(new_event)
             return
         # Only files of a specific extension is a tray file.
         try:
@@ -657,11 +669,11 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     """Take over tmux ``status-right`` to display tray icons."""
     configuration = Configuration()
     control_mode = ControlMode(session_name='ctrl')
-    observer = Observer()
+    watching_observer = phile.watchdog_extras.Observer()
     IconList(
         configuration=configuration,
         control_mode=control_mode,
-        observer=observer,
+        watching_observer=watching_observer,
     ).run()
     return 0
 
