@@ -146,6 +146,10 @@ New in version 3.0: New option 'description' is added.
 # ## Extension: sphinx.ext.intersphinx
 
 intersphinx_mapping = {
+    'pathvalidate':
+        ('https://pathvalidate.readthedocs.io/en/latest', None),
+    'portalocker':
+        ('https://portalocker.readthedocs.io/en/latest', None),
     'python': ('https://docs.python.org/3', None),
     'pyside2': ('https://doc.qt.io/qtforpython/', None),
     'watchdog': ('https://watchdog.readthedocs.io/en/latest/', None),

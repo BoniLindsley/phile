@@ -15,7 +15,12 @@ setup(
         'phile.tray',
     ],
     license='MIT',
-    install_requires=['PySide2', 'watchdog'],
+    install_requires=[
+        'pathvalidate',
+        'portalocker',
+        'PySide2',
+        'watchdog',
+    ],
     entry_points={
         'console_scripts': [
             'phile = phile.__main__:main',
@@ -30,7 +35,6 @@ setup(
         'dev': [
             'coverage',
             'mypy',
-            'portalocker',
             'psutil',
             'recommonmark',
             'sphinx',
