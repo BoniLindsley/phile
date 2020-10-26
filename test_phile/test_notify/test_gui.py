@@ -16,15 +16,15 @@ import unittest.mock
 # External dependencies.
 from PySide2.QtCore import QEventLoop, QObject, Qt
 from PySide2.QtWidgets import QMdiArea
+import watchdog.events  # type: ignore[import]
+from watchdog.observers import Observer  # type: ignore[import]
 
 # Internal packages.
-from phile.notify.gui import (
-    MainWindow, Notification, NotificationMdi, NotificationMdiSubWindow
-)
+import phile.notify.gui
 from phile.notify.notification import Configuration, Notification
-from phile.PySide2_extras.watchdog_wrapper import FileSystemMonitor
-from test_phile.pyside2_test_tools import QTestApplication
-from test_phile.threaded_mock import ThreadedMock
+import phile.PySide2_extras.watchdog_wrapper
+import test_phile.pyside2_test_tools
+import test_phile.threaded_mock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -45,7 +45,7 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        app = QTestApplication()
+        app = test_phile.pyside2_test_tools.QTestApplication()
         self.addCleanup(app.tear_down)
         self.content = 'You have 123 friends.\n'
         'You have 456 unread messages.\n'
@@ -61,10 +61,12 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
             microsecond=4,
         )
         self.name = 'VaceBook'
-        self.notification_sub_window = NotificationMdiSubWindow(
-            content=self.content,
-            creation_datetime=self.creation_datetime,
-            name=self.name,
+        self.notification_sub_window = (
+            phile.notify.gui.NotificationMdiSubWindow(
+                content=self.content,
+                creation_datetime=self.creation_datetime,
+                name=self.name,
+            )
         )
 
     def test_initialisation(self) -> None:
@@ -147,9 +149,9 @@ class TestNotificationMdi(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        self.app = QTestApplication()
+        self.app = test_phile.pyside2_test_tools.QTestApplication()
         self.addCleanup(self.app.tear_down)
-        self.notification_mdi = NotificationMdi()
+        self.notification_mdi = phile.notify.gui.NotificationMdi()
         self.addCleanup(self.notification_mdi.deleteLater)
 
     def test_initialisation(self) -> None:
@@ -488,59 +490,59 @@ class TestMainWindow(unittest.TestCase):
         to make sure no application state information
         would interfere with each other.
         """
-        notification_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(notification_directory.cleanup)
-        self.configuration = Configuration(
-            notification_directory=pathlib.
-            Path(notification_directory.name)
-        )
-        self.app = QTestApplication()
+        # Unique data directory to not interfere with other tests.
+        user_state_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(user_state_directory.cleanup)
+        # PySide2 app has to be cleaned up properly.
+        self.app = test_phile.pyside2_test_tools.QTestApplication()
         self.addCleanup(self.app.tear_down)
-        self.main_window = MainWindow(configuration=self.configuration)
-        self.addCleanup(self.main_window.deleteLater)
+        # Unique observers to ensure handlers do not inger.
+        # Start immediately to allow file changes propagate.
+        # Using a custom observer instead of allowing ``MainWindow``
+        # to automatically create one
+        # because it would try to ``stop`` and ``join``
+        # and we do not care about that for most tests.
+        self.watching_observer = Observer()
+        self.watching_observer.daemon = True
+        self.watching_observer.start()
+        self.addCleanup(self.watching_observer.stop)
+        # Actually create the ``MainWindow``.
+        self.configuration = Configuration(
+            user_state_directory=pathlib.Path(user_state_directory.name)
+        )
+        self.main_window = phile.notify.gui.MainWindow(
+            configuration=self.configuration,
+            watching_observer=self.watching_observer,
+        )
+        # Use a lambda to allow `self.main_window` to be replaced.
+        self.addCleanup(lambda: self.main_window.deleteLater())
+        # For detecting whether dispatch has been called.
+        dispatcher = self.main_window._notify_scheduler._watchdog_handler
+        self.dispatch_patch = unittest.mock.patch.object(
+            dispatcher,
+            'dispatch',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=dispatcher.dispatch,
+        )
+        self.trigger_directory = (
+            self.configuration.trigger_root / 'phile-notify-gui'
+        )
 
     def test_initialisation(self) -> None:
         """Create a MainWindow object."""
         # The object is created in `setUp`.
         # This tests flags up whether the constructor itself fails.
-        self.assertEqual(len(self.main_window._sub_windows), 0)
         self.assertTrue(
-            not self.main_window._signal_emitter.is_started()
+            not self.main_window._notify_scheduler.is_scheduled()
         )
-        self.assertTrue(
-            not self.main_window._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not self.main_window._file_system_monitor.was_stop_called()
-        )
-        # Test also that a main window can be created without arguments.
-        MainWindow().deleteLater()
-
-    def test_initialisation_with_custom_monitor(self) -> None:
-        """
-        Create a :class:`phile.notify.MainWindow` object with a
-        :class:`phile.PySide2_extras.watchdog_wrapper.FileSystemMonitor`.
-        """
-        # Create another instance of `MainWindow`
-        # and ignore the one created in `setUp`.
-        # Use the monitor from it though,
-        # so we don't have to create another one.
-        file_system_monitor = self.main_window._file_system_monitor
-        main_window = MainWindow(
-            configuration=self.configuration,
-            file_system_monitor=file_system_monitor
-        )
-        # Test for the same properties.
-        self.assertEqual(
-            main_window._file_system_monitor, file_system_monitor
-        )
-        self.assertEqual(len(main_window._sub_windows), 0)
-        self.assertTrue(not main_window._signal_emitter.is_started())
-        self.assertTrue(not file_system_monitor.was_start_called())
-        self.assertTrue(not file_system_monitor.was_stop_called())
-        # Clean-up.
-        main_window.deleteLater()
-        self.app.process_deferred_delete_events()
+        self.assertTrue((
+            self.trigger_directory /
+            ('close' + self.configuration.trigger_suffix)
+        ).is_file())
+        self.assertTrue((
+            self.trigger_directory /
+            ('show' + self.configuration.trigger_suffix)
+        ).is_file())
 
     def test_show_and_hide_without_notifications(self) -> None:
         """Showing and hiding should start and stop file monitoring."""
@@ -548,12 +550,18 @@ class TestMainWindow(unittest.TestCase):
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 0)
         self.assertTrue(
-            self.main_window._file_system_monitor.was_start_called()
+            self.main_window._notify_scheduler.is_scheduled()
         )
         self.assertTrue(
-            not self.main_window._file_system_monitor.was_stop_called()
+            not (
+                self.trigger_directory /
+                ('show' + self.configuration.trigger_suffix)
+            ).is_file()
         )
-        self.assertTrue(self.main_window._signal_emitter.is_started())
+        self.assertTrue((
+            self.trigger_directory /
+            ('hide' + self.configuration.trigger_suffix)
+        ).is_file())
         # Hiding should stop monitoring.
         # This should be done by stopping the emitter
         # and not the file system monitor
@@ -561,36 +569,38 @@ class TestMainWindow(unittest.TestCase):
         self.main_window.hide()
         self.assertEqual(len(self.main_window._sub_windows), 0)
         self.assertTrue(
-            self.main_window._file_system_monitor.was_start_called()
+            not self.main_window._notify_scheduler.is_scheduled()
         )
         self.assertTrue(
-            not self.main_window._file_system_monitor.was_stop_called()
+            not (
+                self.trigger_directory /
+                ('hide' + self.configuration.trigger_suffix)
+            ).is_file()
         )
-        self.assertTrue(
-            not self.main_window._signal_emitter.is_started()
-        )
+        self.assertTrue((
+            self.trigger_directory /
+            ('show' + self.configuration.trigger_suffix)
+        ).is_file())
         # Try to show again to ensure toggling works.
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 0)
         self.assertTrue(
-            self.main_window._file_system_monitor.was_start_called()
+            not (
+                self.trigger_directory /
+                ('show' + self.configuration.trigger_suffix)
+            ).is_file()
         )
-        self.assertTrue(
-            not self.main_window._file_system_monitor.was_stop_called()
-        )
+        self.assertTrue((
+            self.trigger_directory /
+            ('hide' + self.configuration.trigger_suffix)
+        ).is_file())
 
     def test_hide_without_show(self) -> None:
         """Calling hide without showing should just not do anything."""
         self.main_window.hide()
         self.assertEqual(len(self.main_window._sub_windows), 0)
         self.assertTrue(
-            not self.main_window._file_system_monitor.was_start_called()
-        )
-        self.assertTrue(
-            not self.main_window._file_system_monitor.was_stop_called()
-        )
-        self.assertTrue(
-            not self.main_window._signal_emitter.is_started()
+            not self.main_window._notify_scheduler.is_scheduled()
         )
 
     def test_show_with_notifications(self) -> None:
@@ -642,6 +652,84 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(len(self.main_window._sub_windows), 0)
         self.assertTrue(not notification.path.is_file())
 
+    def test_triggers(self) -> None:
+        """Notify GUI has show, hide and close triggers."""
+        main_window = self.main_window
+        # Use a threaded mock to check when events are queued into Qt.
+        dispatcher = main_window._trigger_scheduler._watchdog_handler
+        dispatch_patch = unittest.mock.patch.object(
+            dispatcher,
+            'dispatch',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=dispatcher.dispatch,
+        )
+        trigger_directory = self.trigger_directory
+        trigger_suffix = self.configuration.trigger_suffix
+        trigger_path = trigger_directory / ('show' + trigger_suffix)
+        # Respond to a show trigger.
+        with unittest.mock.patch.object(
+            main_window, 'show', wraps=main_window.show
+        ) as show_mock, dispatch_patch as dispatch_mock:
+            trigger_path.unlink()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            show_mock.assert_called()
+        # Respond to a hide trigger.
+        trigger_path = trigger_directory / ('hide' + trigger_suffix)
+        with unittest.mock.patch.object(
+            main_window, 'hide', wraps=main_window.hide
+        ) as hide_mock, dispatch_patch as dispatch_mock:
+            trigger_path.unlink()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            hide_mock.assert_called()
+        # Do not respond to an unknown trigger.
+        # Cannot really test that it has no side effects.
+        # Just run it for coverage to ensure it does not error.
+        # Cannot mock process_trigger since its reference is given
+        # to a wrapping handler.
+        # So mocking the method does not replace it.
+        trigger_name = 'unknown'
+        trigger_path = trigger_directory / (
+            trigger_name + trigger_suffix
+        )
+        with dispatch_patch as dispatch_mock:
+            # Create the fake trigger.
+            # Make sure appropriate events are processed.
+            trigger_path.touch()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileCreatedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            dispatch_mock.reset_mock()
+            # Activate the fake trigger.
+            # It should still be detected.
+            trigger_path.unlink()
+            dispatch_mock.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            with self.assertLogs(
+                logger='phile.notify.gui', level=logging.WARNING
+            ) as logs:
+                self.app.process_events()
+        # Respond to a close trigger.
+        trigger_path = trigger_directory / ('close' + trigger_suffix)
+        with unittest.mock.patch.object(
+            main_window, 'closeEvent', wraps=main_window.closeEvent
+        ) as close_mock, dispatch_patch as dispatch_mock:
+            trigger_path.unlink()
+            dispatch_mock.assert_called_soon(
+                watchdog.events.FileDeletedEvent(str(trigger_path))
+            )
+            self.app.process_events()
+            close_mock.assert_called()
+        # Give cleanup something to delete.
+        self.main_window = unittest.mock.Mock()
+
     def test_new_notification_creates_sub_window(self) -> None:
         """Writing a new notification creates a sub-window."""
         # There should be no sub-window at the beginning.
@@ -650,17 +738,13 @@ class TestMainWindow(unittest.TestCase):
         )
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 0)
-        # Detect when the handler from main window will be dispatched.
-        signal_emitter = self.main_window._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Create the notification and wait for watchdog to find it.
         self.assertTrue(not notification.path.is_file())
         content = 'Happy birthday!'
-        notification.write(content)
-        self.assertTrue(notification.path.is_file())
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            notification.write(content)
+            self.assertTrue(notification.path.is_file())
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -681,15 +765,11 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
-        # Detect when the handler from main window will be dispatched.
-        signal_emitter = self.main_window._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Remove the notification and wait for watchdog to notice.
-        notification.remove()
-        self.assertTrue(not notification.path.is_file())
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            notification.remove()
+            self.assertTrue(not notification.path.is_file())
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -706,16 +786,12 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
-        # Detect when the handler from main window will be dispatched.
-        signal_emitter = self.main_window._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Remove the notification and wait for watchdog to notice.
         new_content = 'Happy New Year!'
-        notification.append(new_content)
-        self.assertTrue(notification.path.is_file())
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            notification.append(new_content)
+            self.assertTrue(notification.path.is_file())
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -736,20 +812,16 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
-        # Detect when the handler from main window will be dispatched.
-        signal_emitter = self.main_window._signal_emitter
-        signal_emitter.dispatch = ThreadedMock(  # type: ignore
-            wraps=signal_emitter.dispatch
-        )
         # Remove the notification and wait for watchdog to notice.
         new_name = 'Disco'
         new_notification = Notification(
             name=new_name, configuration=self.configuration
         )
-        notification.path.rename(new_notification.path)
-        self.assertTrue(not notification.path.is_file())
-        self.assertTrue(new_notification.path.is_file())
-        signal_emitter.dispatch.assert_called_soon()
+        with self.dispatch_patch as dispatch_mock:
+            notification.path.rename(new_notification.path)
+            self.assertTrue(not notification.path.is_file())
+            self.assertTrue(new_notification.path.is_file())
+            dispatch_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -758,6 +830,38 @@ class TestMainWindow(unittest.TestCase):
             self.main_window._sub_windows[new_notification].content,
             content + '\n'
         )
+
+    def test_create_and_delete_before_processing(self) -> None:
+        """
+        Create and delete a notification before event processing.
+
+        Event processing may be slow, and it is possible
+        for a file to be created and deleted
+        before its creation event is processed.
+        Such a case should be handled.
+        """
+        main_window = self.main_window
+        main_window.show()
+        # Create the notification.
+        notification = Notification(
+            name='VeCat', configuration=self.configuration
+        )
+        self.assertTrue(not notification.path.is_file())
+        with self.dispatch_patch as dispatch_mock:
+            notification.write('Meow.')
+            self.assertTrue(notification.path.is_file())
+            # Wait for watchdog to notice it.
+            dispatch_mock.assert_called_soon()
+        # Remove the notification.
+        with self.dispatch_patch as dispatch_mock:
+            notification.remove()
+            self.assertTrue(not notification.path.is_file())
+            # Wait for watchdog to notice it.
+            dispatch_mock.assert_called_soon()
+        # The Qt event should be posted by now.
+        # The icon list should hve handled it by creating a tray icon.
+        self.app.process_events()
+        self.assertEqual(len(main_window._sub_windows), 0)
 
 
 if __name__ == '__main__':

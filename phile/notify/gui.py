@@ -9,7 +9,7 @@ import sys
 import typing
 
 # External dependencies.
-from PySide2.QtCore import QEvent, Qt
+from PySide2.QtCore import QEvent, QEventLoop, Qt
 from PySide2.QtCore import Signal, SignalInstance, Slot
 from PySide2.QtGui import (
     QCloseEvent, QHideEvent, QResizeEvent, QShowEvent, QPalette
@@ -18,15 +18,14 @@ from PySide2.QtWidgets import (
     QApplication, QMainWindow, QMdiArea, QMdiSubWindow, QTextEdit
 )
 import watchdog.events  # type: ignore[import]
+import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
-from phile.notify.notification import Configuration, Notification
-from phile.PySide2_extras.posix_signal import (
-    install_noop_signal_handler, PosixSignal
-)
-from phile.PySide2_extras.watchdog_wrapper import (
-    FileSystemMonitor, FileSystemSignalEmitter
-)
+import phile.configuration
+from phile.notify.notification import Notification
+import phile.trigger
+import phile.PySide2_extras.posix_signal
+import phile.PySide2_extras.watchdog_wrapper
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -237,50 +236,135 @@ class NotificationMdi(QMdiArea):
 
 class MainWindow(QMainWindow):
 
+    _closed = typing.cast(SignalInstance, Signal())
+    """Internal. Emitted when the window is closed to handle cleanup."""
+
     def __init__(
-        self,
-        *args,
-        configuration: Configuration = None,
-        file_system_monitor: FileSystemMonitor = None,
-        **kwargs
+        self, *args, configuration: phile.configuration.Configuration,
+        watching_observer: watchdog.observers.Observer, **kwargs
     ):
+        # Create the window.
         super().__init__(*args, **kwargs)
+        self.setAttribute(Qt.WA_DeleteOnClose)
         # Create the GUI for displaying notifications.
         mdi_area = NotificationMdi()
         self.setCentralWidget(mdi_area)
-        # Use a monitor get file system events.
-        if file_system_monitor is None:
-            file_system_monitor = FileSystemMonitor(mdi_area)
-        self._file_system_monitor = file_system_monitor
-        # Figure out where notifications are and their suffix.
-        if configuration is None:
-            configuration = Configuration()
-        self._configuration = configuration
-        # Let the file monitor know which directory we are interested in.
-        self._signal_emitter = FileSystemSignalEmitter(
-            monitored_path=self._configuration.notification_directory,
-            parent=self._file_system_monitor,
-        )
-        signal = self._signal_emitter.file_system_event_detected
-        signal.connect(  # type: ignore
-            self.on_file_system_event_detected
-        )
         # Keep track of sub-windows by name
         # so that we know which ones to modify when files are changed.
         self._sub_windows: typing.Dict[Notification,
                                        NotificationMdiSubWindow] = {}
+        # Figure out where notifications are and their suffix.
+        self._configuration = configuration
+        # Set up tray directory monitoring.
+        self.set_up_notify_event_handler(
+            watching_observer=watching_observer
+        )
+        self.set_up_trigger_event_handler(
+            watching_observer=watching_observer
+        )
+
+    def set_up_notify_event_handler(
+        self, *, watching_observer: watchdog.observers.Observer
+    ) -> None:
+        # Forward watchdog events into Qt signal and handle it there.
+        signal_emitter = (
+            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+                parent=self,
+                event_handler=self.on_file_system_event_detected,
+            )
+        )
+        # Use a scheduler to toggle the event handling on and off.
+        dispatcher = phile.watchdog_extras.Dispatcher(
+            event_handler=signal_emitter
+        )
+        watched_path = self._configuration.notification_directory
+        watched_path.mkdir(exist_ok=True, parents=True)
+        self._notify_scheduler = phile.watchdog_extras.Scheduler(
+            watchdog_handler=dispatcher,
+            watched_path=watched_path,
+            watching_observer=watching_observer,
+        )
+        # Make sure to remove handler from observer
+        # when ``self`` is closed
+        # so the observer would not call non-existence handlers.
+        self.destroyed.connect(self._notify_scheduler.unschedule)
+        self._closed.connect(self._notify_scheduler.unschedule)
+
+    def set_up_trigger_event_handler(
+        self, *, watching_observer: watchdog.observers.Observer
+    ) -> None:
+        # Take cooperative ownership of the directory
+        # containing trigger file for trays.
+        self._entry_point = phile.trigger.EntryPoint(
+            configuration=self._configuration,
+            trigger_directory=pathlib.Path('phile-notify-gui'),
+        )
+        self._entry_point.bind()
+        self.destroyed.connect(self._entry_point.unbind)
+        # Turn file system events into trigger names to process.
+        event_conveter = phile.trigger.EventConverter(
+            configuration=self._configuration,
+            trigger_handler=self.process_trigger,
+        )
+        # Forward watchdog events into Qt signal and handle it there.
+        signal_emitter = (
+            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+                parent=self,
+                event_handler=event_conveter,
+            )
+        )
+        # Filter out non-trigger activation events
+        # to reduce cross-thread communications.
+        event_filter = phile.trigger.EventFilter(
+            configuration=self._configuration,
+            event_handler=signal_emitter,
+            trigger_directory=self._entry_point.trigger_directory,
+        )
+        # Use a scheduler to toggle the event handling on and off.
+        dispatcher = phile.watchdog_extras.Dispatcher(
+            event_handler=event_filter
+        )
+        self._trigger_scheduler = phile.watchdog_extras.Scheduler(
+            watchdog_handler=dispatcher,
+            watched_path=self._entry_point.trigger_directory,
+            watching_observer=watching_observer,
+        )
+        self._trigger_scheduler.schedule()
+        # Make sure to remove handler from observer
+        # when ``self`` is closed
+        # so the observer would not call non-existence handlers.
+        self.destroyed.connect(self._trigger_scheduler.unschedule)
+        self._closed.connect(self._trigger_scheduler.unschedule)
+        # Allow closing with a trigger.
+        self._entry_point.add_trigger('close')
+        self._entry_point.add_trigger('show')
+
+    def process_trigger(self, trigger_name: str) -> None:
+        _logger.debug('MainWindow trigger %s.', trigger_name)
+        if trigger_name == 'hide':
+            self.hide()
+        elif trigger_name == 'show':
+            self.show()
+        elif trigger_name == 'close':
+            self.close()
+        else:
+            _logger.warning('Unknown trigger command: %s', trigger_name)
+
+    def closeEvent(self, close_event: QCloseEvent) -> None:
+        """Internal. Handle cleanup."""
+        _logger.debug('MainWindow is closing.')
+        self._closed.emit()
 
     def hideEvent(self, hide_event: QHideEvent) -> None:
-        # Start the file monitor first to not miss events.
-        if self._signal_emitter.is_started():  # pragma: no branch
-            self._signal_emitter.stop()
+        _logger.debug('MainWindow is hiding.')
+        self._notify_scheduler.unschedule()
+        self._entry_point.remove_trigger('hide')
+        self._entry_point.add_trigger('show')
 
     def showEvent(self, show_event: QShowEvent) -> None:
-        # Start the file monitor first to not miss events.
-        if not self._file_system_monitor.was_start_called():
-            self._file_system_monitor.start()
-        if not self._signal_emitter.is_started():
-            self._signal_emitter.start()
+        _logger.debug('MainWindow is showing.')
+        # Start scheduling first to not miss events.
+        self._notify_scheduler.schedule()
         # Initialise by filling in existing notifications.
         # There is a possibility of race condition
         # between the file monitor starting
@@ -297,6 +381,8 @@ class MainWindow(QMainWindow):
                 self.on_file_system_event_detected(
                     watchdog.events.FileCreatedEvent(notification_path)
                 )
+        self._entry_point.remove_trigger('show')
+        self._entry_point.add_trigger('hide')
 
     @Slot(watchdog.events.FileSystemEvent)  # type: ignore[operator]
     def on_file_system_event_detected(
@@ -330,18 +416,41 @@ class MainWindow(QMainWindow):
         except Notification.SuffixError as error:
             _logger.debug('Watchdog event: %s', error)
             return
-        # Determine what to do based on the event type.
-        if event_type == watchdog.events.EVENT_TYPE_CREATED:
-            _logger.debug('Watchdog event: notification created.')
-            self.update_notification_sub_window(notification)
-        elif event_type == watchdog.events.EVENT_TYPE_DELETED:
-            _logger.debug('Watchdog event: notification deleted.')
-            self.remove_notification_sub_window(notification)
-        elif event_type == watchdog.events.EVENT_TYPE_MODIFIED:
-            _logger.debug('Watchdog event: notification modified.')
-            self.update_notification_sub_window(notification)
-        else:  # pragma: no cover
-            assert False
+        # Determine what to do base on existence of the actual file.
+        self.load(notification)
+
+    def load(self, notification: Notification) -> None:
+        # Figure out if the notification was tracked.
+        sub_window = self._sub_windows.get(notification, None)
+        # Try to load the notification.
+        notification_exists = True
+        try:
+            new_data = {
+                "content": notification.read(),
+                "creation_datetime": notification.creation_datetime,
+                "name": notification.name,
+            }
+        except FileNotFoundError:
+            notification_exists = False
+        # If the notification does not exist,
+        # either remove the subwindow or there is nothing to do.
+        if not notification_exists:
+            if sub_window is not None:
+                del self._sub_windows[notification]
+                sub_window.deleteLater()
+        # Can assume from here that the notification is loaded.
+        elif sub_window is not None:
+            for key, value in new_data.items():
+                setattr(sub_window, key, value)
+        else:
+            sub_window = self.centralWidget().add_notification(
+                **new_data
+            )
+            sub_window.show()
+            sub_window.closed.connect(
+                self.on_notification_sub_window_closed
+            )
+            self._sub_windows[notification] = sub_window
 
     def on_notification_sub_window_closed(
         self, notification_name: str
@@ -349,53 +458,27 @@ class MainWindow(QMainWindow):
         notification = Notification(
             configuration=self._configuration, name=notification_name
         )
-        self.remove_notification_sub_window(notification)
         notification.remove()
-
-    def remove_notification_sub_window(
-        self, notification: Notification
-    ) -> None:
-        _logger.debug('Deleting notification sub-window.')
-        sub_window = self._sub_windows.pop(notification, None)
-        if sub_window is None:
-            _logger.debug('Sub-window not found. Ignoring.')
-        else:
-            _logger.debug('Sub-window found. Removing.')
-            sub_window.deleteLater()
-
-    def update_notification_sub_window(
-        self, notification: Notification
-    ) -> None:
-        _logger.debug('Updating notification sub-window.')
-        sub_window = self._sub_windows.get(notification, None)
-        new_data = {
-            "content": notification.read(),
-            "creation_datetime": notification.creation_datetime,
-            "name": notification.name,
-        }
-        if sub_window is None:
-            _logger.debug('Sub-window not found. Creating.')
-            sub_window = self.centralWidget().add_notification(
-                **new_data
-            )
-            sub_window.show()
-            sub_window.closed.connect(  # type: ignore
-                self.on_notification_sub_window_closed
-            )
-            self._sub_windows[notification] = sub_window
-        else:
-            _logger.debug('Sub-window found. Upating.')
-            for key, value in new_data.items():
-                setattr(sub_window, key, value)
+        self.load(notification)
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     app = QApplication(argv)
-    main_window = MainWindow()
+    configuration = phile.configuration.Configuration()
+    watching_observer = watchdog.observers.Observer()
+    watching_observer.daemon = True
+    watching_observer.start()
+    main_window = MainWindow(
+        configuration=configuration, watching_observer=watching_observer
+    )
     main_window.show()
-    posix_signal = PosixSignal(main_window)
-    posix_signal.signal_received.connect(app.quit)  # type: ignore
-    install_noop_signal_handler(signal.SIGINT)
+    posix_signal = phile.PySide2_extras.posix_signal.PosixSignal(
+        main_window
+    )
+    posix_signal.signal_received.connect(main_window.close)
+    phile.PySide2_extras.posix_signal.install_noop_signal_handler(
+        signal.SIGINT
+    )
     return app.exec_()
 
 
