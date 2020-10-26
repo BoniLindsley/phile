@@ -356,7 +356,7 @@ class TestIconList(unittest.TestCase):
         self.icon_list = IconList(
             configuration=self.configuration,
             control_mode=self.control_mode,
-            observer=self.observer,
+            watching_observer=self.observer,
         )
         self.observer.start()
         self.addCleanup(self.observer.stop)
@@ -472,7 +472,7 @@ class TestIconList(unittest.TestCase):
         self.icon_list.load(year_tray_file)
         self.control_mode.send_command.assert_not_called()
 
-    def test_dispatch_with_bad_file(self) -> None:
+    def test_process_tray_event_with_bad_file(self) -> None:
         """
         Dispatch ignores badly structured files.
 
@@ -486,7 +486,7 @@ class TestIconList(unittest.TestCase):
         with tray_file.path.open('a+') as file_stream:
             file_stream.write('\nNot JSON.')
         with self.assertWarns(UserWarning):
-            self.icon_list.dispatch(
+            self.icon_list.process_tray_event(
                 watchdog.events.FileCreatedEvent(tray_file.path)
             )
 
@@ -538,10 +538,10 @@ class TestIconList(unittest.TestCase):
         """
         _logger.debug('Showing empty tray.')
         self.icon_list.show()
+        self.assertTrue(not self.icon_list.is_hidden())
         self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('')
         )
-        self.assertIsNotNone(self.icon_list._watchdog_watch)
         _logger.debug('Inserting event setter to monitor events.')
         _logger.debug('Adding a tray file.')
         year_tray_file = TrayFile(
@@ -594,7 +594,7 @@ class TestIconList(unittest.TestCase):
         )
         _logger.debug('Hiding system tray.')
         self.icon_list.hide()
-        self.assertIsNone(self.icon_list._watchdog_watch)
+        self.assertTrue(self.icon_list.is_hidden())
         self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('')
         )
@@ -603,34 +603,34 @@ class TestIconList(unittest.TestCase):
         """Hiding without showing first does nothing."""
         _logger.debug('Hiding  empty tray.')
         self.icon_list.hide()
-        self.assertIsNone(self.icon_list._watchdog_watch)
+        self.assertTrue(self.icon_list.is_hidden())
         self.control_mode.send_command.assert_not_called()
 
     def test_double_show(self) -> None:
         """Double show does nothing."""
         _logger.debug('Hiding  empty tray.')
         self.icon_list.show()
-        self.assertIsNotNone(self.icon_list._watchdog_watch)
+        self.assertTrue(not self.icon_list.is_hidden())
         self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right('')
         )
         self.control_mode.send_command.reset_mock()
         self.icon_list.show()
-        self.assertIsNotNone(self.icon_list._watchdog_watch)
+        self.assertTrue(not self.icon_list.is_hidden())
         self.control_mode.send_command.assert_not_called()
 
     def test_run_with_no_file_and_no_events(self) -> None:
         """Running should drain control mode stdout stream."""
 
         def readline_side_effect():
-            self.assertIsNotNone(self.icon_list._watchdog_watch)
+            self.assertTrue(not self.icon_list.is_hidden())
             raise KeyboardInterrupt()
 
         self.control_mode.readline = unittest.mock.MagicMock(
             side_effect=readline_side_effect
         )
         self.icon_list.run()
-        self.assertIsNone(self.icon_list._watchdog_watch)
+        self.assertTrue(self.icon_list.is_hidden())
 
 
 if __name__ == '__main__':
