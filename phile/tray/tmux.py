@@ -386,7 +386,7 @@ class ControlMode:
         if not self.is_stdout_ready():
             raise TimeoutError('Control mode reading timeout.')
         next_line = self.stdout.readline().decode()
-        stripped_next_line = next_line.rstrip('\nr')
+        stripped_next_line = next_line.rstrip('\n\r')
         _logger.debug('Control mode stdout: %s.', stripped_next_line)
         return stripped_next_line if rstrip_newline else next_line
 
