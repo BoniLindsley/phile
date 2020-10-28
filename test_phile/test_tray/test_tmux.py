@@ -29,7 +29,7 @@ from phile.tray.tmux import (
 from phile.tray.tray_file import TrayFile
 from phile.watchdog_extras import Observer
 from test_phile.pyside2_test_tools import EnvironBackup
-from test_phile.threaded_mock import ThreadedMock
+import test_phile.threaded_mock
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -356,16 +356,29 @@ class TestIconList(unittest.TestCase):
         self.configuration = Configuration(
             tray_directory=self.tray_dir_path
         )
-        self.control_mode = unittest.mock.Mock()
-        self.control_mode.send_command = ThreadedMock()
+        # Override ControlMode to not create a tmux session every test.
+        control_mode_patch = unittest.mock.patch(
+            'phile.tray.tmux.ControlMode'
+        )
+        self.ControlModeMock = control_mode_patch.start()
+        self.addCleanup(control_mode_patch.stop)
+        # Create the actual icon list to test.
         self.observer = Observer()
         self.icon_list = IconList(
             configuration=self.configuration,
-            control_mode=self.control_mode,
             watching_observer=self.observer,
         )
         self.observer.start()
         self.addCleanup(self.observer.stop)
+        # For detecting commands sent to control mode.
+        # Creating a new mock to make mypy happy,
+        # since it detects `send_command` as a method,
+        # and so assigning to it raises errors in mypy.
+        self.control_mode = unittest.mock.Mock()
+        self.control_mode.send_command = (
+            test_phile.threaded_mock.ThreadedMock()
+        )
+        self.icon_list._control_mode = self.control_mode
 
     def test_initialisation(self) -> None:
         """Creates a :class:`~phile.tray.tmux.IconList`."""
