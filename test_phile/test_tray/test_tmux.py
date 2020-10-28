@@ -90,6 +90,12 @@ class TestCommandBuilder(unittest.TestCase):
             )
         )
 
+    def test_unset_global_status_right(self) -> None:
+        self.assertEqual(
+            CommandBuilder.unset_global_status_right(),
+            "set-option -gu status-right"
+        )
+
 
 class TestTimedeltaToSeconds(unittest.TestCase):
     """Tests :class:`~phile.tray.tmux.timedelta_to_seconds`."""
@@ -596,7 +602,7 @@ class TestIconList(unittest.TestCase):
         self.icon_list.hide()
         self.assertTrue(self.icon_list.is_hidden())
         self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right('')
+            CommandBuilder.unset_global_status_right()
         )
 
     def test_hide_without_show(self) -> None:
