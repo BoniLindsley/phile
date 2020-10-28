@@ -417,14 +417,13 @@ class IconList:
         self,
         *,
         configuration: Configuration,
-        control_mode: ControlMode,
         watching_observer: watchdog.observers.Observer,
     ) -> None:
         self._configuration = configuration
         """Information on where tray files are."""
         self._tray_files: typing.List[TrayFile] = []
         """Keeps track of known tray files."""
-        self._control_mode = control_mode
+        self._control_mode = ControlMode()
         """Control mode client for communicating with tmux."""
         # The status line cannot contain new lines.
         # This forces the initial attempt to refresh
@@ -676,11 +675,9 @@ class IconList:
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     """Take over tmux ``status-right`` to display tray icons."""
     configuration = Configuration()
-    control_mode = ControlMode(session_name='ctrl')
     watching_observer = phile.watchdog_extras.Observer()
     IconList(
         configuration=configuration,
-        control_mode=control_mode,
         watching_observer=watching_observer,
     ).run()
     return 0
