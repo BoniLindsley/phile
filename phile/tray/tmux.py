@@ -458,19 +458,31 @@ class IconList:
 
         Implementation detail:
         This calls `show` do the monitoring
-        and then blocks to drain tmux client stdout stream.
-        Raise a :exc:`KeyboardInterrupt` to stop.
+        and then blocks to drain tmux client stdout stream
+        until an exit response is detected.
         """
-        try:
-            self.show()
-            _logger.debug(
-                'Icon list starts draining control mode output.'
-            )
-            while True:
-                self._control_mode.readline()
-        except KeyboardInterrupt:
-            pass
+        # Start draining control mode output.
+        # Can be expanded to an event loop later.
+        control_mode = self._control_mode
+        block_started = False
+        exit_found = False
+        while not exit_found:
+            next_line = control_mode.readline(rstrip_newline=True)
+            if block_started:
+                block_started = not next_line.startswith(
+                    ('%end ', '%error '),
+                )
+            else:
+                block_started = next_line.startswith(
+                    ('%begin ', '\x1bP1000p%begin')
+                )
+                if not block_started:
+                    exit_found = next_line.startswith(('%exit'))
+
+    def close(self) -> None:
         self.hide()
+        self._control_mode.send_command(CommandBuilder.exit_client())
+        self._tray_scheduler.unschedule()
 
     def hide(self) -> None:
         """Stop updating and reset ``status-right``."""
@@ -676,10 +688,13 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     """Take over tmux ``status-right`` to display tray icons."""
     configuration = Configuration()
     watching_observer = phile.watchdog_extras.Observer()
-    IconList(
+    watching_observer.start()
+    icon_list = IconList(
         configuration=configuration,
         watching_observer=watching_observer,
-    ).run()
+    )
+    icon_list.show()
+    icon_list.run()
     return 0
 
 

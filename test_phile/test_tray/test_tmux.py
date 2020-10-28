@@ -13,6 +13,7 @@ import pathlib
 import signal
 import subprocess
 import tempfile
+import threading
 import unittest
 import unittest.mock
 
@@ -339,6 +340,20 @@ class TestControlMode(unittest.TestCase):
             kill_server()
 
 
+class CompletionCheckingThread(threading.Thread):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daemon = True
+        self.completed_event = threading.Event()
+
+    def run(self):
+        super().run()
+        # If run raised an exception,
+        # the event would not be set here.
+        self.completed_event.set()
+
+
 class TestIconList(unittest.TestCase):
     """Tests :class:`~phile.tray.tmux.IconList`."""
 
@@ -638,18 +653,54 @@ class TestIconList(unittest.TestCase):
         self.assertTrue(not self.icon_list.is_hidden())
         self.control_mode.send_command.assert_not_called()
 
-    def test_run_with_no_file_and_no_events(self) -> None:
-        """Running should drain control mode stdout stream."""
-
-        def readline_side_effect():
-            self.assertTrue(not self.icon_list.is_hidden())
-            raise KeyboardInterrupt()
-
-        self.control_mode.readline = unittest.mock.MagicMock(
-            side_effect=readline_side_effect
+    def test_run_returning_on_exit_response(self) -> None:
+        """Run should return when it receives an ``%exit`` response."""
+        # Give an exit response to run.
+        self.control_mode.readline.return_value = '%exit'
+        # Running blocks, so do it in a separate thread.
+        # Detect whether it returns normally.
+        run_thread = CompletionCheckingThread(target=self.icon_list.run)
+        run_thread.start()
+        self.assertTrue(
+            run_thread.completed_event.wait(
+                timeout=wait_time.total_seconds()
+            )
         )
-        self.icon_list.run()
+        self.assertEqual(self.control_mode.readline.call_count, 1)
+
+    def test_run_ignores_blocks(self) -> None:
+        """
+        Run ignore response blocks.
+
+        In particular,
+        if an exit response is wrapped inside a response block,
+        it should be ignored as well.
+        """
+        # Give an exit response to run.
+        self.control_mode.readline.side_effect = [
+            '%begin ',
+            '%exit',
+            '%end ',
+            '%exit',
+        ]
+        # Running blocks, so do it in a separate thread.
+        # Detect whether it returns normally.
+        run_thread = CompletionCheckingThread(target=self.icon_list.run)
+        run_thread.start()
+        self.assertTrue(
+            run_thread.completed_event.wait(
+                timeout=wait_time.total_seconds()
+            )
+        )
+        self.assertEqual(self.control_mode.readline.call_count, 4)
+
+    def test_close_sends_command(self) -> None:
+        """Close sends an exit request to tmux."""
+        self.icon_list.close()
         self.assertTrue(self.icon_list.is_hidden())
+        self.control_mode.send_command.assert_called_with(
+            CommandBuilder.exit_client()
+        )
 
 
 if __name__ == '__main__':
