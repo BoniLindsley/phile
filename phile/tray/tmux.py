@@ -109,6 +109,11 @@ class CommandBuilder:
             shlex.quote(new_status_string)
         )
 
+    @classmethod
+    def unset_global_status_right(cls) -> str:
+        """Change the tmux status line value to the default."""
+        return 'set-option -gu status-right'
+
 
 def timedelta_to_seconds(
     timedelta: typing.Optional[datetime.timedelta] = None
@@ -474,7 +479,10 @@ class IconList:
             return
         self._tray_scheduler.unschedule()
         self._tray_files.clear()
-        self.refresh_status_line()
+        # Reset status line.
+        self._control_mode.send_command(
+            CommandBuilder.unset_global_status_right()
+        )
 
     def show(self) -> None:
         """
