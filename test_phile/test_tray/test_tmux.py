@@ -23,11 +23,11 @@ import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
+import phile.tray
 from phile.tray.tmux import (
     CommandBuilder, ControlMode, get_server_pid, IconList, kill_server,
     timedelta_to_seconds
 )
-from phile.tray.tray_file import TrayFile
 from phile.watchdog_extras import Observer
 from test_phile.pyside2_test_tools import EnvironBackup
 import test_phile.threaded_mock
@@ -372,7 +372,7 @@ class TestIconList(unittest.TestCase):
     def test_insert_set_and_remove(self) -> None:
         """Telling icon list of tray file changes updates status line."""
         _logger.debug('Inserting year tray file.')
-        year_tray_file = TrayFile(
+        year_tray_file = phile.tray.File(
             configuration=self.configuration, name='year'
         )
         year_tray_file.text_icon = '2345'
@@ -391,7 +391,7 @@ class TestIconList(unittest.TestCase):
             )
         )
         _logger.debug('Inserting month tray file.')
-        month_tray_file = TrayFile(
+        month_tray_file = phile.tray.File(
             configuration=self.configuration, name='month'
         )
         month_tray_file.text_icon = '01'
@@ -423,7 +423,7 @@ class TestIconList(unittest.TestCase):
         So four sets of operations.
         """
         _logger.debug('Adding year tray file.')
-        year_tray_file = TrayFile(
+        year_tray_file = phile.tray.File(
             configuration=self.configuration, name='year'
         )
         year_tray_file.text_icon = '2345'
@@ -434,7 +434,7 @@ class TestIconList(unittest.TestCase):
         )
         self.control_mode.send_command.reset_mock()
         _logger.debug('Adding month tray file.')
-        month_tray_file = TrayFile(
+        month_tray_file = phile.tray.File(
             configuration=self.configuration, name='month'
         )
         month_tray_file.text_icon = '01'
@@ -476,7 +476,7 @@ class TestIconList(unittest.TestCase):
 
         There is not much we can do about it as a reader.
         """
-        tray_file = TrayFile(
+        tray_file = phile.tray.File(
             configuration=self.configuration, name='month'
         )
         tray_file.text_icon = 'ABC'
@@ -497,13 +497,13 @@ class TestIconList(unittest.TestCase):
         Moves are treated as delete and create.
         """
         _logger.debug('Adding a tray file.')
-        year_tray_file = TrayFile(
+        year_tray_file = phile.tray.File(
             configuration=self.configuration, name='year'
         )
         year_tray_file.text_icon = '2345'
         year_tray_file.save()
         _logger.debug('Adding a second tray file.')
-        month_tray_file = TrayFile(
+        month_tray_file = phile.tray.File(
             configuration=self.configuration, name='month'
         )
         month_tray_file.text_icon = '12/'
@@ -542,7 +542,7 @@ class TestIconList(unittest.TestCase):
         )
         _logger.debug('Inserting event setter to monitor events.')
         _logger.debug('Adding a tray file.')
-        year_tray_file = TrayFile(
+        year_tray_file = phile.tray.File(
             configuration=self.configuration, name='year'
         )
         year_tray_file.text_icon = '2345'
@@ -553,7 +553,7 @@ class TestIconList(unittest.TestCase):
             )
         )
         _logger.debug('Adding a second tray file.')
-        month_tray_file = TrayFile(
+        month_tray_file = phile.tray.File(
             configuration=self.configuration, name='month'
         )
         month_tray_file.text_icon = '12/'
@@ -572,7 +572,7 @@ class TestIconList(unittest.TestCase):
             )
         )
         _logger.debug('Moving a tray file.')
-        new_year_tray_file = TrayFile(
+        new_year_tray_file = phile.tray.File(
             configuration=self.configuration, name='a_year'
         )
         year_tray_file.path.rename(new_year_tray_file.path)

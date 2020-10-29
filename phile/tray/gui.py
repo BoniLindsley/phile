@@ -31,9 +31,9 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 import phile.PySide2_extras.posix_signal
 import phile.PySide2_extras.watchdog_wrapper
+import phile.tray
 import phile.trigger
 import phile.watchdog_extras
-from phile.tray.tray_file import TrayFile
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -106,7 +106,7 @@ class GuiIconList(QObject):
         # Create as QObject first to use its methods.
         super().__init__(*args, **kwargs)
         # Keep track of GUI icons created.
-        self.tray_files: typing.List[TrayFile] = []
+        self.tray_files: typing.List[phile.tray.File] = []
         # Figure out where tray files are and their suffix.
         self._configuration = configuration
         # Set up tray directory monitoring.
@@ -268,11 +268,11 @@ class GuiIconList(QObject):
             return
         # Only files of a specific extension is a tray file.
         try:
-            tray_file = TrayFile(
+            tray_file = phile.tray.File(
                 configuration=self._configuration,
                 path=pathlib.Path(watchdog_event.src_path)
             )
-        except TrayFile.SuffixError as error:
+        except phile.tray.File.SuffixError as error:
             _logger.debug('Watchdog event: %s', error)
             return
         # Determine what to do base on existence of the actual file.
@@ -293,7 +293,7 @@ class GuiIconList(QObject):
             )
             return
 
-    def load(self, tray_file: TrayFile) -> None:
+    def load(self, tray_file: phile.tray.File) -> None:
         # Figure out the position of the tray icon is in
         # in the tracked tray icons, if it is tracked at all.
         index = bisect.bisect_left(self.tray_files, tray_file)
@@ -332,7 +332,7 @@ class GuiIconList(QObject):
         else:
             self.insert(index, tray_file)
 
-    def insert(self, index: int, tray_file: TrayFile) -> None:
+    def insert(self, index: int, tray_file: phile.tray.File) -> None:
         # Create an additional icon to be displayed,
         # and shift all the icons.
         # Assuming icons are displayed in the order they were created,
@@ -371,7 +371,7 @@ class GuiIconList(QObject):
         # after all the icons are set properly.
         last_icon.show()
 
-    def set(self, index: int, tray_file: TrayFile) -> None:
+    def set(self, index: int, tray_file: phile.tray.File) -> None:
         _logger.debug(
             "Setting tray file in position %s of %s", index + 1,
             len(self.tray_files)
@@ -397,7 +397,7 @@ class GuiIconList(QObject):
         fake_parent.deleteLater()
         self.tray_files.pop(index)
 
-    def load_icon(self, tray_file: TrayFile) -> QIcon:
+    def load_icon(self, tray_file: phile.tray.File) -> QIcon:
         """Load a GUI icon as described by `tray_file`."""
         # Path is more specific. Make it a priority.
         icon_path = tray_file.icon_path

@@ -33,7 +33,7 @@ import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.configuration import Configuration
-from phile.tray.tray_file import TrayFile
+import phile.tray
 import phile.trigger
 import phile.watchdog_extras
 
@@ -414,7 +414,7 @@ class IconList:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._configuration = configuration
         """Information on where tray files are."""
-        self._tray_files: typing.List[TrayFile] = []
+        self._tray_files: typing.List[phile.tray.File] = []
         """Keeps track of known tray files."""
         self._control_mode = ControlMode()
         """Control mode client for communicating with tmux."""
@@ -599,11 +599,11 @@ class IconList:
             return
         # Only files of a specific extension is a tray file.
         try:
-            tray_file = TrayFile(
+            tray_file = phile.tray.File(
                 configuration=self._configuration,
                 path=pathlib.Path(watchdog_event.src_path)
             )
-        except TrayFile.SuffixError as error:
+        except phile.tray.File.SuffixError as error:
             _logger.debug('Watchdog event: %s', error)
             return
         # Determine what to do base on existence of the actual file.
@@ -626,11 +626,11 @@ class IconList:
             )
             return
 
-    def load(self, tray_file: TrayFile) -> None:
+    def load(self, tray_file: phile.tray.File) -> None:
         """
         Update changes in the given tray file in tmux status line.
 
-        :param ~phile.tray.gui.TrayFile tray_file:
+        :param ~phile.tray.File tray_file:
             The tray file in the tray directory to update.
         """
         # Figure out the position of the tray icon is in
@@ -671,12 +671,12 @@ class IconList:
         else:
             self.insert(index, tray_file)
 
-    def insert(self, index: int, tray_file: TrayFile) -> None:
+    def insert(self, index: int, tray_file: phile.tray.File) -> None:
         """
         Insert the content of given tray file into tmux status line.
 
         :param int index: The zero-based position to put the content.
-        :param ~phile.tray.gui.TrayFile tray_file:
+        :param ~phile.tray.File tray_file:
             The tray file whose content to insert.
         """
         _logger.debug(
@@ -686,12 +686,12 @@ class IconList:
         self._tray_files.insert(index, tray_file)
         self.refresh_status_line()
 
-    def set(self, index: int, tray_file: TrayFile) -> None:
+    def set(self, index: int, tray_file: phile.tray.File) -> None:
         """
         Update content at position `index` to the given tray file.
 
         :param int index: The zero-based position at which to change.
-        :param ~phile.tray.gui.TrayFile tray_file:
+        :param ~phile.tray.File tray_file:
             The tray file whose content to update to.
         """
         _logger.debug(
