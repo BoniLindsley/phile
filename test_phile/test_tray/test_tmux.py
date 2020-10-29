@@ -165,6 +165,7 @@ class TestControlMode(unittest.TestCase):
         _logger.debug('Creating control mode.')
         self.control_mode = ControlMode(
             configuration_file_path=tmux_config_path,
+            session_name=None,
             timeout=wait_time,
         )
         _logger.debug('Determining tmux server PID.')

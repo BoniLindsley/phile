@@ -186,7 +186,7 @@ class ControlMode:
         self,
         *,
         configuration_file_path: typing.Optional[pathlib.Path] = None,
-        session_name: typing.Optional[str] = None,
+        session_name: typing.Optional[str] = 'ctrl',
         timeout: typing.Optional[datetime.timedelta] = None,
     ):
         """
