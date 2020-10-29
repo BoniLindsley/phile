@@ -174,7 +174,7 @@ class TestControlMode(unittest.TestCase):
     def tearDown(self) -> None:
         """Shut down the tmux server after each method test."""
         _logger.debug('Shutting down control mode.')
-        self.control_mode.terminate()
+        self.control_mode.__del__()
         _logger.debug('Sending kill-server command.')
         try:
             kill_server()
@@ -273,56 +273,6 @@ class TestControlMode(unittest.TestCase):
         self.control_mode.timeout_seconds = 0
         with self.assertRaises(TimeoutError):
             self.control_mode.readline()
-        self.control_mode.timeout_seconds = original_timeout_seconds
-
-    def test_terminate_fails_to_exit(self) -> None:
-        """
-        Kill client if the server does not provide a normal exit.
-
-        It is possible the server does not process a client exit request
-        as an actual exit request,
-        possibly due to lingering data in the ``stdin`` stream
-        or the server is busy.
-        Regardless of the reason, the client process may not exit.
-        This tests ensures that :class:`~phile.tray.tmux.ControlMode`
-        falls back to killing the process when that happens.
-
-        Forcing the exit to fail is done
-        by writing a command to the ``stdin`` stream
-        without the terminating new line.
-        When :meth:`~phile.tray.tmux.ControlMode.terminate`
-        tries to send an exit request,
-        it sends just a newline ``\\n`` on its own.
-        This terminates the prepared command,
-        turning the exit request into a different command,
-        and the server does not know the client wants to exit.
-        Neither, then, does the client process.
-        In particular, the client does not exit.
-        This means, when :class:`~phile.tray.tmux.ControlMode`
-        waits for the process to exit, it times out,
-        forcing the exit to fail.
-
-        The unterminated message prepared
-        requests the server to send back a line
-        starting with ``'%exit'``.
-        That line is sent by the tmux server
-        after it process an exit request.
-        So the prepared message when sent
-        asks the server to say it knows the client is exiting
-        without actually acknowledging it.
-        This stops the client process from exiting
-        as desired for the test.
-        """
-        _logger.debug('Adding lingering data in the stdin stream.')
-        self.control_mode.stdin.writelines([
-            'display-message -p \'%%exit\''.encode()
-        ])
-        original_timeout_seconds = self.control_mode.timeout_seconds
-        self.control_mode.timeout_seconds = 0
-        with unittest.mock.patch(
-            'phile.tray.tmux.ControlMode.readline_until_starts_with'
-        ):
-            self.control_mode.terminate()
         self.control_mode.timeout_seconds = original_timeout_seconds
 
     def test_function_kill_server_failing(self) -> None:
