@@ -33,6 +33,7 @@ import watchdog.events  # type: ignore[import]
 # Internal packages.
 from phile.configuration import Configuration
 from phile.tray.tray_file import TrayFile
+import phile.trigger
 import phile.watchdog_extras
 
 _logger = logging.getLogger(
@@ -434,6 +435,9 @@ class IconList:
         self._set_up_tray_event_handler(
             watching_observer=watching_observer
         )
+        self._set_up_trigger_event_handler(
+            watching_observer=watching_observer
+        )
 
     def _set_up_tray_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
@@ -451,6 +455,52 @@ class IconList:
             watched_path=watched_path,
             watching_observer=watching_observer,
         )
+
+    def _set_up_trigger_event_handler(
+        self, *, watching_observer: watchdog.observers.Observer
+    ) -> None:
+        # Take cooperative ownership of the directory
+        # containing trigger file for trays.
+        self._entry_point = phile.trigger.EntryPoint(
+            configuration=self._configuration,
+            trigger_directory=pathlib.Path('phile-tray-tmux'),
+        )
+        self._entry_point.bind()
+        # Turn file system events into trigger names to process.
+        event_converter = phile.trigger.EventConverter(
+            configuration=self._configuration,
+            trigger_handler=self.process_trigger,
+        )
+        # Filter out non-trigger activation events
+        # to reduce cross-thread communications.
+        event_filter = phile.trigger.EventFilter(
+            configuration=self._configuration,
+            event_handler=event_converter,
+            trigger_directory=self._entry_point.trigger_directory,
+        )
+        # Use a scheduler to toggle the event handling on and off.
+        dispatcher = phile.watchdog_extras.Dispatcher(
+            event_handler=event_filter
+        )
+        self._trigger_scheduler = phile.watchdog_extras.Scheduler(
+            watchdog_handler=dispatcher,
+            watched_path=self._entry_point.trigger_directory,
+            watching_observer=watching_observer,
+        )
+        self._trigger_scheduler.schedule()
+        # Allow closing with a trigger.
+        self._entry_point.add_trigger('close')
+        self._entry_point.add_trigger('show')
+
+    def process_trigger(self, trigger_name: str) -> None:
+        if trigger_name == 'hide':
+            self.hide()
+        elif trigger_name == 'show':
+            self.show()
+        elif trigger_name == 'close':
+            self.close()
+        else:
+            _logger.warning('Unknown trigger command: %s', trigger_name)
 
     def run(self) -> None:
         """
@@ -482,7 +532,9 @@ class IconList:
     def close(self) -> None:
         self.hide()
         self._control_mode.send_command(CommandBuilder.exit_client())
+        self._trigger_scheduler.unschedule()
         self._tray_scheduler.unschedule()
+        self._entry_point.unbind()
 
     def hide(self) -> None:
         """Stop updating and reset ``status-right``."""
@@ -494,6 +546,8 @@ class IconList:
         self._control_mode.send_command(
             CommandBuilder.unset_global_status_right()
         )
+        self._entry_point.remove_trigger('hide')
+        self._entry_point.add_trigger('show')
 
     def show(self) -> None:
         """
@@ -516,6 +570,8 @@ class IconList:
                 )
         # Refresh the status line even if there are no tray files.
         self.refresh_status_line()
+        self._entry_point.remove_trigger('show')
+        self._entry_point.add_trigger('hide')
 
     def is_hidden(self) -> bool:
         """Returns whether the tray icon is hidden."""
