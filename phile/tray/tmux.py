@@ -184,10 +184,11 @@ class ControlMode:
 
     def __init__(
         self,
-        *,
+        *args,
         configuration_file_path: typing.Optional[pathlib.Path] = None,
         session_name: typing.Optional[str] = 'ctrl',
         timeout: typing.Optional[datetime.timedelta] = None,
+        **kwargs
     ):
         """
         :param configuration_file_path:
@@ -209,6 +210,9 @@ class ControlMode:
             If :data:`None`, waits block indefinitely.
         :type timeout: :class:`~datetime.timedelta` or :data:`None`
         """
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+
         self.timeout_seconds = timedelta_to_seconds(timeout)
         """Time to wait for when reading stdout from the tmux client."""
         _logger.debug(
@@ -303,6 +307,8 @@ class ControlMode:
         # With this, all pty fd are closed.
         _logger.debug('Control mode closing pty fd.')
         self.stdin.close()
+
+        getattr(super(), "__del__", lambda _: None)(self)
 
     def send_command(self, command_string: str) -> None:
         """Send a command to the attached tmux client."""
@@ -399,10 +405,13 @@ class IconList:
 
     def __init__(
         self,
-        *,
+        *args,
         configuration: Configuration,
         watching_observer: watchdog.observers.Observer,
+        **kwargs,
     ) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._configuration = configuration
         """Information on where tray files are."""
         self._tray_files: typing.List[TrayFile] = []
