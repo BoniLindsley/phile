@@ -22,6 +22,7 @@ import pathlib
 import pty
 import select
 import shlex
+import signal
 import subprocess
 import sys
 import typing
@@ -750,6 +751,16 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
         watching_observer=watching_observer,
     )
     icon_list.show()
+    # Handle SIGINT by exiting gracefully.
+    # Using a trigger to do this.
+    # Otherwise, we have to handle a race condition
+    # where we might be in a close when the interrupt occurs.
+    signal.signal(
+        signal.SIGINT, (
+            lambda signal_number, _: icon_list._entry_point.
+            remove_trigger('close')
+        )
+    )
     icon_list.run()
     return 0
 
