@@ -8,6 +8,3 @@ before_install:
   - sudo apt install --assume-yes --no-install-recommends tmux
 install: pip install --upgrade tox
 script: tox
-branches:
-  only:
-    - master

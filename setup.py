@@ -13,6 +13,7 @@ setup(
         'phile.notify',
         'phile.PySide2_extras',
         'phile.tray',
+        'phile.trigger',
     ],
     license='MIT',
     install_requires=[
@@ -25,6 +26,7 @@ setup(
         'console_scripts': [
             'phile = phile.__main__:main',
             'phile-notify = phile.notify.__main__:main',
+            'phile-tray-tmux = phile.tray.tmux:main',
         ],
         'gui_scripts': [
             'phile-notify-gui = phile.notify.gui:main',
