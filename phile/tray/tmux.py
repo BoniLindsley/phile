@@ -278,28 +278,10 @@ class ControlMode:
         _logger.debug('Control mode client started.')
 
     def __del__(self):
+        """
+        Kill the control mode client process if not already terminated.
+        """
         _logger.debug('Control mode finalising.')
-        self.terminate()
-
-    def send_command(self, command_string: str) -> None:
-        """Send a command to the attached tmux client."""
-        _logger.debug(
-            'Control mode sending command: %s.', command_string
-        )
-        self.stdin.writelines([command_string.encode(), b'\n'])
-
-    def terminate(self) -> None:
-        """
-        Exit client and terminate the control mode client process.
-
-        :raises TimeoutError:
-            If the tmux server does not respond to the exit request.
-
-        Exits the client by sending an exit request to the server
-        and then wait for the client process to exit.
-        If it fails to exit, a kill signal is sent to it.
-        """
-        _logger.debug('Control mode terminating.')
         return_code = self.tmux_client.returncode
         if return_code is not None:
             _logger.debug(
@@ -307,18 +289,11 @@ class ControlMode:
                 return_code
             )
             return
-        _logger.debug('Control mode sending exit request.')
-        self.send_command(CommandBuilder.exit_client())
-        self.readline_until_starts_with(stop_prefix=('%exit'))
-        _logger.debug('Control mode process clean-up.')
-        try:
-            return_code = self.tmux_client.wait(
-                timeout=self.timeout_seconds
-            )
-        except subprocess.TimeoutExpired:
-            _logger.debug('Control client did not exit. Killing.')
-            self.tmux_client.kill()
-            return_code = self.tmux_client.wait()
+        # We do not know what state the client is in.
+        # So just kill the process.
+        _logger.debug('Control client killing process.')
+        self.tmux_client.kill()
+        return_code = self.tmux_client.wait()
         _logger.debug('Control mode return code: %s.', return_code)
         # Print out errors if any.
         # This drains and closes automatically created pipes.
@@ -328,6 +303,13 @@ class ControlMode:
         # With this, all pty fd are closed.
         _logger.debug('Control mode closing pty fd.')
         self.stdin.close()
+
+    def send_command(self, command_string: str) -> None:
+        """Send a command to the attached tmux client."""
+        _logger.debug(
+            'Control mode sending command: %s.', command_string
+        )
+        self.stdin.writelines([command_string.encode(), b'\n'])
 
     def read_block(self, *, rstrip_newline: bool = False) -> str:
         """
