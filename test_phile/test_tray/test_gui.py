@@ -335,75 +335,6 @@ class TestGuiIconList(unittest.TestCase):
         _logger.debug('End of test.')
 
     @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
-    )
-    def test_show_with_bad_file(self) -> None:
-        """
-        Show ignores badly structured files.
-
-        There is not much we can do about it as a reader.
-        """
-        # Create a tray.
-        tray = phile.tray.File(
-            name='VeCat', configuration=self.configuration
-        )
-        tray.icon_name = 'phile-tray-empty'
-        tray.text_icon = 'A'
-        tray.save()
-        with tray.path.open('a+') as file_stream:
-            file_stream.write('Extra text.')
-        # Check that they are all detected when showing the tray icons.
-        gui_icon_list = self.gui_icon_list
-        with self.assertLogs(
-            logger='phile.tray.gui', level=logging.WARNING
-        ) as logs:
-            gui_icon_list.show()
-        self.assertEqual(len(gui_icon_list.tray_children()), 0)
-
-    @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
-    )
-    @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
-    )
-    def test_show_with_existing_tray_file(self) -> None:
-        """Showing should list existing tray files."""
-        # Create a tray.
-        tray = phile.tray.File(
-            name='VeCat', configuration=self.configuration
-        )
-        tray.icon_name = 'phile-tray-empty'
-        tray.text_icon = 'A'
-        tray.save()
-        # Show all tray icons. Pretend there are more than one.
-        tray_2 = phile.tray.File(
-            name='Disco', configuration=self.configuration
-        )
-        tray_2.icon_name = 'phile-tray-new'
-        tray_2.text_icon = 'B'
-        tray_2.save()
-        # Throw in a file with a wrong suffix.
-        (
-            self.configuration.tray_directory /
-            ('file' + self.configuration.tray_suffix + '_not')
-        ).touch()
-        # Also throw in a directory that should be ignored.
-        (
-            self.configuration.tray_directory /
-            ('subdirectory' + self.configuration.tray_suffix)
-        ).mkdir()
-        # Need icon paths to test icon loading.
-        set_icon_paths()
-        # Check that they are all detected when showing the tray icons.
-        gui_icon_list = self.gui_icon_list
-        gui_icon_list.show()
-        self.assertEqual(len(gui_icon_list.tray_children()), 2)
-        self.assertTrue(not gui_icon_list.is_hidden())
-        children = gui_icon_list.tray_children()
-        self.assertEqual(children[0].icon().name(), tray_2.icon_name)
-        self.assertEqual(children[1].icon().name(), tray.icon_name)
-
-    @unittest.mock.patch(
         'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
     )
     @unittest.mock.patch(
@@ -547,7 +478,9 @@ class TestGuiIconList(unittest.TestCase):
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
-        self.assertListEqual(gui_icon_list.tray_files, [new_tray_file])
+        self.assertListEqual(
+            gui_icon_list._tray_sorter.tray_files, [new_tray_file]
+        )
 
     def test_creating_deleting_tray_file_may_cause_nothing(self) -> None:
         """

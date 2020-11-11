@@ -34,6 +34,7 @@ import watchdog.events  # type: ignore[import]
 # Internal packages.
 from phile.configuration import Configuration
 import phile.tray
+import phile.tray.event
 import phile.trigger
 import phile.watchdog_extras
 
@@ -414,8 +415,6 @@ class IconList:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._configuration = configuration
         """Information on where tray files are."""
-        self._tray_files: typing.List[phile.tray.File] = []
-        """Keeps track of known tray files."""
         self._control_mode = ControlMode()
         """Control mode client for communicating with tmux."""
         # The status line cannot contain new lines.
@@ -434,12 +433,37 @@ class IconList:
     def _set_up_tray_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
     ):
+        sorter_handler = (
+            lambda index, tray_file: self.refresh_status_line()
+        )
+        self._tray_sorter = phile.tray.event.Sorter(
+            configuration=self._configuration,
+            insert=sorter_handler,
+            pop=sorter_handler,
+            set_item=sorter_handler,
+        )
+        # Convert events to tray files.
+        # It does not matter whether the event say a file is changed
+        # or it has been deleted.
+        # It may have been changed again between the event being emitted
+        # and the event being processed.
+        # So we get the tray file out of the event
+        # and process based on the file instead of the event.
+        event_converter = phile.tray.event.Converter(
+            configuration=self._configuration,
+            tray_handler=self._tray_sorter
+        )
+        # Figure out whether an event is relevant before giving it to Qt.
+        event_filter = phile.tray.event.Filter(
+            configuration=self._configuration,
+            event_handler=event_converter
+        )
         # Make sure the directory to be monitored exists.
         watched_path = self._configuration.tray_directory
         watched_path.mkdir(exist_ok=True, parents=True)
         # Set up how to handle the events.
         dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=self.process_tray_event
+            event_handler=event_filter
         )
         # Use a scheduler to toggle the event handling on and off.
         self._tray_scheduler = phile.watchdog_extras.Scheduler(
@@ -533,7 +557,7 @@ class IconList:
         if self.is_hidden():
             return
         self._tray_scheduler.unschedule()
-        self._tray_files.clear()
+        self._tray_sorter.tray_files.clear()
         # Reset status line.
         self._control_mode.send_command(
             CommandBuilder.unset_global_status_right()
@@ -553,13 +577,7 @@ class IconList:
         # Start monitoring to not miss file events.
         self._tray_scheduler.schedule()
         # Update all existing tray files.
-        configuration = self._configuration
-        tray_directory = configuration.tray_directory
-        for tray_file_path in tray_directory.iterdir():
-            if tray_file_path.is_file():
-                self.process_tray_event(
-                    watchdog.events.FileCreatedEvent(tray_file_path)
-                )
+        self._tray_sorter.load_all()
         # Refresh the status line even if there are no tray files.
         self.refresh_status_line()
         self._entry_point.remove_trigger('show')
@@ -569,158 +587,14 @@ class IconList:
         """Returns whether the tray icon is hidden."""
         return not self._tray_scheduler.is_scheduled()
 
-    def process_tray_event(
-        self, watchdog_event: watchdog.events.FileSystemEvent
-    ) -> None:
-        """
-        Responds to file changes.
-
-        :param ~watchdog.events.FileSystemEvent watchdog_event:
-            The detected file changes in the tray directory.
-        """
-        _logger.debug('Watchdog event received.')
-        # Notifications are files. Directory changes do not matter.
-        if watchdog_event.is_directory:
-            _logger.debug('Watchdog event: not using directory events.')
-            return
-        # Consider a move event as a delete and create.
-        event_type = watchdog_event.event_type
-        if event_type == watchdog.events.EVENT_TYPE_MOVED:
-            _logger.debug('Watchdog event: tray file moved.')
-            for new_event in [
-                watchdog.events.FileDeletedEvent(
-                    watchdog_event.src_path
-                ),
-                watchdog.events.FileCreatedEvent(
-                    watchdog_event.dest_path
-                )
-            ]:
-                self.process_tray_event(new_event)
-            return
-        # Only files of a specific extension is a tray file.
-        try:
-            tray_file = phile.tray.File(
-                configuration=self._configuration,
-                path=pathlib.Path(watchdog_event.src_path)
-            )
-        except phile.tray.File.SuffixError as error:
-            _logger.debug('Watchdog event: %s', error)
-            return
-        # Determine what to do base on existence of the actual file.
-        # There might be a delay between the file operation
-        # and the event being received here.
-        # If the `load` fails, there is not much we can do about it.
-        # So just ignore.
-        # JSON string decoding error is likely to be
-        # a tray file modification in the middle of a read.
-        # In that case, a future file modification event is expected
-        # and this method will receive it, and we can handle it then.
-        # So ignoring is okay in that case.
-        try:
-            self.load(tray_file)
-        except json.decoder.JSONDecodeError:
-            warnings.warn(
-                'Unable to decode a tray file: {}'.format(
-                    tray_file.path
-                )
-            )
-            return
-
-    def load(self, tray_file: phile.tray.File) -> None:
-        """
-        Update changes in the given tray file in tmux status line.
-
-        :param ~phile.tray.File tray_file:
-            The tray file in the tray directory to update.
-        """
-        # Figure out the position of the tray icon is in
-        # in the tracked tray icons, if it is tracked at all.
-        index = bisect.bisect_left(self._tray_files, tray_file)
-        try:
-            is_tracked = self._tray_files[index] == tray_file
-        except IndexError:
-            is_tracked = False
-        if is_tracked:
-            _logger.debug(
-                "Loading tray file in position %s of %s.", index + 1,
-                len(self._tray_files)
-            )
-        else:
-            _logger.debug("Loading tray file that was untracked.")
-        # Try to load the tray file.
-        tray_file_exists = True
-        try:
-            tray_file.load()
-        except FileNotFoundError:
-            tray_file_exists = False
-        # If the tray file does not exist,
-        # either remove the tray icon or there is nothing to do.
-        if not tray_file_exists:
-            if not is_tracked:
-                _logger.debug(
-                    "Tray file does not exist nor tracked."
-                    " Nothing to do."
-                )
-                return
-            else:
-                self.remove(index)
-                return
-        # Can assume from here that the tray file is loaded.
-        if is_tracked:
-            self.set(index, tray_file)
-        else:
-            self.insert(index, tray_file)
-
-    def insert(self, index: int, tray_file: phile.tray.File) -> None:
-        """
-        Insert the content of given tray file into tmux status line.
-
-        :param int index: The zero-based position to put the content.
-        :param ~phile.tray.File tray_file:
-            The tray file whose content to insert.
-        """
-        _logger.debug(
-            "Inserting tray file into position %s of %s", index + 1,
-            len(self._tray_files) + 1
-        )
-        self._tray_files.insert(index, tray_file)
-        self.refresh_status_line()
-
-    def set(self, index: int, tray_file: phile.tray.File) -> None:
-        """
-        Update content at position `index` to the given tray file.
-
-        :param int index: The zero-based position at which to change.
-        :param ~phile.tray.File tray_file:
-            The tray file whose content to update to.
-        """
-        _logger.debug(
-            "Setting tray file in position %s of %s", index + 1,
-            len(self._tray_files)
-        )
-        self._tray_files[index] = tray_file
-        self.refresh_status_line()
-
-    def remove(self, index: int) -> None:
-        """
-        Remove the content at the given position.
-
-        :param int index: The zero-based position at which to remove.
-        """
-        _logger.debug(
-            "Removing tray file in position %s of %s", index + 1,
-            len(self._tray_files)
-        )
-        self._tray_files.pop(index)
-        self.refresh_status_line()
-
     def refresh_status_line(self) -> None:
         """
         Update tmux `status-right` to reflect current tracked contents.
         """
         _logger.debug('Icon list refreshing status line.')
         new_status_right = ''.join(
-            tray_file.text_icon for tray_file in self._tray_files
+            tray_file.text_icon
+            for tray_file in self._tray_sorter.tray_files
             if tray_file.text_icon is not None
         )
         if self._status_right != new_status_right:

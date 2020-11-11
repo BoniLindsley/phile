@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+.. automodule:: phile.tray.event
 .. automodule:: phile.tray.gui
 .. automodule:: phile.tray.tmux
 """

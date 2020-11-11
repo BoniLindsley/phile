@@ -4,6 +4,7 @@
 Test phile.tray.tray_file
 -------------------------
 
+.. automodule:: test_phile.test_tray.test_event
 .. automodule:: test_phile.test_tray.test_gui
 .. automodule:: test_phile.test_tray.test_tmux
 """
