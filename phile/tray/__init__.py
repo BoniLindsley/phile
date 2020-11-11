@@ -9,11 +9,10 @@ import io
 import json
 import pathlib
 import shutil
-import signal
 import typing
 
 # Internal packages.
-from phile.configuration import Configuration
+import phile.configuration
 
 
 class File:
@@ -27,7 +26,7 @@ class File:
     def __init__(
         self,
         *,
-        configuration: Configuration = None,
+        configuration: phile.configuration.Configuration = None,
         name: str = None,
         path: pathlib.Path = None
     ) -> None:
