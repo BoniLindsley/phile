@@ -22,7 +22,6 @@ from watchdog.observers import Observer  # type: ignore[import]
 # Internal packages.
 import phile.notify.gui
 from phile.notify.notification import Configuration, Notification
-import phile.PySide2_extras.watchdog_wrapper
 import test_phile.pyside2_test_tools
 import test_phile.threaded_mock
 

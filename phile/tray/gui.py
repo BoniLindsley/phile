@@ -29,8 +29,8 @@ import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
+import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
-import phile.PySide2_extras.watchdog_wrapper
 import phile.tray
 import phile.tray.event
 import phile.trigger
@@ -137,16 +137,15 @@ class GuiIconList(QObject):
             tray_handler=self._tray_sorter
         )
         # Forward watchdog events into Qt signal and handle it there.
-        signal_emitter = (
-            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+        call_soon = (
+            phile.PySide2_extras.event_loop.CallSoon(
                 parent=self,
-                event_handler=event_converter,
+                call_target=event_converter,
             )
         )
         # Figure out whether an event is relevant before giving it to Qt.
         event_filter = phile.tray.event.Filter(
-            configuration=self._configuration,
-            event_handler=signal_emitter
+            configuration=self._configuration, event_handler=call_soon
         )
         # Use a scheduler to toggle the event handling on and off.
         dispatcher = phile.watchdog_extras.Dispatcher(
@@ -182,17 +181,17 @@ class GuiIconList(QObject):
             trigger_handler=self.process_trigger,
         )
         # Forward watchdog events into Qt signal and handle it there.
-        signal_emitter = (
-            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+        call_soon = (
+            phile.PySide2_extras.event_loop.CallSoon(
                 parent=self,
-                event_handler=event_conveter,
+                call_target=event_conveter,
             )
         )
         # Filter out non-trigger activation events
         # to reduce cross-thread communications.
         event_filter = phile.trigger.EventFilter(
             configuration=self._configuration,
-            event_handler=signal_emitter,
+            event_handler=call_soon,
             trigger_directory=self._entry_point.trigger_directory,
         )
         # Use a scheduler to toggle the event handling on and off.

@@ -24,8 +24,8 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 from phile.notify.notification import Notification
 import phile.trigger
+import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
-import phile.PySide2_extras.watchdog_wrapper
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -267,15 +267,15 @@ class MainWindow(QMainWindow):
         self, *, watching_observer: watchdog.observers.Observer
     ) -> None:
         # Forward watchdog events into Qt signal and handle it there.
-        signal_emitter = (
-            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+        call_soon = (
+            phile.PySide2_extras.event_loop.CallSoon(
                 parent=self,
-                event_handler=self.on_file_system_event_detected,
+                call_target=self.on_file_system_event_detected,
             )
         )
         # Use a scheduler to toggle the event handling on and off.
         dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=signal_emitter
+            event_handler=call_soon
         )
         watched_path = self._configuration.notification_directory
         watched_path.mkdir(exist_ok=True, parents=True)
@@ -307,17 +307,17 @@ class MainWindow(QMainWindow):
             trigger_handler=self.process_trigger,
         )
         # Forward watchdog events into Qt signal and handle it there.
-        signal_emitter = (
-            phile.PySide2_extras.watchdog_wrapper.SignalEmitter(
+        call_soon = (
+            phile.PySide2_extras.event_loop.CallSoon(
                 parent=self,
-                event_handler=event_conveter,
+                call_target=event_conveter,
             )
         )
         # Filter out non-trigger activation events
         # to reduce cross-thread communications.
         event_filter = phile.trigger.EventFilter(
             configuration=self._configuration,
-            event_handler=signal_emitter,
+            event_handler=call_soon,
             trigger_directory=self._entry_point.trigger_directory,
         )
         # Use a scheduler to toggle the event handling on and off.
