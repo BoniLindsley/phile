@@ -22,7 +22,7 @@ import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
-from phile.notify.notification import Notification
+import phile.notify
 import phile.trigger
 import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
@@ -251,7 +251,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(mdi_area)
         # Keep track of sub-windows by name
         # so that we know which ones to modify when files are changed.
-        self._sub_windows: typing.Dict[Notification,
+        self._sub_windows: typing.Dict[phile.notify.File,
                                        NotificationMdiSubWindow] = {}
         # Figure out where notifications are and their suffix.
         self._configuration = configuration
@@ -409,17 +409,17 @@ class MainWindow(QMainWindow):
             return
         # Only files of a specific extension is a notification.
         try:
-            notification = Notification(
+            notification = phile.notify.File(
                 configuration=self._configuration,
                 path=pathlib.Path(watchdog_event.src_path)
             )
-        except Notification.SuffixError as error:
+        except phile.notify.File.SuffixError as error:
             _logger.debug('Watchdog event: %s', error)
             return
         # Determine what to do base on existence of the actual file.
         self.load(notification)
 
-    def load(self, notification: Notification) -> None:
+    def load(self, notification: phile.notify.File) -> None:
         # Figure out if the notification was tracked.
         sub_window = self._sub_windows.get(notification, None)
         # Try to load the notification.
@@ -455,7 +455,7 @@ class MainWindow(QMainWindow):
     def on_notification_sub_window_closed(
         self, notification_name: str
     ) -> None:
-        notification = Notification(
+        notification = phile.notify.File(
             configuration=self._configuration, name=notification_name
         )
         notification.remove()

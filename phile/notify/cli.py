@@ -7,7 +7,8 @@ import sys
 import typing
 
 # Internal packages.
-from phile.notify.notification import Configuration, Notification
+import phile.notify
+import phile.configuration
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -29,17 +30,17 @@ def create_argument_parser() -> argparse.ArgumentParser:
 
 def process_arguments(
     argument_namespace: argparse.Namespace,
-    configuration: Configuration = None,
+    configuration: phile.configuration.Configuration = None,
     output_stream: typing.TextIO = sys.stdout
 ) -> int:
     if configuration is None:
-        configuration = Configuration()
+        configuration = phile.configuration.Configuration()
     command = argument_namespace.command
     configuration.notification_directory.mkdir(
         parents=True, exist_ok=True
     )
     if command == 'append':
-        notification = Notification(
+        notification = phile.notify.File(
             configuration=configuration, name=argument_namespace.name
         )
         notification.append(argument_namespace.content)
@@ -50,18 +51,18 @@ def process_arguments(
             if notificaton_file.suffix == notification_suffix:
                 print(notificaton_file.stem, file=output_stream)
     elif command == 'read':
-        notification = Notification(
+        notification = phile.notify.File(
             configuration=configuration, name=argument_namespace.name
         )
         content = notification.read()
         print(content, end='', file=output_stream)
     elif command == 'remove':
-        notification = Notification(
+        notification = phile.notify.File(
             configuration=configuration, name=argument_namespace.name
         )
         notification.remove()
     elif command == 'write':
-        notification = Notification(
+        notification = phile.notify.File(
             configuration=configuration, name=argument_namespace.name
         )
         notification.write(argument_namespace.content)
