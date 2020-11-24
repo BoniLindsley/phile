@@ -2,6 +2,7 @@
 """
 .. automodule:: phile.tray.event
 .. automodule:: phile.tray.gui
+.. automodule:: phile.tray.publishers
 .. automodule:: phile.tray.tmux
 """
 

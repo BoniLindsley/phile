@@ -62,6 +62,9 @@ class File:
     def __eq__(self, other):
         return self.path == other.path
 
+    def __lt__(self, other):
+        return self.path < other.path
+
     def append(self, additional_content: str):
         with self.path.open('a') as notification_file:
             # End with a new line
