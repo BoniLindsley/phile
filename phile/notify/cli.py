@@ -40,8 +40,8 @@ def process_arguments(
         parents=True, exist_ok=True
     )
     if command == 'append':
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         notification.append(argument_namespace.content)
     elif command == 'list':
@@ -51,19 +51,19 @@ def process_arguments(
             if notificaton_file.suffix == notification_suffix:
                 print(notificaton_file.stem, file=output_stream)
     elif command == 'read':
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         content = notification.read()
         print(content, end='', file=output_stream)
     elif command == 'remove':
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         notification.remove()
     elif command == 'write':
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         notification.write(argument_namespace.content)
     # The following two scopes should be unreachable,

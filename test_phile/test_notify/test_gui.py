@@ -606,14 +606,14 @@ class TestMainWindow(unittest.TestCase):
     def test_show_with_notifications(self) -> None:
         """Showing should list existing notifications."""
         # Create a notification.
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         content = 'Happy birthday!'
         notification.write(content)
         # Show all notifications. Pretend there are more than one.
-        notification_2 = phile.notify.File(
-            name='Disco', configuration=self.configuration
+        notification_2 = phile.notify.File.from_path_stem(
+            'Disco', configuration=self.configuration
         )
         content_2 = 'Happy April Fools\' Day!'
         notification_2.write(content_2)
@@ -641,8 +641,8 @@ class TestMainWindow(unittest.TestCase):
 
     def test_close_notification_sub_window(self) -> None:
         """Closing sub-window should delete notification."""
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         content = 'Happy birthday!'
         notification.write(content)
@@ -733,8 +733,8 @@ class TestMainWindow(unittest.TestCase):
     def test_new_notification_creates_sub_window(self) -> None:
         """Writing a new notification creates a sub-window."""
         # There should be no sub-window at the beginning.
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 0)
@@ -757,8 +757,8 @@ class TestMainWindow(unittest.TestCase):
     def test_deleting_notification_destroys_sub_window(self) -> None:
         """Removing a notification destroys its sub-window."""
         # There should be no sub-window at the beginning.
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         content = 'Happy birthday!'
         notification.write(content)
@@ -778,8 +778,8 @@ class TestMainWindow(unittest.TestCase):
     def test_modifying_notification_updates_sub_window(self) -> None:
         """Modifying a notification updates sub-window content."""
         # There should be no sub-window at the beginning.
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         content = 'Happy birthday!'
         notification.write(content)
@@ -804,8 +804,8 @@ class TestMainWindow(unittest.TestCase):
     def test_moving_notification_recreates_sub_window(self) -> None:
         """Moving a notification is treated as delete and create."""
         # There should be no sub-window at the beginning.
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         content = 'Happy birthday!'
         notification.write(content)
@@ -814,8 +814,8 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(len(self.main_window._sub_windows), 1)
         # Remove the notification and wait for watchdog to notice.
         new_name = 'Disco'
-        new_notification = phile.notify.File(
-            name=new_name, configuration=self.configuration
+        new_notification = phile.notify.File.from_path_stem(
+            new_name, configuration=self.configuration
         )
         with self.dispatch_patch as dispatch_mock:
             notification.path.rename(new_notification.path)
@@ -843,8 +843,8 @@ class TestMainWindow(unittest.TestCase):
         main_window = self.main_window
         main_window.show()
         # Create the notification.
-        notification = phile.notify.File(
-            name='VeCat', configuration=self.configuration
+        notification = phile.notify.File.from_path_stem(
+            'VeCat', configuration=self.configuration
         )
         self.assertTrue(not notification.path.is_file())
         with self.dispatch_patch as dispatch_mock:

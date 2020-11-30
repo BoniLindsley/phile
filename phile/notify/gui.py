@@ -407,15 +407,14 @@ class MainWindow(QMainWindow):
             ]:
                 self.on_file_system_event_detected(new_event)
             return
-        # Only files of a specific extension is a notification.
-        try:
-            notification = phile.notify.File(
-                configuration=self._configuration,
-                path=pathlib.Path(watchdog_event.src_path)
-            )
-        except phile.notify.File.SuffixError as error:
-            _logger.debug('Watchdog event: %s', error)
+        if not phile.notify.File.check_path(
+            configuration=self._configuration,
+            path=pathlib.Path(watchdog_event.src_path),
+        ):
             return
+        notification = phile.notify.File(
+            path=pathlib.Path(watchdog_event.src_path)
+        )
         # Determine what to do base on existence of the actual file.
         self.load(notification)
 
@@ -455,8 +454,8 @@ class MainWindow(QMainWindow):
     def on_notification_sub_window_closed(
         self, notification_name: str
     ) -> None:
-        notification = phile.notify.File(
-            configuration=self._configuration, name=notification_name
+        notification = phile.notify.File.from_path_stem(
+            notification_name, configuration=self._configuration
         )
         notification.remove()
         self.load(notification)

@@ -19,17 +19,87 @@ import phile.configuration
 import phile.notify
 
 
-class TestFile(unittest.TestCase):
-    """Tests :class:`~phile.notify.File`."""
+def round_down_to_two_seconds(
+    source: datetime.datetime
+) -> datetime.datetime:
+    return source - datetime.timedelta(
+        seconds=source.second % 2, microseconds=source.microsecond
+    )
+
+
+def round_up_to_two_seconds(
+    source: datetime.datetime
+) -> datetime.datetime:
+    return source + (
+        datetime.timedelta(minutes=1) - datetime.timedelta(
+            seconds=source.second, microseconds=source.microsecond
+        )
+    ) % datetime.timedelta(seconds=2)
+
+
+class TestFileCheckPath(unittest.TestCase):
+    """Tests :meth:`~phile.notify.File.check_path`."""
 
     def setUp(self) -> None:
-        """
-        Create a directory to use as a notification directory.
+        notification_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(notification_directory.cleanup)
+        self.configuration = phile.configuration.Configuration(
+            notification_directory=pathlib.Path(
+                notification_directory.name
+            ),
+            notification_suffix='.nn'
+        )
 
-        The directories are recreated for each test
-        to make sure no leftover files from tests
-        would interfere with each other.
-        """
+    def test_match(self) -> None:
+        """Check an explicit path that should pass."""
+        configuration = self.configuration
+        name = 'name' + configuration.notification_suffix
+        path = configuration.notification_directory / name
+        self.assertTrue(
+            phile.notify.File.check_path(
+                configuration=configuration, path=path
+            )
+        )
+
+    def test_make_path_result(self) -> None:
+        """Result of :meth:`~phile.notify.File.make_path` should pass."""
+        path_stem = 'stem'
+        path = phile.notify.File.make_path(
+            configuration=self.configuration, path_stem=path_stem
+        )
+        self.assertTrue(
+            phile.notify.File.check_path(
+                configuration=self.configuration, path=path
+            )
+        )
+
+    def test_directory_mismatch(self) -> None:
+        configuration = self.configuration
+        name = 'name' + configuration.notification_suffix
+        path = configuration.notification_directory / name / name
+        self.assertTrue(
+            not phile.notify.File.check_path(
+                configuration=configuration,
+                path=path,
+            )
+        )
+
+    def test_suffix_mismatch(self) -> None:
+        configuration = self.configuration
+        name = 'name' + configuration.notification_suffix + '_not'
+        path = configuration.notification_directory / name
+        self.assertTrue(
+            not phile.notify.File.check_path(
+                configuration=self.configuration,
+                path=path,
+            )
+        )
+
+
+class TestFile(unittest.TestCase):
+    """Tests :data:`~phile.notify.File`."""
+
+    def set_up_configuration(self) -> None:
         notification_directory = tempfile.TemporaryDirectory()
         self.addCleanup(notification_directory.cleanup)
         self.notification_directory_path = pathlib.Path(
@@ -38,103 +108,136 @@ class TestFile(unittest.TestCase):
         self.configuration = phile.configuration.Configuration(
             notification_directory=self.notification_directory_path
         )
-        self.name = 'VeCat'
-        self.content = 'Happy New Year!'
-        self.path = self.configuration.notification_directory / (
-            self.name + self.configuration.notification_suffix
-        )
-        self.notification = phile.notify.File(
-            name=self.name, configuration=self.configuration
+
+    def test_inherited_init(self) -> None:
+        """Has default and keyword initialisation."""
+        file = phile.notify.File(path=pathlib.Path())
+        self.assertTrue(hasattr(file, 'loaded'))
+        self.assertTrue(hasattr(file, 'path'))
+        self.assertTrue(hasattr(file, 'modified_at'))
+        self.assertTrue(hasattr(file, 'text'))
+        self.assertTrue(hasattr(file, 'title'))
+        phile.notify.File(
+            loaded=True,
+            path=pathlib.Path('Great Title'),
+            modified_at=datetime.datetime(year=2001, month=1, day=1),
+            text='This is a big paragraph.',
         )
 
-    def test_construct_with_name(self) -> None:
-        """Constructing with name must come with a configuration."""
-        # A successful construction in `setUp()`.
-        self.assertEqual(self.notification.name, self.name)
-        self.assertEqual(self.notification.path, self.path)
-        self.path.touch()
-        self.assertIsInstance(
-            self.notification.creation_datetime, datetime.datetime
+    def test_from_path_stem(self) -> None:
+        """Create from configuration and path stem."""
+        self.set_up_configuration()
+        file = phile.notify.File.from_path_stem(
+            'config',
+            configuration=self.configuration,
         )
-        # It should fail without a configuration give.
-        with self.assertRaises(ValueError):
-            phile.notify.File(name=self.name)
-
-    def test_construct_with_path(self) -> None:
-        """Constructing with just path should be possible."""
-        notification = phile.notify.File(
-            path=self.configuration.notification_directory /
-            (self.name + self.configuration.notification_suffix)
-        )
-        self.assertEqual(self.notification.path, self.path)
-
-    def test_construct_with_path_with_wrong_parent(self) -> None:
-        """Constructing with path must be in configured directory."""
-        with self.assertRaises(phile.notify.File.ParentError):
-            notification = phile.notify.File(
-                configuration=self.configuration,
-                path=self.configuration.notification_directory /
-                'subdir' /
-                (self.name + self.configuration.notification_suffix)
+        self.assertTrue(
+            phile.notify.File.check_path(
+                configuration=self.configuration, path=file.path
             )
-
-    def test_construct_with_path_with_wrong_suffix(self) -> None:
-        """Constructing with path must be in configured suffix."""
-        with self.assertRaises(phile.notify.File.SuffixError):
-            notification = phile.notify.File(
-                configuration=self.configuration,
-                path=self.configuration.notification_directory /
-                (self.name + '.wrong_suffix')
-            )
-
-    def test_hash(self) -> None:
-        """Can be used as keys in dictionaries."""
-        number = 1
-        notificaion_key_dictionary = {self.notification: number}
-        self.assertEqual(
-            notificaion_key_dictionary[self.notification], number
         )
 
-    def test_remove_file(self) -> None:
-        """Notifications can be removed."""
-        self.notification.path.touch()
-        self.assertTrue(self.notification.path.is_file())
-        self.notification.remove()
-        self.assertTrue(not self.notification.path.is_file())
-
-    def test_remove_non_existent_file(self) -> None:
-        """Removing notifications that do not exist should be fine."""
-        self.assertTrue(not self.notification.path.is_file())
-        self.notification.remove()
-        self.assertTrue(not self.notification.path.is_file())
-
-    def test_read_file(self) -> None:
-        """Notifications can be read from."""
-        self.notification.path.write_text(self.content)
-        actual_content = self.notification.read()
-        self.assertEqual(actual_content, self.content)
-
-    def test_write_file(self) -> None:
-        """Notifications can be written to."""
-        self.notification.write(self.content)
-        self.assertEqual(
-            self.notification.path.read_text(), self.content + '\n'
+    def test_from_path_stem_accpets_init_arguments(self) -> None:
+        """Create from configuration, forwards argument to init."""
+        self.set_up_configuration()
+        text = 'from_path_stem'
+        file = phile.notify.File.from_path_stem(
+            configuration=self.configuration,
+            path_stem='config',
+            text=text,
         )
+        self.assertEqual(file.text, text)
 
-    def test_append_file(self) -> None:
-        """Notifications can be appended to."""
-        self.notification.write(self.content)
-        self.notification.append(self.content)
-        actual_content = self.notification.read()
-        self.assertEqual(
-            actual_content, self.content + '\n' + self.content + '\n'
+    def test_compare(self) -> None:
+        """Partial order uses :data:`~phile.notify.File.path`."""
+        file_1 = phile.notify.File(
+            loaded=True,
+            path=pathlib.Path('a/b'),
+            modified_at=datetime.datetime(year=2001, month=1, day=1),
+            text='This is a big paragraph.',
         )
+        file_2 = phile.notify.File(
+            loaded=False,
+            path=pathlib.Path('a/b'),
+            modified_at=datetime.datetime(year=2002, month=2, day=2),
+            text='This is a bigger paragraph.',
+        )
+        self.assertEqual(file_1, file_2)
+        file_2.path = pathlib.Path('a/c')
+        self.assertLess(file_1, file_2)
+        file_1.path = pathlib.Path('b/a')
+        self.assertLess(file_1, file_2)
 
-    def test_append_to_empty_file(self) -> None:
-        """Notifications can be appended to even if empty."""
-        self.notification.append(self.content)
-        actual_content = self.notification.read()
-        self.assertEqual(actual_content, self.content + '\n')
+    def test_title(self) -> None:
+        """Title is path stem."""
+        title = 'b'
+        file = phile.notify.File(path=pathlib.Path('a') / (title + '.n'))
+        self.assertEqual(file.title, title)
+        title = 'a'
+        file.title = title
+        self.assertEqual(file.title, title)
+
+    def test_title_for_path_without_suffix(self) -> None:
+        """Title is path stem, even without path suffix."""
+        title = 'b'
+        file = phile.notify.File(path=pathlib.Path('a') / title)
+        self.assertEqual(file.title, title)
+        title = 'a'
+        file.title = title
+        self.assertEqual(file.title, title)
+
+    def test_load(self) -> None:
+        """Load retrieves file content and modified time."""
+        self.set_up_configuration()
+        text = 'Reminder.'
+        path = self.configuration.notification_directory / 'b'
+        # The largest resolution mentioned in Python3 docs
+        # is two second for FAT32.
+        before = round_down_to_two_seconds(datetime.datetime.now())
+        path.write_text(text)
+        after = round_up_to_two_seconds(datetime.datetime.now())
+        file = phile.notify.File(path=path)
+        file.load()
+        self.assertTrue(file.loaded)
+        self.assertEqual(file.text, text)
+        self.assertLessEqual(file.modified_at, after)
+        self.assertGreaterEqual(file.modified_at, before)
+
+    def test_load_raises_if_missing(self) -> None:
+        """Raises exception if file is missing."""
+        self.set_up_configuration()
+        name = 'missing'
+        path = self.configuration.notification_directory / name
+        file = phile.notify.File(path=path)
+        file.loaded = True
+        with self.assertRaises(FileNotFoundError):
+            file.load()
+        self.assertTrue(not file.loaded)
+
+    def test_load_raises_if_is_directory(self) -> None:
+        """Raises exception if file path resolves to a directory."""
+        self.set_up_configuration()
+        name = 'missing'
+        path = self.configuration.notification_directory / name
+        path.mkdir()
+        file = phile.notify.File(path=path)
+        file.loaded = True
+        with self.assertRaises(IsADirectoryError):
+            file.load()
+        self.assertTrue(not file.loaded)
+
+    def test_save(self) -> None:
+        """Save sets file content and modified time."""
+        self.set_up_configuration()
+        text = 'Reminder.'
+        path = self.configuration.notification_directory / 'b'
+        file = phile.notify.File(path=path, text=text)
+        before = round_down_to_two_seconds(datetime.datetime.now())
+        file.save()
+        after = round_up_to_two_seconds(datetime.datetime.now())
+        self.assertEqual(path.read_text(), text)
+        self.assertLessEqual(file.modified_at, after)
+        self.assertGreaterEqual(file.modified_at, before)
 
 
 if __name__ == '__main__':

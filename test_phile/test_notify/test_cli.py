@@ -119,8 +119,8 @@ class TestProcessArguments(unittest.TestCase):
             name='VeCat',
             content='There is a kitty.',
         )
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         original_text = 'Once up a time.'
         notification.write(original_text)
@@ -189,8 +189,8 @@ class TestProcessArguments(unittest.TestCase):
         argument_namespace = argparse.Namespace(
             command='read', name='VeCat'
         )
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         notification.write(original_text)
         output_stream = io.StringIO()
@@ -213,8 +213,8 @@ class TestProcessArguments(unittest.TestCase):
             command='remove',
             name='VeCat',
         )
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         notification.path.touch()
         self.assertTrue(notification.path.is_file())
@@ -244,8 +244,8 @@ class TestProcessArguments(unittest.TestCase):
             configuration=configuration
         )
         self.assertEqual(return_value, 0)
-        notification = phile.notify.File(
-            configuration=configuration, name=argument_namespace.name
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name, configuration=configuration
         )
         self.assertEqual(
             notification.read(), argument_namespace.content + '\n'

@@ -5,6 +5,8 @@
 """
 
 # Standard library.
+import contextlib
+import dataclasses
 import datetime
 import pathlib
 
@@ -12,83 +14,120 @@ import pathlib
 import phile.configuration
 
 
+@dataclasses.dataclass(eq=False)
 class File:
 
-    class ParentError(ValueError):
-        pass
-
-    class SuffixError(ValueError):
-        pass
-
-    def __init__(
-        self,
-        *,
-        configuration: phile.configuration.Configuration = None,
-        name: str = None,
-        path: pathlib.Path = None
-    ) -> None:
-        if path is None:
-            if configuration is None or name is None:
-                raise ValueError(
-                    'Notification is constructed from path'
-                    ' or from both configuration and name'
-                )
-            path = configuration.notification_directory / (
-                name + configuration.notification_suffix
-            )
-        else:
-            if configuration is not None:
-                path_parent = path.parent
-                directory = configuration.notification_directory
-                if path_parent != directory:
-                    raise File.ParentError(
-                        'Path parent ({}) is not {}'.format(
-                            path_parent, directory
-                        )
-                    )
-                path_suffix = path.suffix
-                notification_suffix = configuration.notification_suffix
-                if path_suffix != notification_suffix:
-                    raise File.SuffixError(
-                        'Path suffix ({}) is not {}'.format(
-                            path_suffix, notification_suffix
-                        )
-                    )
-        self.path = path
+    path: pathlib.Path
+    """Path from which the data was loaded."""
+    loaded: bool = False
+    """Whether the data was successfully loaded from :data:`path`."""
+    modified_at: datetime.datetime = datetime.datetime.fromtimestamp(0)
+    text: str = ''
 
     def __hash__(self):
         return hash(self.path)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self.path == other.path
 
-    def __lt__(self, other):
-        return self.path < other.path
-
-    def append(self, additional_content: str):
-        with self.path.open('a') as notification_file:
-            # End with a new line
-            # so that appending again would not jumble up the text.
-            notification_file.write(additional_content + '\n')
+    def __lt__(self, other) -> bool:
+        return ((self.path.name, self.path) <
+                (other.path.name, other.path))
 
     @property
     def creation_datetime(self) -> datetime.datetime:
-        return datetime.datetime.fromtimestamp(self.path.stat().st_mtime)
+        return self.modified_at
 
     @property
     def name(self) -> str:
-        return self.path.stem
+        return self.title
+
+    @classmethod
+    def from_path_stem(
+        cls,
+        path_stem: str,
+        *args,
+        configuration: phile.configuration.Configuration,
+        **kwargs,
+    ) -> 'File':
+        """Dataclasses do not allow keyword-only arguments."""
+        assert 'path' not in kwargs
+        kwargs['path'] = cls.make_path(
+            configuration=configuration, path_stem=path_stem
+        )
+        return cls(*args, **kwargs)
+
+    @staticmethod
+    def make_path(
+        *,
+        configuration: phile.configuration.Configuration,
+        path_stem: str,
+    ) -> pathlib.Path:
+        return configuration.notification_directory / (
+            path_stem + configuration.notification_suffix
+        )
+
+    @staticmethod
+    def check_path(
+        *,
+        configuration: phile.configuration.Configuration,
+        path: pathlib.Path,
+    ) -> bool:
+        return (
+            path.parent == configuration.notification_directory
+            and path.suffix == configuration.notification_suffix
+        )
 
     def read(self) -> str:
-        return self.path.read_text()
+        self.load()
+        return self.text
 
-    def remove(self):
-        try:
+    def write(self, new_content: str) -> None:
+        self.text = new_content + '\n'
+        self.save()
+
+    def append(self, additional_content: str) -> None:
+        self.load()
+        self.text += additional_content + '\n'
+        self.save()
+
+    def save(self) -> None:
+        """Write content to file, and read new modified time."""
+        self.path.write_text(self.text)
+        self.load_modified_at()
+
+    def load(self) -> None:
+        """
+        Loads content of :data:`~phile.data.File.path` as a notification.
+
+        :raises FileNotFoundError:
+            If :data:`~phile.data.File.path` does not exist.
+        :raises IsADirectoryError:
+            If :data:`~phile.data.File.path` resolves to a directory.
+
+        Sets :data:`~phile.data.File.loaded`
+        depending on whether the load was successful
+        even if exceptions are raised.
+        """
+        self.loaded = False
+        self.text = self.path.read_text()
+        self.load_modified_at()
+        self.loaded = True
+
+    def load_modified_at(self) -> None:
+        """Update stored data to reflect modified time of file."""
+        self.modified_at = datetime.datetime.fromtimestamp(
+            self.path.stat().st_mtime
+        )
+
+    def remove(self) -> None:
+        with contextlib.suppress(FileNotFoundError):
             self.path.unlink()
-        except FileNotFoundError:
-            pass
 
-    def write(self, new_content: str):
-        # End with a new line
-        # so that appending would not jumble up the text.
-        self.path.write_text(new_content + '\n')
+    @property
+    def title(self) -> str:
+        return self.path.stem
+
+    @title.setter
+    def title(self, new_title: str) -> None:
+        self.path = self.path.with_name(new_title + self.path.suffix)

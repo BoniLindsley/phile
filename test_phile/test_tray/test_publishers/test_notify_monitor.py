@@ -125,8 +125,8 @@ class TestMonitorStart(unittest.TestCase):
         self.assertTrue(not self.monitor.notify_tray_file.path.exists())
 
     def test_init_with_existing_notify_file(self) -> None:
-        self.notify_file_to_find = phile.notify.File(
-            configuration=self.configuration, name='init'
+        self.notify_file_to_find = phile.notify.File.from_path_stem(
+            'init', configuration=self.configuration
         )
         self.configuration.notification_directory.mkdir(exist_ok=True)
         self.notify_file_to_find.write('first')
@@ -139,8 +139,8 @@ class TestMonitorStart(unittest.TestCase):
     def test_detects_new_notify_file(self) -> None:
         self.set_up_worker_thread()
         self.set_up_tray_event_dispatcher()
-        new_file = phile.notify.File(
-            configuration=self.configuration, name='new'
+        new_file = phile.notify.File.from_path_stem(
+            'new', configuration=self.configuration
         )
         new_file.write('new content')
         self.tray_dispatch.assert_called_with_soon(
