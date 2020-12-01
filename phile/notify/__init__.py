@@ -121,26 +121,3 @@ class File(phile.data.File):
     @title.setter
     def title(self, new_title: str) -> None:
         self.path = self.path.with_name(new_title + self.path.suffix)
-
-
-_D_contra = typing.TypeVar('_D_contra', contravariant=True)
-
-
-class SingleParameterCallback(typing.Protocol[_D_contra]):
-    """
-    Replacement for ``Callable[[_D_contra], None]``.
-
-    Calling a callable member is not handled correctly by mypy yet.
-    Specifically, ``self.load(0)`` is treated as a two-argument call
-    even if ``self.load`` is a callable variable.
-    See: https://github.com/python/mypy/issues/708#issuecomment-667989040
-    """
-
-    def __call__(self, __arg_1: _D_contra) -> None:
-        ...
-
-
-PathsHandler = SingleParameterCallback[typing.Iterator[pathlib.Path]]
-"""
-Signature of callables for processing multiple :class:`~pathlib.Path`-s.
-"""

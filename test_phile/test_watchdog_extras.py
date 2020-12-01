@@ -6,9 +6,11 @@ Test phile.watchdog_extras
 """
 
 # Standard library.
+import dataclasses
 import pathlib
 import logging
 import tempfile
+import typing
 import unittest
 import unittest.mock
 
@@ -25,15 +27,83 @@ _logger = logging.getLogger(
 )
 """Logger whose name is the module name."""
 
+IntCallback = phile.watchdog_extras.SingleParameterCallback[int]
+
+
+class TestSingleParameterCallback(unittest.TestCase):
+    """Tests :data:`~phile.watchdog_extras.SingleParameterCallback`."""
+
+    def do_callback_test(self, callback: IntCallback) -> None:
+        """
+        Calls ``callback`` directly and as a member.
+
+        Call signature also checks the given ``callback`` in ``mypy``.
+        """
+
+        callback(0)
+
+        @dataclasses.dataclass
+        class Parent:
+            callback: IntCallback
+
+        self.parent = Parent(callback=callback)
+        self.parent.callback(0)
+
+    def test_class_method(self) -> None:
+        """Methods of with proper parameter satisfies the protocol."""
+
+        class IntObject:
+
+            @classmethod
+            def int_method(self, _: int) -> None:
+                pass
+
+        self.do_callback_test(IntObject.int_method)
+
+    def test_function(self) -> None:
+        """Subclass of protocol can inherit methods to satisfy it."""
+
+        def int_function(_: int) -> None:
+            pass
+
+        self.do_callback_test(int_function)
+
+    def test_lambda(self) -> None:
+        """Lambda without signature satisfies protocol."""
+        self.do_callback_test(lambda _: None)
+
+    def test_method(self) -> None:
+        """Methods of with proper parameter satisfies the protocol."""
+
+        class IntObject:
+
+            def int_method(self, _: int) -> None:
+                pass
+
+        self.do_callback_test(IntObject().int_method)
+
+    def test_static_method(self) -> None:
+        """Methods of with proper parameter satisfies the protocol."""
+
+        class IntObject:
+
+            @staticmethod
+            def int_method(_: int) -> None:
+                pass
+
+        self.do_callback_test(IntObject.int_method)
+
+    def test_subclass(self) -> None:
+        """Subclass of protocol can inherit methods to satisfy it."""
+
+        class Callback(IntCallback):
+            pass
+
+        self.do_callback_test(Callback())
+
 
 class TestEventHandler(unittest.TestCase):
     """Tests :data:`~phile.watchdog_extras.EventHandler`."""
-
-    def test_lambda(self) -> None:
-        """
-        A lambda can be a :data:`~phile.watchdog_extras.EventHandler`.
-        """
-        _: phile.watchdog_extras.EventHandler = lambda _: None
 
     def test_function(self) -> None:
         """
@@ -46,6 +116,22 @@ class TestEventHandler(unittest.TestCase):
             pass
 
         _: phile.watchdog_extras.EventHandler = event_handle_function
+
+
+class TestPathsHandler(unittest.TestCase):
+    """Tests :data:`~phile.watchdog_extras.PathsHandler`."""
+
+    def test_function(self) -> None:
+        """
+        A function can be a :data:`~phile.watchdog_extras.PathsHandler`.
+        """
+
+        def paths_handle_function(
+            paths: typing.Iterable[pathlib.Path]
+        ) -> None:
+            pass
+
+        _: phile.watchdog_extras.PathsHandler = paths_handle_function
 
 
 class TestObserver(unittest.TestCase):

@@ -34,7 +34,7 @@ class Converter:  # pragma: no cover
     """Convert a notify file event to a notify file."""
 
     configuration: phile.configuration.Configuration
-    paths_handler: phile.notify.PathsHandler
+    paths_handler: phile.watchdog_extras.PathsHandler
     """Callback repsonsible of processing notify files by path."""
 
     def __call__(
@@ -56,7 +56,7 @@ class Converter:  # pragma: no cover
 
 def create_notify_scheduler(
     configuration: phile.configuration.Configuration,
-    paths_handler: phile.notify.PathsHandler,
+    paths_handler: phile.watchdog_extras.PathsHandler,
     watching_observer: watchdog.observers.Observer,
 ) -> phile.watchdog_extras.Scheduler:
     # Turn file system events into notify files for processing.

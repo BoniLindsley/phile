@@ -13,10 +13,32 @@ import typing
 import watchdog.events  # type: ignore[import]
 import watchdog.observers  # type: ignore[import]
 
-EventHandler = typing.Callable[[watchdog.events.FileSystemEvent], None]
+_D_contra = typing.TypeVar('_D_contra', contravariant=True)
+
+
+class SingleParameterCallback(typing.Protocol[_D_contra]):
+    """
+    Replacement for ``Callable[[_D_contra], None]``.
+
+    Calling a callable member is not handled correctly by mypy yet.
+    Specifically, ``self.load(0)`` is treated as a two-argument call
+    even if ``self.load`` is a callable variable.
+    See: https://github.com/python/mypy/issues/708#issuecomment-667989040
+    """
+
+    def __call__(self, __arg_1: _D_contra) -> None:
+        ...
+
+
+EventHandler = SingleParameterCallback[watchdog.events.FileSystemEvent]
 """
 Signature of callables
 receiveing :class:`~watchdog.events.FileSystemEvent`-s.
+"""
+
+PathsHandler = SingleParameterCallback[typing.Iterator[pathlib.Path]]
+"""
+Signature of callables for processing multiple :class:`~pathlib.Path`-s.
 """
 
 
