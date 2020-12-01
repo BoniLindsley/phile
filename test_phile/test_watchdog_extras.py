@@ -264,5 +264,49 @@ class TestScheduler(unittest.TestCase):
         )
 
 
+class TestToFilePaths(unittest.TestCase):
+    """Tests :func:`~phile.PySide2_extras.to_file_paths`."""
+
+    def test_forward_file_creation_events_passes(self) -> None:
+        """File creation events passes through."""
+        file_path = pathlib.Path('created')
+        source_event = watchdog.events.FileCreatedEvent(str(file_path))
+        self.assertListEqual(
+            phile.watchdog_extras.to_file_paths(source_event),
+            [file_path]
+        )
+
+    def test_ignores_directory_events(self) -> None:
+        """Directory events are not considered as file events here."""
+        file_path = pathlib.Path('directory')
+        source_event = watchdog.events.DirCreatedEvent(str(file_path))
+        self.assertListEqual(
+            phile.watchdog_extras.to_file_paths(source_event), []
+        )
+
+    def test_splitting_move_events(self) -> None:
+        """Move events should be split into two paths."""
+        source_path = pathlib.Path('source')
+        dest_path = pathlib.Path('dest')
+        source_event = watchdog.events.FileMovedEvent(
+            str(source_path), str(dest_path)
+        )
+        self.assertSetEqual(
+            set(phile.watchdog_extras.to_file_paths(source_event)),
+            {source_path, dest_path}
+        )
+
+    def test_ignores_directory_move_events(self) -> None:
+        """Directory events should be ignored even for move events."""
+        source_path = pathlib.Path('source')
+        dest_path = pathlib.Path('dest')
+        source_event = watchdog.events.DirMovedEvent(
+            str(source_path), str(dest_path)
+        )
+        self.assertListEqual(
+            phile.watchdog_extras.to_file_paths(source_event), []
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

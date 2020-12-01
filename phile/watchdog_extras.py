@@ -354,3 +354,46 @@ class Scheduler:
                     watching_observer._remove_emitter(emitter)
                     watching_observer._watches.remove(watchdog_watch)
         self._is_scheduled = False
+
+
+def to_file_paths(
+    source_event: watchdog.events.FileSystemEvent
+) -> typing.List[pathlib.Path]:
+    """
+    Returns a :class:`list` of :class:`~pathlib.Path`-s of files
+    involved in the given :class:`~watchdog.events.FileSystemEvent`.
+
+    :param source_event:
+        The :class:`~watchdog.events.FileSystemEvent`
+        from which to extract file paths.
+    :returns:
+        The file paths extracted from ``source_event``.
+        If ``source_event`` is a directory event,
+        an empty :class:`list` is returned.
+        If it is a file move event,
+        the :class:`list` contains both file paths
+        in an unspecified order.
+        Otherwise, the :class:`list` contains one path.
+
+    There is a delay between the event being detected
+    and the event being processed.
+    This time may be sufficient for the files involved to be deleted
+    or changed to a directory, etc.
+    So the event type itself is not so useful.
+    In particular, the user of the event
+    needs to handle such cases anyway at the point of file access.
+    So the only reliable data from the event are the file paths
+    indicating that some changes occured to the files of the path.
+    It is then up to the user to determine what to do with the path
+    depending on whether the path still exists, is still a file,
+    has valid data or was already known about using their own data.
+    """
+    if source_event.is_directory:
+        return []
+    elif source_event.event_type != watchdog.events.EVENT_TYPE_MOVED:
+        return [pathlib.Path(source_event.src_path)]
+    else:
+        return [
+            pathlib.Path(source_event.src_path),
+            pathlib.Path(source_event.dest_path)
+        ]

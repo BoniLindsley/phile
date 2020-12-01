@@ -4,6 +4,7 @@
 import asyncio
 import bisect
 import contextlib
+import dataclasses
 import json
 import logging
 import pathlib
@@ -28,107 +29,31 @@ _logger = logging.getLogger(
 """Logger whose name is the module name."""
 
 
-class Filter:  # pragma: no cover
-    """
-    Ignore events that are not notify file events.
-
-    An event is a notify file event if it involves a file with the
-    :attr:`~phile.configuration.Configuration.notification_suffix`
-    and is in the
-    :attr:`~phile.configuration.Configuration.notification_directory`.
-    """
-
-    def __init__(
-        self,
-        *args,
-        configuration: phile.configuration.Configuration,
-        event_handler: phile.watchdog_extras.EventHandler,
-        **kwargs,
-    ) -> None:
-        """
-        :param ~phile.configuration.Configuration configuration:
-            Information on what constitute a notify file.
-        :param event_handler:
-            Handler to call if an event passes this filter.
-        :type event_handler: :data:`~phile.watchdog_extras.EventHandler`
-        """
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._event_handler = event_handler
-        """Callback repsonsible of processing notifys."""
-        self._notify_directory = configuration.notification_directory
-        """The directory containing notify files."""
-        self._notify_suffix = configuration.notification_suffix
-        """Suffix that notifys must have."""
-
-    def __call__(
-        self, watchdog_event: watchdog.events.FileSystemEvent
-    ) -> None:
-        """
-        Internal.
-
-        Calls ``event_handler``
-        if ``watchdog_event`` is a notify file event.
-        """
-        if watchdog_event.is_directory:
-            return
-        event_type = watchdog_event.event_type
-        if event_type == watchdog.events.EVENT_TYPE_MOVED:
-            for new_event in [
-                watchdog.events.FileDeletedEvent(
-                    watchdog_event.src_path
-                ),
-                watchdog.events.FileCreatedEvent(
-                    watchdog_event.dest_path
-                )
-            ]:
-                self.__call__(new_event)
-            return
-        notify_path = pathlib.Path(watchdog_event.src_path)
-        if notify_path.suffix != self._notify_suffix:
-            return
-        if notify_path.parent != self._notify_directory:
-            return
-        self._event_handler(watchdog_event)
-
-
+@dataclasses.dataclass
 class Converter:  # pragma: no cover
     """Convert a notify file event to a notify file."""
 
-    def __init__(
-        self,
-        *args,
-        notify_handler: typing.Callable[[phile.notify.File], None],
-        **kwargs,
-    ) -> None:
-        """
-        :param notify_handler:
-            Handler to call with the notify name.
-        :type notify_handler: :data:`Handler`
-        """
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._notify_handler = notify_handler
-        """Callback repsonsible of processing notify by name"""
+    configuration: phile.configuration.Configuration
+    notify_handler: phile.notify.FileHandler
+    """Callback repsonsible of processing notify by name"""
 
     def __call__(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:
         """
-        Internal.
-
-        Calls ``notify_handler`` with the notify file
-        given in the `watchdog_event`.
-        The given ``watchdog_event`` must be a notify file event
-        that is not a moved event.
-        It is undefined behaviour otherwise.
+        Calls :data:`notify_handler` with the notify file
+        given in the ``watchdog_event``.
         """
-        assert (
-            watchdog_event.event_type != watchdog.events.EVENT_TYPE_MOVED
-        )
-        notify_path = pathlib.Path(watchdog_event.src_path)
-        notify_file = phile.notify.File(path=notify_path)
-        self._notify_handler(notify_file)
+        notifications = [
+            phile.notify.File(path=path) for path in
+            phile.watchdog_extras.to_file_paths(watchdog_event)
+            if phile.notify.File.check_path(
+                configuration=self.configuration,
+                path=path,
+            )
+        ]
+        for notification in notifications:
+            self.notify_handler(notification)
 
 
 class Sorter:  # pragma: no cover
@@ -244,15 +169,13 @@ def create_notify_scheduler(
     watching_observer: watchdog.observers.Observer,
 ) -> phile.watchdog_extras.Scheduler:
     # Turn file system events into notify files for processing.
-    event_converter = Converter(notify_handler=notify_handler)
-    # Filter out non-trigger activation events.
-    event_filter = Filter(
+    event_converter = Converter(
+        notify_handler=notify_handler,
         configuration=configuration,
-        event_handler=event_converter,
     )
     # Use a scheduler to toggle the event handling on and off.
     dispatcher = phile.watchdog_extras.Dispatcher(
-        event_handler=event_filter
+        event_handler=event_converter
     )
     watched_path = configuration.notification_directory
     watched_path.mkdir(exist_ok=True, parents=True)

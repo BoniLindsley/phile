@@ -24,6 +24,7 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 import phile.notify
 import phile.trigger
+import phile.watchdog_extras
 import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
 
@@ -388,35 +389,16 @@ class MainWindow(QMainWindow):
     def on_file_system_event_detected(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:
-        _logger.debug('Watchdog event received.')
-        # Notifications are files. Directory changes do not matter.
-        if watchdog_event.is_directory:
-            _logger.debug('Watchdog event: not using directory events.')
-            return
-        # Consider a move event as a delete and create.
-        event_type = watchdog_event.event_type
-        if event_type == watchdog.events.EVENT_TYPE_MOVED:
-            _logger.debug('Watchdog event: notification moved.')
-            for new_event in [
-                watchdog.events.FileDeletedEvent(
-                    watchdog_event.src_path
-                ),
-                watchdog.events.FileCreatedEvent(
-                    watchdog_event.dest_path
-                )
-            ]:
-                self.on_file_system_event_detected(new_event)
-            return
-        if not phile.notify.File.check_path(
-            configuration=self._configuration,
-            path=pathlib.Path(watchdog_event.src_path),
-        ):
-            return
-        notification = phile.notify.File(
-            path=pathlib.Path(watchdog_event.src_path)
-        )
-        # Determine what to do base on existence of the actual file.
-        self.load(notification)
+        notifications = [
+            phile.notify.File(path=path) for path in
+            phile.watchdog_extras.to_file_paths(watchdog_event)
+            if phile.notify.File.check_path(
+                configuration=self._configuration,
+                path=path,
+            )
+        ]
+        for notification in notifications:
+            self.load(notification)
 
     def load(self, notification: phile.notify.File) -> None:
         # Figure out if the notification was tracked.
