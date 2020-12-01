@@ -218,61 +218,6 @@ class Scheduler:
 
     Remembers infomation necessary to start watching a directory or file
     so that starting requires only a single method call.
-
-    Example::
-
-        import cmd
-        import pathlib
-        from datetime import timedelta
-        from phile.watchdog_extras import (
-            Dispatcher, Observer, Scheduler
-        )
-
-        observer = Observer()
-
-        class MonitoringCmd(cmd.Cmd):
-
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self._scheduler = Scheduler(
-                    watchdog_handler=Dispatcher(
-                        event_handler=lambda x: print(x)
-                    ),
-                    watched_path=pathlib.Path(),
-                    watching_observer=observer,
-                )
-
-            def do_is_scheduled(self, arg: str):
-                self._scheduler.is_scheduled()
-
-            def do_schedule(self, arg: str):
-                self._scheduler.schedule()
-
-            def do_touch(self, arg: str):
-                pathlib.Path(arg).touch()
-
-            def do_unschedule(self, arg: str):
-                self._scheduler.unschedule()
-
-            def do_EOF(self, arg: str):
-                return True
-
-            def emptyline(self):
-                pass
-
-        observer.start()
-        MonitoringCmd().cmdloop()
-        # (Cmd) touch a.txt  # Creates a file.
-        # (Cmd) schedule     # Start monitoring for changes.
-        # (Cmd) touch b.txt  # Create another file. Prints out events.
-        # (Cmd) <FileCreatedEvent: src_path='./b.txt'>
-        # <DirModifiedEvent: src_path='.'>
-        #
-        # (Cmd) unschedule   # Stop monitoring.
-        # (Cmd) touch c.txt  # Creates a file. No more printing.
-        # (Cmd) EOF          # Exit.
-        observer.stop()
-        observer.join()
     """
 
     def __init__(
