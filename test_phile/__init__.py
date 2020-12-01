@@ -2,6 +2,7 @@
 """
 .. automodule:: test_phile.pyside2_test_tools
 .. automodule:: test_phile.test_configuration
+.. automodule:: test_phile.test_data
 .. automodule:: test_phile.test_notify
 .. automodule:: test_phile.test_PySide2_extras
 .. automodule:: test_phile.test_tray

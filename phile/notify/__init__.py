@@ -13,27 +13,16 @@ import typing
 
 # Internal packages.
 import phile.configuration
+import phile.data
 
 
 @dataclasses.dataclass(eq=False)
-class File:
-
-    path: pathlib.Path
-    """Path from which the data was loaded."""
-    loaded: bool = False
-    """Whether the data was successfully loaded from :data:`path`."""
+class File(phile.data.File):
     modified_at: datetime.datetime = datetime.datetime.fromtimestamp(0)
     text: str = ''
 
     def __hash__(self):
         return hash(self.path)
-
-    def __eq__(self, other) -> bool:
-        return self.path == other.path
-
-    def __lt__(self, other) -> bool:
-        return ((self.path.name, self.path) <
-                (other.path.name, other.path))
 
     @property
     def creation_datetime(self) -> datetime.datetime:
@@ -151,5 +140,7 @@ class SingleParameterCallback(typing.Protocol[_D_contra]):
         ...
 
 
-FileHandler = SingleParameterCallback[File]
-"""Signature of callables receiveing :class:`~pathlib.Path`-s."""
+PathsHandler = SingleParameterCallback[typing.Iterator[pathlib.Path]]
+"""
+Signature of callables for processing multiple :class:`~pathlib.Path`-s.
+"""

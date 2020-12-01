@@ -34,143 +34,34 @@ class Converter:  # pragma: no cover
     """Convert a notify file event to a notify file."""
 
     configuration: phile.configuration.Configuration
-    notify_handler: phile.notify.FileHandler
-    """Callback repsonsible of processing notify by name"""
+    paths_handler: phile.notify.PathsHandler
+    """Callback repsonsible of processing notify files by path."""
 
     def __call__(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:
         """
-        Calls :data:`notify_handler` with the notify file
+        Calls :data:`notify_handler` with the notify file paths
         given in the ``watchdog_event``.
         """
-        notifications = [
-            phile.notify.File(path=path) for path in
+        self.paths_handler(
+            path for path in
             phile.watchdog_extras.to_file_paths(watchdog_event)
             if phile.notify.File.check_path(
                 configuration=self.configuration,
                 path=path,
             )
-        ]
-        for notification in notifications:
-            self.notify_handler(notification)
-
-
-class Sorter:  # pragma: no cover
-    """
-    Collect notify files into a list.
-
-    Not threadsafe.
-    In particular, its callback members should not be modified
-    while ``self`` is set as a callback in a different thread.
-    """
-
-    def __init__(
-        self,
-        *args,
-        configuration: phile.configuration.Configuration,
-        **kwargs,
-    ) -> None:
-        """
-        :param ~phile.configuration.Configuration configuration:
-            Information on what constitute a notify file.
-        """
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._configuration = configuration
-        """Determines where and which files are notify files."""
-        self.notify_files: typing.List[phile.notify.File] = []
-        """Keeps track of known notify files."""
-        self.insert = self._noop_handler
-        """
-        Called when an untracked notify file is found.
-
-        It is given the index at which the notify file is inserted at.
-        """
-        self.pop = self._noop_handler
-        """
-        Called when a tracked notify file is deleted.
-
-        It is given the index the notify file was at before removal.
-        """
-        self.set_item = self._noop_handler
-        """
-        Called when a tracked notify file is modified.
-
-        It is given the index the notify file is at.
-        """
-
-    def __call__(self, notify_file: phile.notify.File) -> None:
-        """
-        Forwards to handlers
-        depending on how :data:`notify_files` is changed.
-        Call different handlers depending on the given ``notify_file``.
-
-        :param ~phile.notify.File notify_file:
-            The notify file to insert or update in `:data:`notify_files`
-            if it exists,
-            or to pop from it otherwise.
-
-        Tracking of the given ``notify_file`` in  :data:`notify_files`
-        is updated before the handlers are called.
-        """
-
-        index = bisect.bisect_left(self.notify_files, notify_file)
-        is_tracked: bool
-        try:
-            is_tracked = self.notify_files[index] == notify_file
-        except IndexError:
-            is_tracked = False
-
-        notify_file_exists: bool
-        try:
-            notify_text = notify_file.read()
-        except FileNotFoundError:
-            notify_file_exists = False
-        except json.decoder.JSONDecodeError:
-            notify_file_exists = False
-            _logger.warning(
-                'Tray file decoding failed: {}'.format(notify_file.path)
-            )
-        else:
-            notify_file_exists = True
-
-        if not notify_file_exists:
-            if is_tracked:
-                self.notify_files.pop(index)
-                self.pop(index, notify_file)
-        elif is_tracked:
-            self.notify_files[index] = notify_file
-            self.set_item(index, notify_file)
-        else:
-            self.notify_files.insert(index, notify_file)
-            self.insert(index, notify_file)
-
-    def load_all(self):
-        assert len(self.notify_files) == 0
-        # Update all existing notify files.
-        configuration = self._configuration
-        for notify_file_path in configuration.notification_directory.glob(
-            '*' + self._configuration.notification_suffix
-        ):
-            if not notify_file_path.is_file():
-                continue
-            notify_file = phile.notify.File(path=notify_file_path)
-            self.__call__(notify_file)
-
-    def _noop_handler(self, index: int, notify_file: phile.notify.File):
-        """Implementation detail."""
-        pass
+        )
 
 
 def create_notify_scheduler(
     configuration: phile.configuration.Configuration,
-    notify_handler: typing.Callable[[phile.notify.File], None],
+    paths_handler: phile.notify.PathsHandler,
     watching_observer: watchdog.observers.Observer,
 ) -> phile.watchdog_extras.Scheduler:
     # Turn file system events into notify files for processing.
     event_converter = Converter(
-        notify_handler=notify_handler,
+        paths_handler=paths_handler,
         configuration=configuration,
     )
     # Use a scheduler to toggle the event handling on and off.
@@ -254,6 +145,13 @@ class DefaultTrayFile(phile.tray.File):
         self.text_icon = text_icon
 
 
+def load_file(path: pathlib.Path) -> phile.notify.File:
+    file = phile.notify.File(path=path)
+    with contextlib.suppress(FileNotFoundError, IsADirectoryError):
+        file.load()
+    return file
+
+
 class Monitor:
 
     def __init__(
@@ -275,9 +173,11 @@ class Monitor:
             trigger_directory=pathlib.Path('phile-notify-tray'),
         )
         self.trigger_switch = TriggerSwitch()
-        self.notify_sorter = Sorter(configuration=configuration)
-        self.notify_sorter.insert = self._refresh_tray_file
-        self.notify_sorter.pop = self._refresh_tray_file
+        self.notify_sorter = phile.data.SortedLoadCache(
+            load=load_file,
+            on_insert=self._refresh_tray_file,
+            on_pop=self._refresh_tray_file,
+        )
 
     async def start(self) -> None:
         running_loop = asyncio.get_running_loop()
@@ -298,10 +198,10 @@ class Monitor:
         )
         self.notify_scheduler = create_notify_scheduler(
             configuration=self._configuration,
-            notify_handler=(
-                lambda notify_file: (
+            paths_handler=(
+                lambda paths: (
                     None if call_soon_threadsafe(
-                        self.notify_sorter, notify_file
+                        self.notify_sorter.update_paths, paths
                     ) else None
                 )
             ),
@@ -323,25 +223,34 @@ class Monitor:
 
     def _show(self, *args, **kwargs) -> None:
         self.notify_scheduler.schedule()
-        self.notify_sorter.load_all()
+        self.notify_sorter.refresh(
+            data_directory=self._configuration.notification_directory,
+            data_file_suffix=self._configuration.notification_suffix
+        )
         self.entry_point.remove_trigger('show')
         self.entry_point.add_trigger('hide')
 
     def _hide(self, *args, **kwargs) -> None:
         self.notify_scheduler.unschedule()
-        self.notify_sorter.notify_files.clear()
-        self._refresh_tray_file()
+        self.notify_sorter.tracked_data.clear()
+        self._remove_tray_file()
         self.entry_point.remove_trigger('hide')
         self.entry_point.add_trigger('show')
 
-    def _refresh_tray_file(self, *args, **kwargs) -> None:
-        if self.notify_sorter.notify_files:
+    def _refresh_tray_file(
+        self, index: int, loaded_data: phile.notify.File,
+        tracked_data: typing.List[phile.notify.File]
+    ) -> None:
+        if tracked_data:
             self.notify_tray_file.path.parent.mkdir(
                 parents=True, exist_ok=True
             )
             self.notify_tray_file.save()
         else:
-            self.notify_tray_file.remove()
+            self._remove_tray_file()
+
+    def _remove_tray_file(self) -> None:
+        self.notify_tray_file.remove()
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover

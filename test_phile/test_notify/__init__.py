@@ -17,6 +17,7 @@ import unittest
 
 # Internal packages.
 import phile.configuration
+import phile.data
 import phile.notify
 
 
@@ -148,6 +149,12 @@ class TestFile(unittest.TestCase):
             text=text,
         )
         self.assertEqual(file.text, text)
+
+    def test_is_sortable_load_notify(self) -> None:
+        """Satisfies :class:`~phile.data.SortableLoadData` protocol."""
+        _: phile.data.SortableLoadData = phile.notify.File(
+            path=pathlib.Path()
+        )
 
     def test_compare(self) -> None:
         """Partial order uses :data:`~phile.notify.File.path`."""
