@@ -51,7 +51,7 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         'You have 456 unread messages.\n'
         'New security settings has been added.\n'
         'Log in to review them.',
-        self.creation_datetime = datetime.datetime(
+        self.modified_at = datetime.datetime(
             year=2000,
             month=11,
             day=2,
@@ -60,12 +60,12 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
             second=58,
             microsecond=4,
         )
-        self.name = 'VaceBook'
+        self.title = 'VaceBook'
         self.notification_sub_window = (
             phile.notify.gui.NotificationMdiSubWindow(
                 content=self.content,
-                creation_datetime=self.creation_datetime,
-                name=self.name,
+                modified_at=self.modified_at,
+                title=self.title,
             )
         )
 
@@ -77,10 +77,9 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         # Check the parameters given in the constructor.
         self.assertEqual(notification_sub_window.content, self.content)
         self.assertEqual(
-            notification_sub_window.creation_datetime,
-            self.creation_datetime
+            notification_sub_window.modified_at, self.modified_at
         )
-        self.assertEqual(notification_sub_window.name, self.name)
+        self.assertEqual(notification_sub_window.title, self.title)
         # It should not be marked as read by default.
         self.assertTrue(not notification_sub_window.is_read)
 
@@ -91,16 +90,13 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         notification_sub_window.content = new_content
         self.assertEqual(notification_sub_window.content, new_content)
 
-    def test_creation_datetime(self) -> None:
+    def test_modified_at(self) -> None:
         """Check that creation datetime set requests are processed."""
         notification_sub_window = self.notification_sub_window
-        new_creation_datetime = datetime.datetime(
-            year=1999, month=9, day=9
-        )
-        notification_sub_window.creation_datetime = new_creation_datetime
+        new_modified_at = datetime.datetime(year=1999, month=9, day=9)
+        notification_sub_window.modified_at = new_modified_at
         self.assertEqual(
-            notification_sub_window.creation_datetime,
-            new_creation_datetime
+            notification_sub_window.modified_at, new_modified_at
         )
 
     def test_event_handling_without_parent_mdi(self) -> None:
@@ -117,12 +113,12 @@ class TestNotificationMdiSubWindow(unittest.TestCase):
         notification_sub_window.is_read = False
         self.assertTrue(not notification_sub_window.is_read)
 
-    def test_name(self) -> None:
+    def test_title(self) -> None:
         """Check that content path set requests are processed."""
         notification_sub_window = self.notification_sub_window
-        new_name = 'What title?'
-        notification_sub_window.name = new_name
-        self.assertEqual(notification_sub_window.name, new_name)
+        new_title = 'What title?'
+        notification_sub_window.title = new_title
+        self.assertEqual(notification_sub_window.title, new_title)
 
     def test_closed_signal(self) -> None:
         """Check that closing emits a closed signal."""
@@ -165,8 +161,8 @@ class TestNotificationMdi(unittest.TestCase):
 
         _logger.debug('Creating sub-window 1.')
         notification_sub_window = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -214,8 +210,8 @@ class TestNotificationMdi(unittest.TestCase):
 
         _logger.debug('Creating sub-window 1.')
         notification_sub_window = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -250,8 +246,8 @@ class TestNotificationMdi(unittest.TestCase):
         # and move the first sub-window back to the top left.
         _logger.debug('Creating sub-window 2.')
         notification_sub_window_2 = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -283,8 +279,8 @@ class TestNotificationMdi(unittest.TestCase):
 
         _logger.debug('Creating sub-window 1.')
         notification_sub_window = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -298,8 +294,8 @@ class TestNotificationMdi(unittest.TestCase):
         )
         _logger.debug('Creating sub-window 2.')
         notification_sub_window_2 = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -338,8 +334,8 @@ class TestNotificationMdi(unittest.TestCase):
         """Maximising and minimising a sub-window should re-tile."""
         notification_mdi = self.notification_mdi
         notification_sub_window = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -356,8 +352,8 @@ class TestNotificationMdi(unittest.TestCase):
         # Create a second window to check that it will later get re-tiled
         # when the first one will be maximised.
         notification_sub_window_2 = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -404,8 +400,8 @@ class TestNotificationMdi(unittest.TestCase):
         """Resizing should retile sub-windows."""
         notification_mdi = self.notification_mdi
         notification_sub_window = notification_mdi.add_notification(
-            name='WatZap',
-            creation_datetime=datetime.datetime(
+            title='WatZap',
+            modified_at=datetime.datetime(
                 year=2001,
                 month=12,
                 day=3,
@@ -450,8 +446,8 @@ class TestNotificationMdi(unittest.TestCase):
         notification_mdi.setViewMode(QMdiArea.TabbedView)
         _logger.debug('Creating sub-window.')
         notification_sub_window = notification_mdi.add_notification(
-            name='VeeCat',
-            creation_datetime=datetime.datetime(
+            title='VeeCat',
+            modified_at=datetime.datetime(
                 year=2002,
                 month=1,
                 day=5,
@@ -813,9 +809,9 @@ class TestMainWindow(unittest.TestCase):
         self.main_window.show()
         self.assertEqual(len(self.main_window._sub_windows), 1)
         # Remove the notification and wait for watchdog to notice.
-        new_name = 'Disco'
+        new_title = 'Disco'
         new_notification = phile.notify.File.from_path_stem(
-            new_name, configuration=self.configuration
+            new_title, configuration=self.configuration
         )
         with self.dispatch_patch as dispatch_mock:
             notification.path.rename(new_notification.path)

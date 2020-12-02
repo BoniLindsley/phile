@@ -24,14 +24,6 @@ class File(phile.data.File):
     def __hash__(self):
         return hash(self.path)
 
-    @property
-    def creation_datetime(self) -> datetime.datetime:
-        return self.modified_at
-
-    @property
-    def name(self) -> str:
-        return self.title
-
     @classmethod
     def from_path_stem(
         cls,

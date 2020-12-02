@@ -40,8 +40,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
     """Emitted when the sub-window is closed."""
 
     def __init__(
-        self, *, name: str, creation_datetime: datetime.datetime,
-        content: str
+        self, *, title: str, modified_at: datetime.datetime, content: str
     ):
         super().__init__()
         content_widget = QTextEdit()
@@ -55,11 +54,11 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         self.setAttribute(Qt.WA_DeleteOnClose)
         # Create variables for storing properties,
         # so that setups, such as window title modification, can use it.
-        self._creation_datetime = creation_datetime
+        self._modified_at = modified_at
         # Remember remaining given properties.
         self.content = content
         self.is_read = False
-        self.name = name
+        self.title = title
 
     def changeEvent(self, change_event: QEvent) -> None:
         super().changeEvent(change_event)
@@ -84,7 +83,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
 
     def closeEvent(self, close_event: QCloseEvent) -> None:
         """Internal method to handle the sub-window being closed. """
-        self.closed.emit(self.name)
+        self.closed.emit(self.title)
 
     @property
     def content(self) -> str:
@@ -95,12 +94,12 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         self.widget().setPlainText(new_content)
 
     @property
-    def creation_datetime(self) -> datetime.datetime:
-        return self._creation_datetime
+    def modified_at(self) -> datetime.datetime:
+        return self._modified_at
 
-    @creation_datetime.setter
-    def creation_datetime(self, new_create_datetime) -> None:
-        self._creation_datetime = new_create_datetime
+    @modified_at.setter
+    def modified_at(self, new_create_datetime) -> None:
+        self._modified_at = new_create_datetime
         self.refresh_window_title()
 
     def hideEvent(self, hide_event: QHideEvent):
@@ -137,17 +136,17 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         content_widget.setPalette(content_palette)
 
     @property
-    def name(self) -> str:
+    def title(self) -> str:
         return self.widget().documentTitle()
 
-    @name.setter
-    def name(self, new_name: str) -> None:
-        self.widget().setDocumentTitle(new_name)
+    @title.setter
+    def title(self, new_title: str) -> None:
+        self.widget().setDocumentTitle(new_title)
         self.refresh_window_title()
 
     def refresh_window_title(self) -> None:
         self.setWindowTitle(
-            self.name + '--' + self.creation_datetime.strftime('%c')
+            self.title + '--' + self.modified_at.strftime('%c')
         )
 
     def _retile_parent(self) -> None:
@@ -250,7 +249,7 @@ class MainWindow(QMainWindow):
         # Create the GUI for displaying notifications.
         mdi_area = NotificationMdi()
         self.setCentralWidget(mdi_area)
-        # Keep track of sub-windows by name
+        # Keep track of sub-windows by title
         # so that we know which ones to modify when files are changed.
         self._sub_windows: typing.Dict[phile.notify.File,
                                        NotificationMdiSubWindow] = {}
@@ -408,8 +407,8 @@ class MainWindow(QMainWindow):
         try:
             new_data = {
                 "content": notification.read(),
-                "creation_datetime": notification.creation_datetime,
-                "name": notification.name,
+                "modified_at": notification.modified_at,
+                "title": notification.title,
             }
         except FileNotFoundError:
             notification_exists = False
@@ -434,10 +433,10 @@ class MainWindow(QMainWindow):
             self._sub_windows[notification] = sub_window
 
     def on_notification_sub_window_closed(
-        self, notification_name: str
+        self, notification_title: str
     ) -> None:
         notification = phile.notify.File.from_path_stem(
-            notification_name, configuration=self._configuration
+            notification_title, configuration=self._configuration
         )
         notification.remove()
         self.load(notification)
