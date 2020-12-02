@@ -82,19 +82,15 @@ class File(phile.data.File):
         """
         Loads content of :data:`~phile.data.File.path` as a notification.
 
-        :raises FileNotFoundError:
-            If :data:`~phile.data.File.path` does not exist.
-        :raises IsADirectoryError:
-            If :data:`~phile.data.File.path` resolves to a directory.
-
         Sets :data:`~phile.data.File.loaded`
         depending on whether the load was successful
         even if exceptions are raised.
         """
         self.loaded = False
-        self.text = self.path.read_text()
-        self.load_modified_at()
-        self.loaded = True
+        with contextlib.suppress(FileNotFoundError, IsADirectoryError):
+            self.text = self.path.read_text()
+            self.load_modified_at()
+            self.loaded = True
 
     def load_modified_at(self) -> None:
         """Update stored data to reflect modified time of file."""

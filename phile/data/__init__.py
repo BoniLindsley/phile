@@ -14,7 +14,7 @@ class SortableLoadData(typing.Protocol):
 
     path: pathlib.Path
     """Path from which the data was loaded."""
-    loaded: bool
+    loaded: bool = False
     """Whether the data was successfully loaded from :data:`path`."""
 
     def __eq__(self, other) -> bool:
@@ -22,6 +22,9 @@ class SortableLoadData(typing.Protocol):
 
     def __lt__(self, other) -> bool:
         ...
+
+    def load(self) -> None:
+        self.loaded = self.path.is_file()
 
 
 @dataclasses.dataclass
@@ -34,11 +37,22 @@ class File(SortableLoadData):
     """Whether the data was successfully loaded from :data:`path`."""
 
     def __eq__(self, other) -> bool:
-        return self.path == other.path
+        pair = (self.path.name, self.path.parent)
+        if isinstance(other, File):
+            return pair == (other.path.name, other.path.parent)
+        elif isinstance(other, pathlib.Path):
+            return pair == (other.name, other.parent)
+        else:
+            return NotImplemented
 
     def __lt__(self, other) -> bool:
-        return ((self.path.name, self.path) <
-                (other.path.name, other.path))
+        pair = (self.path.name, self.path.parent)
+        if isinstance(other, File):
+            return pair < (other.path.name, other.path.parent)
+        elif isinstance(other, pathlib.Path):
+            return pair < (other.name, other.parent)
+        else:
+            return NotImplemented
 
 
 _D = typing.TypeVar('_D', bound=SortableLoadData)
@@ -62,7 +76,7 @@ class UpdateCallback(typing.Protocol[_D]):
         ...
 
 
-class Loader(typing.Protocol[_D_co]):
+class CreateFile(typing.Protocol[_D_co]):
     """Replacement for ``Callable[[pathlib.Path], _D_co]``."""
 
     def __call__(self, __source_path: pathlib.Path) -> _D_co:
@@ -79,9 +93,9 @@ class SortedLoadCache(typing.Generic[_D]):
     ) -> None:
         pass
 
-    load: Loader[_D]
+    create_file: CreateFile[_D]
     """
-    Called to load a file into this cache.
+    Called to create  a file object, possibly to be added to the cache.
 
     The ``loaded`` attribute of the returned ``_D`` data
     determines whether the ``load`` is successful.
@@ -156,12 +170,12 @@ class SortedLoadCache(typing.Generic[_D]):
 
     def update(self, data_path: pathlib.Path) -> None:
         """
-        Try to :data:`load` data from ``data_path``
-        and add it to :data:`tracked_data`.
+        Try to :data:`create` File` of ``data_path``
+        and then load and add it to :data:`tracked_data`.
 
         :param data_path:
-            Path of file to be loaded :data:`load`.
-            It is up to the :data:`load` callback
+            Path of file to be loaded from.
+            It is up to the :data:`create` callback
             to validate the name if necessary.
 
         Calls to :data:`on_insert`, :data:`on_pop` and :data:`on_set`
@@ -169,18 +183,23 @@ class SortedLoadCache(typing.Generic[_D]):
         from the data load attempt.
         The :data:`tracked_data` is updated before the calls.
         """
-        loaded_data: _D = self.load(data_path)
-        index = bisect.bisect_left(self.tracked_data, loaded_data)
+        index = bisect.bisect_left(self.tracked_data, data_path)
         is_tracked = False
-        with contextlib.suppress(IndexError):
-            is_tracked = (self.tracked_data[index] == loaded_data)
-        if not loaded_data.loaded:
-            if is_tracked:
-                loaded_data = self.tracked_data.pop(index)
-                self.on_pop(index, loaded_data, self.tracked_data)
-        elif is_tracked:
-            self.tracked_data[index] = loaded_data
-            self.on_set(index, loaded_data, self.tracked_data)
+        file: _D
+        try:
+            file = self.tracked_data[index]
+        except IndexError:
+            file = self.create_file(data_path)
         else:
-            self.tracked_data.insert(index, loaded_data)
-            self.on_insert(index, loaded_data, self.tracked_data)
+            is_tracked = True
+        file.load()
+        if not file.loaded:
+            if is_tracked:
+                file = self.tracked_data.pop(index)
+                self.on_pop(index, file, self.tracked_data)
+        elif is_tracked:
+            self.tracked_data[index] = file
+            self.on_set(index, file, self.tracked_data)
+        else:
+            self.tracked_data.insert(index, file)
+            self.on_insert(index, file, self.tracked_data)

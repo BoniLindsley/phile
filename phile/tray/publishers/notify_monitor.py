@@ -145,13 +145,6 @@ class DefaultTrayFile(phile.tray.File):
         self.text_icon = text_icon
 
 
-def load_file(path: pathlib.Path) -> phile.notify.File:
-    file = phile.notify.File(path=path)
-    with contextlib.suppress(FileNotFoundError, IsADirectoryError):
-        file.load()
-    return file
-
-
 class Monitor:
 
     def __init__(
@@ -174,7 +167,7 @@ class Monitor:
         )
         self.trigger_switch = TriggerSwitch()
         self.notify_sorter = phile.data.SortedLoadCache(
-            load=load_file,
+            create_file=phile.notify.File,
             on_insert=self._refresh_tray_file,
             on_pop=self._refresh_tray_file,
         )

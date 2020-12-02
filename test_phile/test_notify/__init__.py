@@ -211,27 +211,25 @@ class TestFile(unittest.TestCase):
         self.assertLessEqual(file.modified_at, after)
         self.assertGreaterEqual(file.modified_at, before)
 
-    def test_load_raises_if_missing(self) -> None:
-        """Raises exception if file is missing."""
+    def test_load_fails_if_missing(self) -> None:
+        """Load fails but returns if file is missing."""
         self.set_up_configuration()
         name = 'missing'
         path = self.configuration.notification_directory / name
         file = phile.notify.File(path=path)
         file.loaded = True
-        with self.assertRaises(FileNotFoundError):
-            file.load()
+        file.load()
         self.assertTrue(not file.loaded)
 
-    def test_load_raises_if_is_directory(self) -> None:
-        """Raises exception if file path resolves to a directory."""
+    def test_load_fails_if_is_directory(self) -> None:
+        """Load fails but returns file path resolves to a directory."""
         self.set_up_configuration()
         name = 'missing'
         path = self.configuration.notification_directory / name
         path.mkdir()
         file = phile.notify.File(path=path)
         file.loaded = True
-        with self.assertRaises(IsADirectoryError):
-            file.load()
+        file.load()
         self.assertTrue(not file.loaded)
 
     def test_save(self) -> None:

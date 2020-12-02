@@ -30,6 +30,7 @@ class TestSortableLoadData(unittest.TestCase):
         data = BasicLoadData()
         data == data
         data < data
+        data.load()
 
 
 class TestFile(unittest.TestCase):
@@ -59,6 +60,21 @@ class TestFile(unittest.TestCase):
             phile.data.File(path=pathlib.Path('b'))
         )
 
+    def test_compare_with_path(self) -> None:
+        """Implements partial order with :class:~pathlib.Path`."""
+        self.assertEqual(
+            phile.data.File(path=pathlib.Path()), pathlib.Path()
+        )
+        self.assertLess(
+            phile.data.File(path=pathlib.Path('a')), pathlib.Path('b')
+        )
+
+    def test_compare_with_object(self) -> None:
+        """Does not implement comparison with arbitrary objects."""
+        self.assertNotEqual(phile.data.File(path=pathlib.Path()), 0)
+        with self.assertRaises(TypeError):
+            self.assertLess(phile.data.File(path=pathlib.Path('a')), 'b')
+
 
 class TestUpdateCallback(unittest.TestCase):
     """Tests :class:`~phile.data.UpdateCallback`."""
@@ -75,17 +91,17 @@ class TestUpdateCallback(unittest.TestCase):
         BasicUpdateCallback()(0, data, [data])
 
 
-class TestLoader(unittest.TestCase):
-    """Tests :class:`~phile.data.Loader`."""
+class TestCreateFile(unittest.TestCase):
+    """Tests :class:`~phile.data.CreateFile`."""
 
     def test_subclass(self) -> None:
         """Subclass of protocol can inherit methods to satisfy it."""
 
-        class BasicLoader(phile.data.Loader[BasicLoadData]):
+        class BasicCreateFile(phile.data.CreateFile[BasicLoadData]):
             pass
 
-        loader = BasicLoader()
-        loader(pathlib.Path())
+        create_file = BasicCreateFile()
+        create_file(pathlib.Path())
 
 
 class TestSortedLoadCache(unittest.TestCase):
@@ -100,10 +116,7 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_pop = unittest.mock.Mock()
         self.on_set = unittest.mock.Mock()
         self.cache = phile.data.SortedLoadCache[phile.data.File](
-            load=(
-                lambda source_path: phile.data.
-                File(loaded=source_path.exists(), path=source_path)
-            ),
+            create_file=phile.data.File,
             on_insert=self.on_insert,
             on_pop=self.on_pop,
             on_set=self.on_set,
@@ -128,12 +141,12 @@ class TestSortedLoadCache(unittest.TestCase):
 
         data = phile.data.File(path=pathlib.Path())
         cache = phile.data.SortedLoadCache[phile.data.File](
-            load=lambda source_path: data,
+            create_file=lambda source_path: data,
             on_insert=lambda _1, _2, _3: None,
             on_pop=update_function,
             on_set=update_callback(),
         )
-        self.assertEqual(cache.load(pathlib.Path()), data)
+        self.assertEqual(cache.create_file(pathlib.Path()), data)
 
     def test_update_with_loaded_untracked_data(self) -> None:
         """
