@@ -78,7 +78,7 @@ class File(phile.data.File):
         self.path.write_text(self.text)
         self.load_modified_at()
 
-    def load(self) -> None:
+    def load(self) -> bool:
         """
         Loads content of :data:`~phile.data.File.path` as a notification.
 
@@ -86,11 +86,13 @@ class File(phile.data.File):
         depending on whether the load was successful
         even if exceptions are raised.
         """
-        self.loaded = False
-        with contextlib.suppress(FileNotFoundError, IsADirectoryError):
+        try:
             self.text = self.path.read_text()
             self.load_modified_at()
-            self.loaded = True
+        except (FileNotFoundError, IsADirectoryError):
+            return False
+        else:
+            return True
 
     def load_modified_at(self) -> None:
         """Update stored data to reflect modified time of file."""

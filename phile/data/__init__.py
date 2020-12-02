@@ -14,8 +14,6 @@ class SortableLoadData(typing.Protocol):
 
     path: pathlib.Path
     """Path from which the data was loaded."""
-    loaded: bool = False
-    """Whether the data was successfully loaded from :data:`path`."""
 
     def __eq__(self, other) -> bool:
         ...
@@ -23,8 +21,8 @@ class SortableLoadData(typing.Protocol):
     def __lt__(self, other) -> bool:
         ...
 
-    def load(self) -> None:
-        self.loaded = self.path.is_file()
+    def load(self) -> bool:
+        return self.path.is_file()
 
 
 @dataclasses.dataclass
@@ -33,8 +31,6 @@ class File(SortableLoadData):
 
     path: pathlib.Path
     """Path from which the data was loaded."""
-    loaded: bool = False
-    """Whether the data was successfully loaded from :data:`path`."""
 
     def __eq__(self, other) -> bool:
         pair = (self.path.name, self.path.parent)
@@ -96,9 +92,6 @@ class SortedLoadCache(typing.Generic[_D]):
     create_file: CreateFile[_D]
     """
     Called to create  a file object, possibly to be added to the cache.
-
-    The ``loaded`` attribute of the returned ``_D`` data
-    determines whether the ``load`` is successful.
     """
     on_insert: UpdateCallback[_D] = _noop_update
     """
@@ -192,8 +185,7 @@ class SortedLoadCache(typing.Generic[_D]):
             file = self.create_file(data_path)
         else:
             is_tracked = True
-        file.load()
-        if not file.loaded:
+        if not file.load():
             if is_tracked:
                 file = self.tracked_data.pop(index)
                 self.on_pop(index, file, self.tracked_data)

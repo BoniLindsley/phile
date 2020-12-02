@@ -18,7 +18,6 @@ import phile.data
 
 class BasicLoadData(phile.data.SortableLoadData):
     path: pathlib.Path = pathlib.Path('a')
-    loaded: bool = False
 
 
 class TestSortableLoadData(unittest.TestCase):
@@ -39,9 +38,8 @@ class TestFile(unittest.TestCase):
     def test_init(self) -> None:
         """Test keyword initialisation."""
         file = phile.data.File(path=pathlib.Path())
-        self.assertTrue(hasattr(file, 'loaded'))
         self.assertTrue(hasattr(file, 'path'))
-        phile.data.File(loaded=True, path=pathlib.Path('a'))
+        phile.data.File(path=pathlib.Path('a'))
 
     def test_is_sortable_load_data(self) -> None:
         """Satisfies :class:`~phile.data.SortableLoadData` protocol."""
@@ -157,12 +155,10 @@ class TestSortedLoadCache(unittest.TestCase):
         source_path.touch()
         self.cache.update(source_path)
         self.assertListEqual(
-            self.cache.tracked_data,
-            [phile.data.File(loaded=True, path=source_path)]
+            self.cache.tracked_data, [phile.data.File(path=source_path)]
         )
         self.on_insert.assert_called_once_with(
-            0, phile.data.File(loaded=True, path=source_path),
-            self.cache.tracked_data
+            0, phile.data.File(path=source_path), self.cache.tracked_data
         )
         self.on_pop.assert_not_called()
         self.on_set.assert_not_called()
@@ -192,8 +188,7 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_insert.assert_not_called()
         self.on_pop.assert_not_called()
         self.on_set.assert_called_once_with(
-            0, phile.data.File(loaded=True, path=source_path),
-            self.cache.tracked_data
+            0, phile.data.File(path=source_path), self.cache.tracked_data
         )
 
     def test_update_with_unloaded_tracked_data(self) -> None:
@@ -208,8 +203,7 @@ class TestSortedLoadCache(unittest.TestCase):
         self.assertEqual(len(self.cache.tracked_data), 0)
         self.on_insert.assert_not_called()
         self.on_pop.assert_called_once_with(
-            0, phile.data.File(loaded=False, path=source_path),
-            self.cache.tracked_data
+            0, phile.data.File(path=source_path), self.cache.tracked_data
         )
         self.on_set.assert_not_called()
 
@@ -224,13 +218,11 @@ class TestSortedLoadCache(unittest.TestCase):
         self.cache.update_paths([source_path, source_path])
         self.assertEqual(len(self.cache.tracked_data), 1)
         self.on_insert.assert_called_once_with(
-            0, phile.data.File(loaded=True, path=source_path),
-            self.cache.tracked_data
+            0, phile.data.File(path=source_path), self.cache.tracked_data
         )
         self.on_pop.assert_not_called()
         self.on_set.assert_called_once_with(
-            0, phile.data.File(loaded=True, path=source_path),
-            self.cache.tracked_data
+            0, phile.data.File(path=source_path), self.cache.tracked_data
         )
 
     def test_update_no_paths(self) -> None:
@@ -267,8 +259,7 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_insert.assert_not_called()
         self.on_pop.assert_not_called()
         self.on_set.assert_called_once_with(
-            0, phile.data.File(loaded=True, path=source_path),
-            self.cache.tracked_data
+            0, phile.data.File(path=source_path), self.cache.tracked_data
         )
 
     def test_refresh_can_unload(self) -> None:
@@ -286,7 +277,7 @@ class TestSortedLoadCache(unittest.TestCase):
         )
         self.assertListEqual(
             self.cache.tracked_data,
-            [phile.data.File(loaded=True, path=new_source_path)]
+            [phile.data.File(path=new_source_path)]
         )
 
 

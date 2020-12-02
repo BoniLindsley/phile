@@ -403,21 +403,20 @@ class MainWindow(QMainWindow):
         # Figure out if the notification was tracked.
         sub_window = self._sub_windows.get(notification, None)
         # Try to load the notification.
-        notification.load()
-        notification_exists = True
+        # If the notification does not exist,
+        # either remove the subwindow or there is nothing to do.
+        if not notification.load():
+            if sub_window is not None:
+                del self._sub_windows[notification]
+                sub_window.deleteLater()
+            return
+        # Can assume from here that the notification is loaded.
         new_data = {
             "content": notification.text,
             "modified_at": notification.modified_at,
             "title": notification.title,
         }
-        # If the notification does not exist,
-        # either remove the subwindow or there is nothing to do.
-        if not notification.loaded:
-            if sub_window is not None:
-                del self._sub_windows[notification]
-                sub_window.deleteLater()
-        # Can assume from here that the notification is loaded.
-        elif sub_window is not None:
+        if sub_window is not None:
             for key, value in new_data.items():
                 setattr(sub_window, key, value)
         else:

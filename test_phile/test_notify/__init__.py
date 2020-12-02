@@ -114,13 +114,11 @@ class TestFile(unittest.TestCase):
     def test_inherited_init(self) -> None:
         """Has default and keyword initialisation."""
         file = phile.notify.File(path=pathlib.Path())
-        self.assertTrue(hasattr(file, 'loaded'))
         self.assertTrue(hasattr(file, 'path'))
         self.assertTrue(hasattr(file, 'modified_at'))
         self.assertTrue(hasattr(file, 'text'))
         self.assertTrue(hasattr(file, 'title'))
         phile.notify.File(
-            loaded=True,
             path=pathlib.Path('Great Title'),
             modified_at=datetime.datetime(year=2001, month=1, day=1),
             text='This is a big paragraph.',
@@ -159,13 +157,11 @@ class TestFile(unittest.TestCase):
     def test_compare(self) -> None:
         """Partial order uses :data:`~phile.notify.File.path`."""
         file_1 = phile.notify.File(
-            loaded=True,
             path=pathlib.Path('a/b'),
             modified_at=datetime.datetime(year=2001, month=1, day=1),
             text='This is a big paragraph.',
         )
         file_2 = phile.notify.File(
-            loaded=False,
             path=pathlib.Path('a/b'),
             modified_at=datetime.datetime(year=2002, month=2, day=2),
             text='This is a bigger paragraph.',
@@ -205,8 +201,7 @@ class TestFile(unittest.TestCase):
         path.write_text(text)
         after = round_up_to_two_seconds(datetime.datetime.now())
         file = phile.notify.File(path=path)
-        file.load()
-        self.assertTrue(file.loaded)
+        self.assertTrue(file.load())
         self.assertEqual(file.text, text)
         self.assertLessEqual(file.modified_at, after)
         self.assertGreaterEqual(file.modified_at, before)
@@ -217,9 +212,7 @@ class TestFile(unittest.TestCase):
         name = 'missing'
         path = self.configuration.notification_directory / name
         file = phile.notify.File(path=path)
-        file.loaded = True
-        file.load()
-        self.assertTrue(not file.loaded)
+        self.assertTrue(not file.load())
 
     def test_load_fails_if_is_directory(self) -> None:
         """Load fails but returns file path resolves to a directory."""
@@ -228,9 +221,7 @@ class TestFile(unittest.TestCase):
         path = self.configuration.notification_directory / name
         path.mkdir()
         file = phile.notify.File(path=path)
-        file.loaded = True
-        file.load()
-        self.assertTrue(not file.loaded)
+        self.assertTrue(not file.load())
 
     def test_save(self) -> None:
         """Save sets file content and modified time."""
