@@ -182,9 +182,11 @@ class SortedLoadCache(typing.Generic[_D]):
         try:
             file = self.tracked_data[index]
         except IndexError:
-            file = self.create_file(data_path)
+            pass
         else:
-            is_tracked = True
+            is_tracked = (file.path == data_path)
+        if not is_tracked:
+            file = self.create_file(data_path)
         if not file.load():
             if is_tracked:
                 file = self.tracked_data.pop(index)

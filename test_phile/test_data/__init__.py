@@ -207,6 +207,21 @@ class TestSortedLoadCache(unittest.TestCase):
         )
         self.on_set.assert_not_called()
 
+    def test_prepend_to_non_empty_tracked_list(self) -> None:
+        """
+        It previously overridden position zero instead of prepending.
+        """
+        self.test_update_with_loaded_untracked_data()
+        source_path = self.data_directory_path / 'before'
+        source_path.touch()
+        self.cache.update(source_path)
+        self.assertEqual(len(self.cache.tracked_data), 2)
+        self.on_insert.assert_called_once_with(
+            0, phile.data.File(path=source_path), self.cache.tracked_data
+        )
+        self.on_pop.assert_not_called()
+        self.on_set.assert_not_called()
+
     def test_update_paths(self) -> None:
         """
         :meth:`~phile.data.SortedLoadCache.update_paths`
