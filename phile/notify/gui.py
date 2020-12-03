@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Standard library.
+import dataclasses
 import datetime
 import logging
 import pathlib
@@ -22,6 +23,7 @@ import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
+import phile.data
 import phile.notify
 import phile.trigger
 import phile.watchdog_extras
@@ -234,6 +236,11 @@ class NotificationMdi(QMdiArea):
         _logger.debug('Finished tiling.')
 
 
+@dataclasses.dataclass
+class SubWindowContent(phile.notify.File):
+    sub_window: typing.Optional[NotificationMdiSubWindow] = None
+
+
 class MainWindow(QMainWindow):
 
     _closed = typing.cast(SignalInstance, Signal())
@@ -249,10 +256,6 @@ class MainWindow(QMainWindow):
         # Create the GUI for displaying notifications.
         mdi_area = NotificationMdi()
         self.setCentralWidget(mdi_area)
-        # Keep track of sub-windows by title
-        # so that we know which ones to modify when files are changed.
-        self._sub_windows: typing.Dict[phile.notify.File,
-                                       NotificationMdiSubWindow] = {}
         # Figure out where notifications are and their suffix.
         self._configuration = configuration
         # Set up tray directory monitoring.
@@ -266,6 +269,14 @@ class MainWindow(QMainWindow):
     def set_up_notify_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
     ) -> None:
+        # Keep track of sub-windows by title
+        # so that we know which ones to modify when files are changed.
+        self.sorter = phile.data.SortedLoadCache[SubWindowContent](
+            create_file=SubWindowContent,
+            on_pop=self.on_pop,
+            on_set=self.on_set,
+            on_insert=self.on_insert,
+        )
         # Forward watchdog events into Qt signal and handle it there.
         call_soon = (
             phile.PySide2_extras.event_loop.CallSoon(
@@ -279,6 +290,7 @@ class MainWindow(QMainWindow):
         )
         watched_path = self._configuration.notification_directory
         watched_path.mkdir(exist_ok=True, parents=True)
+        # TODO(BoniLindsley): Refactor Scheduler to subclass Dispatcher.
         self._notify_scheduler = phile.watchdog_extras.Scheduler(
             watchdog_handler=dispatcher,
             watched_path=watched_path,
@@ -375,12 +387,10 @@ class MainWindow(QMainWindow):
         # There is cooperative locking,
         # but that seems over-engineered for the task at hand.
         configuration = self._configuration
-        notification_directory = configuration.notification_directory
-        for notification_path in notification_directory.iterdir():
-            if notification_path.is_file():
-                self.on_file_system_event_detected(
-                    watchdog.events.FileCreatedEvent(notification_path)
-                )
+        self.sorter.refresh(
+            data_directory=configuration.notification_directory,
+            data_file_suffix=configuration.notification_suffix
+        )
         self._entry_point.remove_trigger('show')
         self._entry_point.add_trigger('hide')
 
@@ -388,46 +398,56 @@ class MainWindow(QMainWindow):
     def on_file_system_event_detected(
         self, watchdog_event: watchdog.events.FileSystemEvent
     ) -> None:
-        notifications = [
-            phile.notify.File(path=path) for path in
+        paths = [
+            path for path in
+            # TODO(BoniLindsley): Refactor this into Filter and Sorter.
+            # Wrap `Filter` around `to_file_paths`
+            # And subclass sorter to remember directory and suffix.
+            # This would simplify `refresh` usage above.
+            # May be rename `refresh`
+            # to `update_directory(directory, suffix='')`.
             phile.watchdog_extras.to_file_paths(watchdog_event)
-            if phile.notify.File.check_path(
+            if SubWindowContent.check_path(
                 configuration=self._configuration,
                 path=path,
             )
         ]
-        for notification in notifications:
-            self.load(notification)
+        self.sorter.update_paths(paths)
 
-    def load(self, notification: phile.notify.File) -> None:
-        # Figure out if the notification was tracked.
-        sub_window = self._sub_windows.get(notification, None)
-        # Try to load the notification.
-        # If the notification does not exist,
-        # either remove the subwindow or there is nothing to do.
-        if not notification.load():
-            if sub_window is not None:
-                del self._sub_windows[notification]
-                sub_window.deleteLater()
-            return
-        # Can assume from here that the notification is loaded.
-        new_data = {
-            "content": notification.text,
-            "modified_at": notification.modified_at,
-            "title": notification.title,
+    def on_pop(
+        self, _index: int, content: SubWindowContent,
+        _tracked_data: typing.List[SubWindowContent]
+    ) -> None:
+        sub_window = content.sub_window
+        assert sub_window is not None
+        sub_window.deleteLater()
+
+    def on_set(
+        self, _index: int, content: SubWindowContent,
+        _tracked_data: typing.List[SubWindowContent]
+    ) -> None:
+        sub_window = content.sub_window
+        assert sub_window is not None
+        for key, value in self.get_data(content).items():
+            setattr(sub_window, key, value)
+
+    def on_insert(
+        self, _index: int, content: SubWindowContent,
+        _tracked_data: typing.List[SubWindowContent]
+    ) -> None:
+        new_data = self.get_data(content)
+        sub_window = content.sub_window = (
+            self.centralWidget().add_notification(**new_data)
+        )
+        sub_window.show()
+        sub_window.closed.connect(self.on_notification_sub_window_closed)
+
+    def get_data(self, content=SubWindowContent) -> dict:
+        return {
+            "content": content.text,
+            "modified_at": content.modified_at,
+            "title": content.title,
         }
-        if sub_window is not None:
-            for key, value in new_data.items():
-                setattr(sub_window, key, value)
-        else:
-            sub_window = self.centralWidget().add_notification(
-                **new_data
-            )
-            sub_window.show()
-            sub_window.closed.connect(
-                self.on_notification_sub_window_closed
-            )
-            self._sub_windows[notification] = sub_window
 
     def on_notification_sub_window_closed(
         self, notification_title: str
@@ -436,7 +456,6 @@ class MainWindow(QMainWindow):
             notification_title, configuration=self._configuration
         )
         notification.remove()
-        self.load(notification)
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover

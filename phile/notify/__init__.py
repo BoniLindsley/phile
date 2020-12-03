@@ -21,9 +21,6 @@ class File(phile.data.File):
     modified_at: datetime.datetime = datetime.datetime.fromtimestamp(0)
     text: str = ''
 
-    def __hash__(self):
-        return hash(self.path)
-
     @classmethod
     def from_path_stem(
         cls,
