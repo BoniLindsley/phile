@@ -11,7 +11,7 @@ import typing
 
 # External dependencies.
 from PySide2.QtCore import QEvent, QEventLoop, Qt
-from PySide2.QtCore import Signal, SignalInstance, Slot
+from PySide2.QtCore import Signal, SignalInstance
 from PySide2.QtGui import (
     QCloseEvent, QHideEvent, QResizeEvent, QShowEvent, QPalette
 )
@@ -271,17 +271,29 @@ class MainWindow(QMainWindow):
     ) -> None:
         # Keep track of sub-windows by title
         # so that we know which ones to modify when files are changed.
-        self.sorter = phile.data.SortedLoadCache[SubWindowContent](
-            create_file=SubWindowContent,
-            on_pop=self.on_pop,
-            on_set=self.on_set,
-            on_insert=self.on_insert,
+        self.sorter = sorter = (
+            phile.data.SortedLoadCache[SubWindowContent](
+                create_file=SubWindowContent,
+                on_pop=self.on_pop,
+                on_set=self.on_set,
+                on_insert=self.on_insert,
+            )
         )
         # Forward watchdog events into Qt signal and handle it there.
         call_soon = (
             phile.PySide2_extras.event_loop.CallSoon(
                 parent=self,
-                call_target=self.on_file_system_event_detected,
+                call_target=(
+                    lambda event: sorter.update_paths(
+                        filter(
+                            lambda path: SubWindowContent.check_path(
+                                configuration=self._configuration,
+                                path=path
+                            ), phile.watchdog_extras.
+                            to_file_paths(event)
+                        )
+                    )
+                )
             )
         )
         # Use a scheduler to toggle the event handling on and off.
@@ -393,26 +405,6 @@ class MainWindow(QMainWindow):
         )
         self._entry_point.remove_trigger('show')
         self._entry_point.add_trigger('hide')
-
-    @Slot(watchdog.events.FileSystemEvent)  # type: ignore[operator]
-    def on_file_system_event_detected(
-        self, watchdog_event: watchdog.events.FileSystemEvent
-    ) -> None:
-        paths = [
-            path for path in
-            # TODO(BoniLindsley): Refactor this into Filter and Sorter.
-            # Wrap `Filter` around `to_file_paths`
-            # And subclass sorter to remember directory and suffix.
-            # This would simplify `refresh` usage above.
-            # May be rename `refresh`
-            # to `update_directory(directory, suffix='')`.
-            phile.watchdog_extras.to_file_paths(watchdog_event)
-            if SubWindowContent.check_path(
-                configuration=self._configuration,
-                path=path,
-            )
-        ]
-        self.sorter.update_paths(paths)
 
     def on_pop(
         self, _index: int, content: SubWindowContent,
