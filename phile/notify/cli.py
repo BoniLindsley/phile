@@ -60,7 +60,7 @@ def process_arguments(
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
         )
-        notification.remove()
+        notification.path.unlink(missing_ok=True)
     elif command == 'write':
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration

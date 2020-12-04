@@ -426,7 +426,7 @@ class MainWindow(QMainWindow):
         notification = phile.notify.File.from_path_stem(
             notification_title, configuration=self._configuration
         )
-        notification.remove()
+        notification.path.unlink(missing_ok=True)
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover

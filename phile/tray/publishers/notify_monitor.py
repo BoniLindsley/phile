@@ -146,7 +146,7 @@ class Monitor:
             self._remove_tray_file()
 
     def _remove_tray_file(self) -> None:
-        self.notify_tray_file.remove()
+        self.notify_tray_file.path.unlink(missing_ok=True)
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover

@@ -782,7 +782,7 @@ class TestMainWindow(unittest.TestCase):
         self.assert_tracked_data_length(1)
         # Remove the notification and wait for watchdog to notice.
         with self.notify_path_handler_patch as handler_mock:
-            notification.remove()
+            notification.path.unlink(missing_ok=True)
             self.assertTrue(not notification.path.is_file())
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
@@ -868,7 +868,7 @@ class TestMainWindow(unittest.TestCase):
             handler_mock.assert_called_soon()
         # Remove the notification.
         with self.notify_path_handler_patch as handler_mock:
-            notification.remove()
+            notification.path.unlink(missing_ok=True)
             self.assertTrue(not notification.path.is_file())
             # Wait for watchdog to notice it.
             handler_mock.assert_called_soon()

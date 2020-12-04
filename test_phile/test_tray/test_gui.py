@@ -448,7 +448,7 @@ class TestGuiIconList(unittest.TestCase):
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         # Wait for watchdog to notice the tray file is gone now.
         with self.tray_path_handler_patch as handler_mock:
-            tray_file.remove()
+            tray_file.path.unlink(missing_ok=True)
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
@@ -546,7 +546,7 @@ class TestGuiIconList(unittest.TestCase):
         # Remove the tray file.
         # Wait for watchdog to notice it.
         with self.tray_path_handler_patch as handler_mock:
-            tray_file.remove()
+            tray_file.path.unlink(missing_ok=True)
             self.assertTrue(not tray_file.path.is_file())
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.

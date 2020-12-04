@@ -152,7 +152,7 @@ class TestMonitorStart(unittest.TestCase):
     def test_detects_file_removal(self) -> None:
         self.test_init_with_existing_notify_file()
         self.set_up_tray_event_dispatcher()
-        self.notify_file_to_find.remove()
+        self.notify_file_to_find.path.unlink(missing_ok=True)
         self.tray_dispatch.assert_called_with_soon(
             watchdog.events.FileDeletedEvent(
                 src_path=str(self.monitor.notify_tray_file.path)

@@ -489,7 +489,7 @@ class TestIconList(unittest.TestCase):
         )
         _logger.debug('Removing a tray file.')
         year_tray_file.text_icon = ''
-        year_tray_file.remove()
+        year_tray_file.path.unlink(missing_ok=True)
         self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(
                 month_tray_file.text_icon

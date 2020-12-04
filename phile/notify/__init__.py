@@ -99,10 +99,6 @@ class File(phile.data.File):
             self.path.stat().st_mtime
         )
 
-    def remove(self) -> None:
-        with contextlib.suppress(FileNotFoundError):
-            self.path.unlink()
-
     @property
     def title(self) -> str:
         return self.path.stem

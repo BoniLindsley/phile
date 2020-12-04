@@ -108,10 +108,6 @@ class File(phile.data.File):
         else:
             self.icon_path = None
 
-    def remove(self) -> None:
-        warnings.warn("deprecated", DeprecationWarning)
-        self.path.unlink(missing_ok=True)
-
     def save(self) -> None:
         # Buffer for data to be written.
         content_stream = io.StringIO()

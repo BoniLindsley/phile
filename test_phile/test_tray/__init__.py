@@ -111,19 +111,6 @@ class TestFile(unittest.TestCase):
         tray = phile.tray.File(self.path)
         self.assertEqual(self.tray.path, self.path)
 
-    def test_remove_file(self) -> None:
-        """Tray can be removed."""
-        self.tray.path.touch()
-        self.assertTrue(self.tray.path.is_file())
-        self.tray.remove()
-        self.assertTrue(not self.tray.path.is_file())
-
-    def test_remove_non_existent_file(self) -> None:
-        """Removing trays that do not exist should be fine."""
-        self.assertTrue(not self.tray.path.is_file())
-        self.tray.remove()
-        self.assertTrue(not self.tray.path.is_file())
-
     def test_load(self) -> None:
         """Parse a tray file for information."""
         data = {
