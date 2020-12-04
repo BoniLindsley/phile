@@ -671,20 +671,24 @@ class TestMainWindow(unittest.TestCase):
 
     def test_close_notification_sub_window(self) -> None:
         """Closing sub-window should delete notification."""
+        main_window = self.main_window
         notification = phile.notify.File.from_path_stem(
             'VeCat', configuration=self.configuration
         )
         content = 'Happy birthday!'
         notification.write(content)
         self.assertTrue(notification.path.is_file())
-        self.main_window.show()
-        sub_window = self.main_window.sorter.tracked_data[0].sub_window
+        main_window.show()
+        sub_window = main_window.sorter.tracked_data[0].sub_window
         self.assertIsNotNone(sub_window)
         assert sub_window is not None  # For mypy to ignore Optional.
-        sub_window.close()
-        self.app.process_events()
-        self.assert_tracked_data_length(0)
-        self.assertTrue(not notification.path.is_file())
+        with self.notify_path_handler_patch as handler_mock:
+            sub_window.close()
+            self.assertTrue(not notification.path.is_file())
+            handler_mock.assert_called_with_soon(notification.path)
+            self.app.process_events()
+            self.assertTrue(not main_window.isHidden())
+            self.assert_tracked_data_length(0)
 
     def test_triggers(self) -> None:
         """Notify GUI has show, hide and close triggers."""
