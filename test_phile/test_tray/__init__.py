@@ -4,7 +4,6 @@
 Test phile.tray.tray_file
 -------------------------
 
-.. automodule:: test_phile.test_tray.test_event
 .. automodule:: test_phile.test_tray.test_gui
 .. automodule:: test_phile.test_tray.test_publishers
 .. automodule:: test_phile.test_tray.test_tmux
@@ -124,10 +123,15 @@ class TestFile(unittest.TestCase):
         content += '}}'
         content = content.format(**data)
         self.tray.path.write_text(content)
-        self.tray.load()
+        self.assertTrue(self.tray.load())
         self.assertEqual(self.tray.icon_name, data['icon_name'])
         self.assertEqual(self.tray.icon_path, data['icon_path'])
         self.assertEqual(self.tray.text_icon, data['text_icon'])
+
+    def test_load_fails_decoading(self) -> None:
+        """Load returns false if JSON decoding fails.."""
+        self.tray.path.write_text('\nA\n')
+        self.assertTrue(not self.tray.load())
 
     def test_save(self) -> None:
         """Save a tray file with some information."""

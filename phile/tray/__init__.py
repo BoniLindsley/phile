@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """
-.. automodule:: phile.tray.event
 .. automodule:: phile.tray.gui
 .. automodule:: phile.tray.publishers
 .. automodule:: phile.tray.tmux
@@ -63,15 +62,9 @@ class File(phile.data.File):
             and path.suffix == configuration.tray_suffix
         )
 
-    def load(self):
+    def load(self) -> bool:
         """
         Parse tray file for a tray icon to be displayed.
-
-        :raises ~FileNotFoundError:
-            If the file to load cannot be found.
-        :raises ~json.decoder.JSONDecodeError:
-            If the JSON string part of the tray file to load
-            cannot be decode properly.
 
         The input file should start with a single line
         that can be displayed in a text tray environment such as `tmux`.
@@ -85,9 +78,13 @@ class File(phile.data.File):
         It should not contan any other keys,
         and may be ignored, subject to implementation details.
         """
+
         # Buffer the file content to reduce the chance of file changes
         # introducing a race condition.
-        content_stream = io.StringIO(self.path.read_text())
+        try:
+            content_stream = io.StringIO(self.path.read_text())
+        except (FileNotFoundError, IsADirectoryError):
+            return False
         # First line is the text icon.
         # Do not write content yet in case JSON decoding fails.
         text_icon = content_stream.readline().rstrip('\r\n')
@@ -96,7 +93,10 @@ class File(phile.data.File):
         current_offset = content_stream.tell()
         if content_stream.read(1):
             content_stream.seek(current_offset)
-            json_content = json.load(content_stream)
+            try:
+                json_content = json.load(content_stream)
+            except json.decoder.JSONDecodeError:
+                return False
         else:
             json_content = {}
         # Get properties from the decoded structure.
@@ -107,6 +107,7 @@ class File(phile.data.File):
             self.icon_path = pathlib.Path(icon_path)
         else:
             self.icon_path = None
+        return True
 
     def save(self) -> None:
         # Buffer for data to be written.

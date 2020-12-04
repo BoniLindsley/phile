@@ -518,7 +518,7 @@ class TestGuiIconList(unittest.TestCase):
         self.app.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         self.assertListEqual(
-            gui_icon_list._tray_sorter.tray_files, [new_tray_file]
+            gui_icon_list._tray_sorter.tracked_data, [new_tray_file]
         )
 
     def test_creating_deleting_tray_file_may_cause_nothing(self) -> None:

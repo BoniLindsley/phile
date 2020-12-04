@@ -386,9 +386,9 @@ class TestIconList(unittest.TestCase):
             (trigger_directory / ('show' + trigger_suffix)).is_file()
         )
 
-    def test_refresh_status_line_with_no_tray_files(self) -> None:
+    def test_refresh_with_no_tray_files(self) -> None:
         """Change tmux status line to reflect currently tracked files."""
-        self.icon_list.refresh_status_line()
+        self.icon_list.refresh()
         self.control_mode.send_command.assert_called_with_soon(
             CommandBuilder.set_global_status_right(''),
         )

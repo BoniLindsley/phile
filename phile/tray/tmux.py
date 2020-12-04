@@ -15,6 +15,7 @@ in control mode.
 # Standard libraries.
 import bisect
 import datetime
+import functools
 import json
 import logging
 import os
@@ -33,8 +34,8 @@ import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 from phile.configuration import Configuration
+import phile.data
 import phile.tray
-import phile.tray.event
 import phile.trigger
 import phile.watchdog_extras
 
@@ -435,22 +436,23 @@ class IconList:
     ):
         configuration = self._configuration
         sorter_handler = (
-            lambda index, tray_file: self.refresh_status_line()
+            lambda _index, _tray_file, tracked_data:
+            (self.refresh_status_line(tracked_data))
         )
-        self._tray_sorter = tray_sorter = phile.tray.event.Sorter(
-            configuration=configuration,
-            insert=sorter_handler,
-            pop=sorter_handler,
-            set_item=sorter_handler,
+        self._tray_sorter = tray_sorter = (
+            phile.data.SortedLoadCache[phile.tray.File](
+                create_file=phile.tray.File,
+                on_insert=sorter_handler,
+                on_pop=sorter_handler,
+                on_set=sorter_handler,
+            )
         )
         # Forward watchdog events into Qt signal and handle it there.
         self._tray_scheduler = phile.watchdog_extras.Scheduler(
-            path_filter=(
-                lambda path: (path.suffix == configuration.tray_suffix)
+            path_filter=functools.partial(
+                phile.tray.File.check_path, configuration=configuration
             ),
-            path_handler=(
-                lambda path: tray_sorter(phile.tray.File(path=path))
-            ),
+            path_handler=tray_sorter.update,
             watched_path=configuration.tray_directory,
             watching_observer=watching_observer,
         )
@@ -536,7 +538,7 @@ class IconList:
         if self.is_hidden():
             return
         self._tray_scheduler.unschedule()
-        self._tray_sorter.tray_files.clear()
+        self._tray_sorter.tracked_data.clear()
         # Reset status line.
         self._control_mode.send_command(
             CommandBuilder.unset_global_status_right()
@@ -556,9 +558,12 @@ class IconList:
         # Start monitoring to not miss file events.
         self._tray_scheduler.schedule()
         # Update all existing tray files.
-        self._tray_sorter.load_all()
+        self._tray_sorter.refresh(
+            data_directory=self._configuration.tray_directory,
+            data_file_suffix=self._configuration.tray_suffix
+        )
         # Refresh the status line even if there are no tray files.
-        self.refresh_status_line()
+        self.refresh()
         self._entry_point.remove_trigger('show')
         self._entry_point.add_trigger('hide')
 
@@ -566,14 +571,18 @@ class IconList:
         """Returns whether the tray icon is hidden."""
         return not self._tray_scheduler.is_scheduled
 
-    def refresh_status_line(self) -> None:
+    def refresh(self) -> None:
+        self.refresh_status_line(self._tray_sorter.tracked_data)
+
+    def refresh_status_line(
+        self, tracked_data: typing.List[phile.tray.File]
+    ) -> None:
         """
         Update tmux `status-right` to reflect current tracked contents.
         """
         _logger.debug('Icon list refreshing status line.')
         new_status_right = ''.join(
-            tray_file.text_icon
-            for tray_file in self._tray_sorter.tray_files
+            tray_file.text_icon for tray_file in tracked_data
             if tray_file.text_icon is not None
         )
         if self._status_right != new_status_right:

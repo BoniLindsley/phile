@@ -29,10 +29,10 @@ import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
+import phile.data
 import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
 import phile.tray
-import phile.tray.event
 import phile.trigger
 import phile.watchdog_extras
 
@@ -120,11 +120,16 @@ class GuiIconList(QObject):
         self, *, watching_observer: watchdog.observers.Observer
     ):
         configuration = self._configuration
-        self._tray_sorter = tray_sorter = phile.tray.event.Sorter(
-            configuration=configuration,
-            insert=self.insert,
-            pop=(lambda index, tray_file: self.remove(index)),
-            set_item=self.set,
+        self._tray_sorter = tray_sorter = (
+            phile.data.SortedLoadCache[phile.tray.File](
+                create_file=phile.tray.File,
+                on_insert=self.insert,
+                on_pop=(
+                    lambda index, _tray_file, _tracked_data: self.
+                    remove(index)
+                ),
+                on_set=self.set,
+            )
         )
         # Forward watchdog events into Qt signal and handle it there.
         self._tray_scheduler = scheduler = (
@@ -134,11 +139,7 @@ class GuiIconList(QObject):
                     (path.suffix == configuration.tray_suffix)
                 ),
                 path_handler=phile.PySide2_extras.event_loop.CallSoon(
-                    parent=self,
-                    call_target=(
-                        lambda path:
-                        tray_sorter(phile.tray.File(path=path))
-                    )
+                    parent=self, call_target=tray_sorter.update
                 ),
                 watched_path=configuration.tray_directory,
                 watching_observer=watching_observer,
@@ -212,7 +213,7 @@ class GuiIconList(QObject):
         if self.is_hidden():
             return
         self._tray_scheduler.unschedule()
-        self._tray_sorter.tray_files.clear()
+        self._tray_sorter.tracked_data.clear()
         for tray_icon in self.tray_children():
             tray_icon.hide()
             tray_icon.deleteLater()
@@ -230,11 +231,17 @@ class GuiIconList(QObject):
         # Start monitoring to not miss file events.
         self._tray_scheduler.schedule()
         # Update all existing tray files.
-        self._tray_sorter.load_all()
+        self._tray_sorter.refresh(
+            data_directory=self._configuration.tray_directory,
+            data_file_suffix=self._configuration.tray_suffix
+        )
         self._entry_point.remove_trigger('show')
         self._entry_point.add_trigger('hide')
 
-    def insert(self, index: int, tray_file: phile.tray.File) -> None:
+    def insert(
+        self, index: int, tray_file: phile.tray.File,
+        _tracked_data: typing.List[phile.tray.File]
+    ) -> None:
         # Create an additional icon to be displayed,
         # and shift all the icons.
         # Assuming icons are displayed in the order they were created,
@@ -272,7 +279,10 @@ class GuiIconList(QObject):
         # after all the icons are set properly.
         last_icon.show()
 
-    def set(self, index: int, tray_file: phile.tray.File) -> None:
+    def set(
+        self, index: int, tray_file: phile.tray.File,
+        _tracked_data: typing.List[phile.tray.File]
+    ) -> None:
         new_icon = self.load_icon(tray_file)
         children = self.tray_children()
         children[index].setIcon(new_icon)
