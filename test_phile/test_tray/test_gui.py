@@ -216,8 +216,8 @@ class TestGuiIconList(unittest.TestCase):
     def test_show_and_hide(self) -> None:
         """Showing and hiding should apply to its tray icons."""
         # Create a tray.
-        tray = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         tray.save()
         # Need icon paths to test icon loading.
@@ -302,8 +302,8 @@ class TestGuiIconList(unittest.TestCase):
         """Retrive icon based on a icon name in tray file data."""
         # Create a tray.
         _logger.debug('Creating tray file.')
-        tray = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         resource_dir_path = pathlib.Path(
             pkg_resources.resource_filename('phile.tray', "resources")
@@ -322,8 +322,8 @@ class TestGuiIconList(unittest.TestCase):
         """Retrive icon based on a icon path in tray file data."""
         # Create a tray.
         _logger.debug('Creating tray file.')
-        tray = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         resource_dir_path = pathlib.Path(
             pkg_resources.resource_filename('phile.tray', "resources")
@@ -348,8 +348,8 @@ class TestGuiIconList(unittest.TestCase):
     def test_show_tray_file_without_icon_name_or_path(self) -> None:
         """Showing a tray file without icon should use default icon."""
         # Create a tray.
-        tray = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         tray.save()
         # Need icon paths to test icon loading.
@@ -379,8 +379,8 @@ class TestGuiIconList(unittest.TestCase):
         # Need icon paths to test icon loading.
         set_icon_paths()
         # Create the tray file.
-        tray_file = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray_file = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
@@ -409,8 +409,8 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list = self.gui_icon_list
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         # Create the tray file.
-        tray_file = phile.tray.File(
-            name='FeCat', configuration=self.configuration
+        tray_file = phile.tray.File.from_path_stem(
+            path_stem='FeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
@@ -433,8 +433,8 @@ class TestGuiIconList(unittest.TestCase):
     def test_deleting_tray_file_destroys_tray_icon(self) -> None:
         """Removing a tray file destroys its tray icon."""
         # Create the tray file.
-        tray_file = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray_file = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
@@ -464,8 +464,8 @@ class TestGuiIconList(unittest.TestCase):
     def test_modifying_tray_file_updates_tray_icon(self) -> None:
         """Modifying a tray file updates its tray icon."""
         # Create the tray file.
-        tray_file = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray_file = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
@@ -492,8 +492,8 @@ class TestGuiIconList(unittest.TestCase):
     def test_moving_tray_file_recreates_tray_icon(self) -> None:
         """Moving a tray file is treated as delete and create."""
         # Create the tray file.
-        tray_file = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray_file = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'
@@ -507,8 +507,8 @@ class TestGuiIconList(unittest.TestCase):
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         # Wait for watchdog to notice the tray file is moved now.
         new_name = 'Disco'
-        new_tray_file = phile.tray.File(
-            name=new_name, configuration=self.configuration
+        new_tray_file = phile.tray.File.from_path_stem(
+            path_stem=new_name, configuration=self.configuration
         )
         with self.tray_path_handler_patch as handler_mock:
             tray_file.path.rename(new_tray_file.path)
@@ -533,8 +533,8 @@ class TestGuiIconList(unittest.TestCase):
         gui_icon_list.show()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
         # Create the tray file.
-        tray_file = phile.tray.File(
-            name='VeCat', configuration=self.configuration
+        tray_file = phile.tray.File.from_path_stem(
+            path_stem='VeCat', configuration=self.configuration
         )
         self.assertTrue(not tray_file.path.is_file())
         tray_file.icon_name = 'phile-tray-new'

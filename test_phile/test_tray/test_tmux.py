@@ -402,14 +402,14 @@ class TestIconList(unittest.TestCase):
         Moves are treated as delete and create.
         """
         _logger.debug('Adding a tray file.')
-        year_tray_file = phile.tray.File(
-            configuration=self.configuration, name='year'
+        year_tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='year'
         )
         year_tray_file.text_icon = '2345'
         year_tray_file.save()
         _logger.debug('Adding a second tray file.')
-        month_tray_file = phile.tray.File(
-            configuration=self.configuration, name='month'
+        month_tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='month'
         )
         month_tray_file.text_icon = '12/'
         month_tray_file.save()
@@ -447,8 +447,8 @@ class TestIconList(unittest.TestCase):
         )
         _logger.debug('Inserting event setter to monitor events.')
         _logger.debug('Adding a tray file.')
-        year_tray_file = phile.tray.File(
-            configuration=self.configuration, name='year'
+        year_tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='year'
         )
         year_tray_file.text_icon = '2345'
         year_tray_file.save()
@@ -458,8 +458,8 @@ class TestIconList(unittest.TestCase):
             )
         )
         _logger.debug('Adding a second tray file.')
-        month_tray_file = phile.tray.File(
-            configuration=self.configuration, name='month'
+        month_tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='month'
         )
         month_tray_file.text_icon = '12/'
         month_tray_file.save()
@@ -477,8 +477,8 @@ class TestIconList(unittest.TestCase):
             )
         )
         _logger.debug('Moving a tray file.')
-        new_year_tray_file = phile.tray.File(
-            configuration=self.configuration, name='a_year'
+        new_year_tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='a_year'
         )
         year_tray_file.path.rename(new_year_tray_file.path)
         year_tray_file.path = new_year_tray_file.path

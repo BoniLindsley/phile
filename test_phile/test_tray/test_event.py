@@ -284,8 +284,8 @@ class TestSorter(unittest.TestCase):
 
     def test_insert_new_untracked_tray_files_from_empty(self) -> None:
         """Tray files that exist but untracked are given to insert."""
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='first'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='first'
         )
         tray_file.save()
         self.sorter(tray_file)
@@ -302,16 +302,16 @@ class TestSorter(unittest.TestCase):
     ) -> None:
         """Insert new untrack tray file when list non-empty."""
         # Fill in the list with something first.
-        prev_tray_file = phile.tray.File(
-            configuration=self.configuration, name='zero'
+        prev_tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='zero'
         )
         prev_tray_file.save()
         self.sorter(prev_tray_file)
         self.assertListEqual(self.sorter.tray_files, [prev_tray_file])
         self.insert.reset_mock()
         # And then test insert.
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='first'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='first'
         )
         tray_file.save()
         self.sorter(tray_file)
@@ -329,8 +329,8 @@ class TestSorter(unittest.TestCase):
 
     def test_set_modified_tracked_tray_files(self) -> None:
         """Tray files that exist and tracked are given to set_item."""
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='first'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='first'
         )
         tray_file.save()
         self.sorter(tray_file)
@@ -345,8 +345,8 @@ class TestSorter(unittest.TestCase):
     def test_pop_missing_tracked_tray_files(self) -> None:
         """Tray files that do not exist and tracked are popped."""
         # Fill in the list with something first.
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='zero'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='zero'
         )
         tray_file.save()
         self.sorter(tray_file)
@@ -364,8 +364,8 @@ class TestSorter(unittest.TestCase):
 
     def test_ignore_untracked_non_existent_tray_files(self) -> None:
         """Tray files that do not exist and untracted are ignored."""
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='not_exists'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='not_exists'
         )
         self.sorter(tray_file)
         self.assertListEqual(self.sorter.tray_files, [])
@@ -379,8 +379,8 @@ class TestSorter(unittest.TestCase):
 
         There is not much we can do about it as a reader.
         """
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='bad'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='bad'
         )
         tray_file.icon_name = 'phile-tray-empty'
         tray_file.save()
@@ -397,11 +397,11 @@ class TestSorter(unittest.TestCase):
 
     def test_load_all(self) -> None:
         """Load all adds all tray files to list."""
-        tray_file_first = phile.tray.File(
-            configuration=self.configuration, name='first'
+        tray_file_first = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='first'
         )
-        tray_file_second = phile.tray.File(
-            configuration=self.configuration, name='second'
+        tray_file_second = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='second'
         )
         tray_file_first.save()
         tray_file_second.save()
@@ -410,17 +410,17 @@ class TestSorter(unittest.TestCase):
             self.sorter.tray_files, [tray_file_first, tray_file_second]
         )
         self.assertSetEqual({
-            call_args[0][1]
+            call_args[0][1].path
             for call_args in self.insert.call_args_list
-        }, {tray_file_first, tray_file_second})
+        }, {tray_file_first.path, tray_file_second.path})
         self.pop.assert_not_called()
         self.set_item.assert_not_called()
 
     def test_load_all_asserts_if_not_empty(self) -> None:
         """Load all asserts on the tracked list being empty."""
         # Fill in the list with something first.
-        tray_file = phile.tray.File(
-            configuration=self.configuration, name='something'
+        tray_file = phile.tray.File.from_path_stem(
+            configuration=self.configuration, path_stem='something'
         )
         tray_file.save()
         self.sorter(tray_file)

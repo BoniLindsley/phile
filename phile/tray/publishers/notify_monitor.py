@@ -42,19 +42,6 @@ class TriggerSwitch:  # pragma: no cover
         _logger.warning('Unknown trigger command: %s', trigger_name)
 
 
-class DefaultTrayFile(phile.tray.File):
-
-    def __init__(
-        self,
-        *args,
-        name: str = '30-phile-notify-tray',
-        text_icon='N',
-        **kwargs
-    ):
-        super().__init__(*args, name=name, **kwargs)
-        self.text_icon = text_icon
-
-
 class Monitor:
 
     def __init__(
@@ -65,8 +52,10 @@ class Monitor:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
 
         self._configuration = configuration
-        self.notify_tray_file = DefaultTrayFile(
-            configuration=configuration
+        self.notify_tray_file = phile.tray.File.from_path_stem(
+            configuration=configuration,
+            path_stem='30-phile-notify-tray',
+            text_icon='N'
         )
         """Read-only."""
         self._watching_observer = watching_observer

@@ -7,76 +7,61 @@
 """
 
 # Standard library.
+import contextlib
+import dataclasses
 import io
 import json
 import pathlib
 import shutil
 import typing
+import warnings
 
 # Internal packages.
 import phile.configuration
+import phile.data
 
 
-class File:
+@dataclasses.dataclass(eq=False)
+class File(phile.data.File):
+    icon_name: typing.Optional[str] = None
+    icon_path: typing.Optional[pathlib.Path] = None
+    text_icon: typing.Optional[str] = None
 
-    class ParentError(ValueError):
-        pass
+    @classmethod
+    def from_path_stem(
+        cls,
+        path_stem: str,
+        *args,
+        configuration: phile.configuration.Configuration,
+        **kwargs,
+    ) -> 'File':
+        """Dataclasses do not allow keyword-only arguments."""
+        assert 'path' not in kwargs
+        kwargs['path'] = cls.make_path(
+            configuration=configuration, path_stem=path_stem
+        )
+        return cls(*args, **kwargs)
 
-    class SuffixError(ValueError):
-        pass
-
-    def __init__(
-        self,
+    @staticmethod
+    def make_path(
         *,
-        configuration: phile.configuration.Configuration = None,
-        name: str = None,
-        path: pathlib.Path = None
-    ) -> None:
-        if path is None:
-            if configuration is None or name is None:
-                raise ValueError(
-                    'tray.File is constructed from path'
-                    ' or from both configuration and name'
-                )
-            path = configuration.tray_directory / (
-                name + configuration.tray_suffix
-            )
-        else:
-            if configuration is not None:
-                path_parent = path.parent
-                directory = configuration.tray_directory
-                if path_parent != directory:
-                    raise File.ParentError(
-                        'Path parent ({}) is not {}'.format(
-                            path_parent, directory
-                        )
-                    )
-                path_suffix = path.suffix
-                tray_suffix = configuration.tray_suffix
-                if path_suffix != tray_suffix:
-                    raise File.SuffixError(
-                        'Path suffix ({}) is not {}'.format(
-                            path_suffix, tray_suffix
-                        )
-                    )
-        self.path = path
+        configuration: phile.configuration.Configuration,
+        path_stem: str,
+    ) -> pathlib.Path:
+        return configuration.tray_directory / (
+            path_stem + configuration.tray_suffix
+        )
 
-        self.icon_name: typing.Optional[str] = None
-        self.icon_path: typing.Optional[pathlib.Path] = None
-        self.text_icon: typing.Optional[str] = None
-
-    def __hash__(self):
-        return hash(self.path)
-
-    def __eq__(self, other):
-        return self.path == other.path
-
-    def __lt__(self, other):
-        return self.path < other.path
-
-    @property
-    def name(self) -> str:
-        return self.path.stem
+    @staticmethod
+    def check_path(
+        path: pathlib.Path,
+        *,
+        configuration: phile.configuration.Configuration,
+    ) -> bool:
+        return (
+            path.parent == configuration.tray_directory
+            and path.suffix == configuration.tray_suffix
+        )
 
     def load(self):
         """
@@ -123,13 +108,11 @@ class File:
         else:
             self.icon_path = None
 
-    def remove(self):
-        try:
-            self.path.unlink()
-        except FileNotFoundError:
-            pass
+    def remove(self) -> None:
+        warnings.warn("deprecated", DeprecationWarning)
+        self.path.unlink(missing_ok=True)
 
-    def save(self):
+    def save(self) -> None:
         # Buffer for data to be written.
         content_stream = io.StringIO()
         # First line is the text icon.

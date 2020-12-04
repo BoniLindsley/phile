@@ -11,6 +11,7 @@ Test phile.tray.tray_file
 """
 
 # Standard library.
+import functools
 import pathlib
 import tempfile
 import unittest
@@ -18,6 +19,68 @@ import unittest
 # Internal packages.
 import phile.configuration
 import phile.tray
+
+
+class TestFileCheckPath(unittest.TestCase):
+    """Tests :meth:`~phile.tray.File.check_path`."""
+
+    def set_up_configuration(self) -> None:
+        tray_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(tray_directory.cleanup)
+        self.configuration = configuration = (
+            phile.configuration.Configuration(
+                tray_directory=pathlib.Path(tray_directory.name),
+                tray_suffix='.tt'
+            )
+        )
+        self.tray_directory = (configuration.tray_directory)
+        self.tray_suffix = configuration.tray_suffix
+
+    def set_up_path_filter(self) -> None:
+        self.path_filter = path_filter = functools.partial(
+            phile.tray.File.check_path, configuration=self.configuration
+        )
+
+    def setUp(self) -> None:
+        self.set_up_configuration()
+        self.set_up_path_filter()
+
+    def test_match(self) -> None:
+        """Check an explicit path that should pass."""
+        name = 'name' + self.tray_suffix
+        path = self.tray_directory / name
+        self.assertTrue(
+            phile.tray.File.check_path(
+                configuration=self.configuration, path=path
+            )
+        )
+
+    def test_partial_for_filter(self) -> None:
+        """
+        Usable as a single parameter callback
+        using :func:`~functools.partial`.
+        """
+        name = 'name' + self.tray_suffix
+        path = self.tray_directory / name
+        self.assertTrue(self.path_filter(path))
+
+    def test_make_path_result(self) -> None:
+        """Result of :meth:`~phile.tray.File.make_path` should pass."""
+        path_stem = 'stem'
+        path = phile.tray.File.make_path(
+            configuration=self.configuration, path_stem=path_stem
+        )
+        self.assertTrue(self.path_filter(path))
+
+    def test_directory_mismatch(self) -> None:
+        name = 'name' + self.tray_suffix
+        path = self.tray_directory / name / name
+        self.assertTrue(not self.path_filter(path))
+
+    def test_suffix_mismatch(self) -> None:
+        name = 'name' + self.tray_suffix + '_not'
+        path = self.tray_directory / name
+        self.assertTrue(not self.path_filter(path))
 
 
 class TestFile(unittest.TestCase):
@@ -41,57 +104,12 @@ class TestFile(unittest.TestCase):
         self.path = self.configuration.tray_directory / (
             self.name + self.configuration.tray_suffix
         )
-        self.tray = phile.tray.File(
-            name=self.name, configuration=self.configuration
-        )
-
-    def test_construct_with_name(self) -> None:
-        """Constructing with name must come with a configuration."""
-        # A successful construction in `setUp()`.
-        self.assertEqual(self.tray.name, self.name)
-        self.assertEqual(self.tray.path, self.path)
-        # It should fail without a configuration give.
-        with self.assertRaises(ValueError):
-            phile.tray.File(name=self.name)
+        self.tray = phile.tray.File(path=self.path)
 
     def test_construct_with_path(self) -> None:
         """Constructing with just path should be possible."""
-        tray = phile.tray.File(
-            path=self.configuration.tray_directory /
-            (self.name + self.configuration.tray_suffix)
-        )
+        tray = phile.tray.File(self.path)
         self.assertEqual(self.tray.path, self.path)
-
-    def test_construct_with_path_with_wrong_parent(self) -> None:
-        """Constructing with path must be in configured directory."""
-        with self.assertRaises(phile.tray.File.ParentError):
-            tray = phile.tray.File(
-                configuration=self.configuration,
-                path=self.configuration.tray_directory / 'subdir' /
-                (self.name + self.configuration.tray_suffix)
-            )
-
-    def test_construct_with_path_with_wrong_suffix(self) -> None:
-        """Constructing with path must be in configured suffix."""
-        with self.assertRaises(phile.tray.File.SuffixError):
-            tray = phile.tray.File(
-                configuration=self.configuration,
-                path=self.configuration.tray_directory /
-                (self.name + '.wrong_suffix')
-            )
-
-    def test_hash(self) -> None:
-        """Can be used as keys in dictionaries."""
-        number = 1
-        tray_key_dictionary = {self.tray: number}
-        self.assertEqual(tray_key_dictionary[self.tray], number)
-
-    def test_lt(self) -> None:
-        """Can be used as keys in dictionaries."""
-        smaller_tray = phile.tray.File(
-            name='smaller.tray', configuration=self.configuration
-        )
-        self.assertLess(self.tray, smaller_tray)
 
     def test_remove_file(self) -> None:
         """Tray can be removed."""

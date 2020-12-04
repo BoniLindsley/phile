@@ -230,7 +230,5 @@ class Sorter:
         ):
             if not tray_file_path.is_file():
                 continue
-            tray_file = phile.tray.File(
-                configuration=configuration, path=tray_file_path
-            )
+            tray_file = phile.tray.File(path=tray_file_path)
             self.__call__(tray_file)
