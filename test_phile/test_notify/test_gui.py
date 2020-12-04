@@ -496,10 +496,10 @@ class TestMainWindow(unittest.TestCase):
         Start immediately to allow file changes propagate.
         The observer does not join, as that can take a long time.
         """
-        self.watching_observer = watchdog.observers.Observer()
-        self.watching_observer.daemon = True
-        self.watching_observer.start()
-        self.addCleanup(self.watching_observer.stop)
+        self.watching_observer = observer = watchdog.observers.Observer()
+        observer.daemon = True
+        observer.start()
+        self.addCleanup(observer.stop)
 
     def set_up_pyside2_app(self) -> None:
         """
@@ -524,24 +524,22 @@ class TestMainWindow(unittest.TestCase):
 
     def set_up_notify_dispatcher(self) -> None:
         """Patch for detecting when notify dispatch has been called."""
-        dispatcher = self.main_window._notify_scheduler._watchdog_handler
-        self.notify_dispatch_patch = unittest.mock.patch.object(
-            dispatcher,
-            'dispatch',
+        scheduler = self.main_window._notify_scheduler
+        self.notify_path_handler_patch = unittest.mock.patch.object(
+            scheduler,
+            'path_handler',
             new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=dispatcher.dispatch,
+            wraps=scheduler.path_handler
         )
 
     def set_up_trigger_dispatcher(self) -> None:
         """Patch for detecting when trigger dispatch has been called."""
-        dispatcher = (
-            self.main_window._trigger_scheduler._watchdog_handler
-        )
-        self.trigger_dispatch_patch = unittest.mock.patch.object(
-            dispatcher,
-            'dispatch',
+        scheduler = self.main_window._trigger_scheduler
+        self.trigger_path_handler_patch = unittest.mock.patch.object(
+            scheduler,
+            'path_handler',
             new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=dispatcher.dispatch,
+            wraps=scheduler.path_handler
         )
 
     def setUp(self) -> None:
@@ -556,7 +554,7 @@ class TestMainWindow(unittest.TestCase):
         """Create a MainWindow object."""
         self.assertTrue(self.main_window.isHidden())
         self.assertTrue(
-            not self.main_window._notify_scheduler.is_scheduled()
+            not self.main_window._notify_scheduler.is_scheduled
         )
         self.assertTrue((
             self.trigger_directory /
@@ -577,9 +575,7 @@ class TestMainWindow(unittest.TestCase):
         # Showing should start monitoring.
         self.main_window.show()
         self.assert_tracked_data_length(0)
-        self.assertTrue(
-            self.main_window._notify_scheduler.is_scheduled()
-        )
+        self.assertTrue(self.main_window._notify_scheduler.is_scheduled)
         self.assertTrue(
             not (
                 self.trigger_directory /
@@ -597,7 +593,7 @@ class TestMainWindow(unittest.TestCase):
         self.main_window.hide()
         self.assert_tracked_data_length(0)
         self.assertTrue(
-            not self.main_window._notify_scheduler.is_scheduled()
+            not self.main_window._notify_scheduler.is_scheduled
         )
         self.assertTrue(
             not (
@@ -628,7 +624,7 @@ class TestMainWindow(unittest.TestCase):
         self.main_window.hide()
         self.assert_tracked_data_length(0)
         self.assertTrue(
-            not self.main_window._notify_scheduler.is_scheduled()
+            not self.main_window._notify_scheduler.is_scheduled
         )
 
     def test_show_with_notifications(self) -> None:
@@ -697,20 +693,16 @@ class TestMainWindow(unittest.TestCase):
         trigger_suffix = self.configuration.trigger_suffix
         trigger_path = trigger_directory / ('show' + trigger_suffix)
         # Respond to a show trigger.
-        with self.trigger_dispatch_patch as dispatch_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
+            handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
             self.assertTrue(not main_window.isHidden())
         # Respond to a hide trigger.
         trigger_path = trigger_directory / ('hide' + trigger_suffix)
-        with self.trigger_dispatch_patch as dispatch_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
+            handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
             self.assertTrue(main_window.isHidden())
         # Do not respond to an unknown trigger.
@@ -723,34 +715,28 @@ class TestMainWindow(unittest.TestCase):
         trigger_path = trigger_directory / (
             trigger_name + trigger_suffix
         )
-        with self.trigger_dispatch_patch as dispatch_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             # Create the fake trigger.
             # Make sure appropriate events are processed.
             trigger_path.touch()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(str(trigger_path))
-            )
+            handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
-            dispatch_mock.reset_mock()
+            handler_mock.reset_mock()
             # Activate the fake trigger.
             # It should still be detected.
             trigger_path.unlink()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
+            handler_mock.assert_called_with_soon(trigger_path)
             with self.assertLogs(
                 logger='phile.notify.gui', level=logging.WARNING
             ) as logs:
                 self.app.process_events()
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
-        with self.trigger_dispatch_patch as dispatch_mock:
-            close_mock = unittest.mock.Mock()
-            main_window.destroyed.connect(close_mock)
+        with unittest.mock.patch.object(
+            main_window, 'close', wraps=main_window.close
+        ) as close_mock, self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            dispatch_mock.assert_called_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
+            handler_mock.assert_called_soon(trigger_path)
             self.app.process_events()
             close_mock.assert_called()
         # Give cleanup something to delete.
@@ -767,10 +753,10 @@ class TestMainWindow(unittest.TestCase):
         # Create the notification and wait for watchdog to find it.
         self.assertTrue(not notification.path.is_file())
         content = 'Happy birthday!'
-        with self.notify_dispatch_patch as dispatch_mock:
+        with self.notify_path_handler_patch as handler_mock:
             notification.write(content)
             self.assertTrue(notification.path.is_file())
-            dispatch_mock.assert_called_soon()
+            handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -791,10 +777,10 @@ class TestMainWindow(unittest.TestCase):
         self.main_window.show()
         self.assert_tracked_data_length(1)
         # Remove the notification and wait for watchdog to notice.
-        with self.notify_dispatch_patch as dispatch_mock:
+        with self.notify_path_handler_patch as handler_mock:
             notification.remove()
             self.assertTrue(not notification.path.is_file())
-            dispatch_mock.assert_called_soon()
+            handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -813,10 +799,10 @@ class TestMainWindow(unittest.TestCase):
         self.assert_tracked_data_length(1)
         # Remove the notification and wait for watchdog to notice.
         new_content = 'Happy New Year!'
-        with self.notify_dispatch_patch as dispatch_mock:
+        with self.notify_path_handler_patch as handler_mock:
             notification.append(new_content)
             self.assertTrue(notification.path.is_file())
-            dispatch_mock.assert_called_soon()
+            handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -842,11 +828,11 @@ class TestMainWindow(unittest.TestCase):
         new_notification = phile.notify.File.from_path_stem(
             new_title, configuration=self.configuration
         )
-        with self.notify_dispatch_patch as dispatch_mock:
+        with self.notify_path_handler_patch as handler_mock:
             notification.path.rename(new_notification.path)
             self.assertTrue(not notification.path.is_file())
             self.assertTrue(new_notification.path.is_file())
-            dispatch_mock.assert_called_soon()
+            handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
         self.app.process_events()
@@ -871,17 +857,17 @@ class TestMainWindow(unittest.TestCase):
             'VeCat', configuration=self.configuration
         )
         self.assertTrue(not notification.path.is_file())
-        with self.notify_dispatch_patch as dispatch_mock:
+        with self.notify_path_handler_patch as handler_mock:
             notification.write('Meow.')
             self.assertTrue(notification.path.is_file())
             # Wait for watchdog to notice it.
-            dispatch_mock.assert_called_soon()
+            handler_mock.assert_called_soon()
         # Remove the notification.
-        with self.notify_dispatch_patch as dispatch_mock:
+        with self.notify_path_handler_patch as handler_mock:
             notification.remove()
             self.assertTrue(not notification.path.is_file())
             # Wait for watchdog to notice it.
-            dispatch_mock.assert_called_soon()
+            handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
         self.app.process_events()

@@ -3,6 +3,7 @@
 # Standard library.
 import dataclasses
 import datetime
+import functools
 import logging
 import pathlib
 import signal
@@ -269,6 +270,7 @@ class MainWindow(QMainWindow):
     def set_up_notify_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
     ) -> None:
+        configuration = self._configuration
         # Keep track of sub-windows by title
         # so that we know which ones to modify when files are changed.
         self.sorter = sorter = (
@@ -280,88 +282,65 @@ class MainWindow(QMainWindow):
             )
         )
         # Forward watchdog events into Qt signal and handle it there.
-        call_soon = (
-            phile.PySide2_extras.event_loop.CallSoon(
-                parent=self,
-                call_target=(
-                    lambda event: sorter.update_paths(
-                        filter(
-                            lambda path: SubWindowContent.check_path(
-                                configuration=self._configuration,
-                                path=path
-                            ), phile.watchdog_extras.
-                            to_file_paths(event)
-                        )
-                    )
-                )
+        self._notify_scheduler = scheduler = (
+            phile.watchdog_extras.Scheduler(
+                path_filter=functools.partial(
+                    SubWindowContent.check_path,
+                    configuration=configuration
+                ),
+                path_handler=phile.PySide2_extras.event_loop.CallSoon(
+                    parent=self, call_target=sorter.update
+                ),
+                watched_path=configuration.notification_directory,
+                watching_observer=watching_observer,
             )
-        )
-        # Use a scheduler to toggle the event handling on and off.
-        dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=call_soon
-        )
-        watched_path = self._configuration.notification_directory
-        watched_path.mkdir(exist_ok=True, parents=True)
-        # TODO(BoniLindsley): Refactor Scheduler to subclass Dispatcher.
-        self._notify_scheduler = phile.watchdog_extras.Scheduler(
-            watchdog_handler=dispatcher,
-            watched_path=watched_path,
-            watching_observer=watching_observer,
         )
         # Make sure to remove handler from observer
         # when ``self`` is closed
         # so the observer would not call non-existence handlers.
-        self.destroyed.connect(self._notify_scheduler.unschedule)
-        self._closed.connect(self._notify_scheduler.unschedule)
+        self.destroyed.connect(scheduler.unschedule)
+        self._closed.connect(scheduler.unschedule)
 
     def set_up_trigger_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
     ) -> None:
+        configuration = self._configuration
         # Take cooperative ownership of the directory
         # containing trigger file for trays.
-        self._entry_point = phile.trigger.EntryPoint(
-            configuration=self._configuration,
+        self._entry_point = entry_point = phile.trigger.EntryPoint(
+            configuration=configuration,
             trigger_directory=pathlib.Path('phile-notify-gui'),
         )
-        self._entry_point.bind()
-        self.destroyed.connect(self._entry_point.unbind)
-        # Turn file system events into trigger names to process.
-        event_conveter = phile.trigger.EventConverter(
-            configuration=self._configuration,
-            trigger_handler=self.process_trigger,
-        )
+        trigger_directory = entry_point.trigger_directory
+        entry_point.bind()
+        self.destroyed.connect(entry_point.unbind)
         # Forward watchdog events into Qt signal and handle it there.
-        call_soon = (
-            phile.PySide2_extras.event_loop.CallSoon(
-                parent=self,
-                call_target=event_conveter,
+        self._trigger_scheduler = scheduler = (
+            phile.watchdog_extras.Scheduler(
+                path_filter=(
+                    lambda path:
+                    (path.suffix == configuration.trigger_suffix)
+                ),
+                path_handler=phile.PySide2_extras.event_loop.CallSoon(
+                    parent=self,
+                    call_target=(
+                        lambda path: self.process_trigger(path.stem)
+                        if not path.is_file() else None
+                    )
+                ),
+                watched_path=entry_point.trigger_directory,
+                watching_observer=watching_observer,
             )
         )
-        # Filter out non-trigger activation events
-        # to reduce cross-thread communications.
-        event_filter = phile.trigger.EventFilter(
-            configuration=self._configuration,
-            event_handler=call_soon,
-            trigger_directory=self._entry_point.trigger_directory,
-        )
-        # Use a scheduler to toggle the event handling on and off.
-        dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=event_filter
-        )
-        self._trigger_scheduler = phile.watchdog_extras.Scheduler(
-            watchdog_handler=dispatcher,
-            watched_path=self._entry_point.trigger_directory,
-            watching_observer=watching_observer,
-        )
-        self._trigger_scheduler.schedule()
+        scheduler.schedule()
         # Make sure to remove handler from observer
         # when ``self`` is closed
         # so the observer would not call non-existence handlers.
-        self.destroyed.connect(self._trigger_scheduler.unschedule)
-        self._closed.connect(self._trigger_scheduler.unschedule)
+        self.destroyed.connect(scheduler.unschedule)
+        self._closed.connect(scheduler.unschedule)
         # Allow closing with a trigger.
-        self._entry_point.add_trigger('close')
-        self._entry_point.add_trigger('show')
+        entry_point.add_trigger('close')
+        entry_point.add_trigger('show')
 
     def process_trigger(self, trigger_name: str) -> None:
         _logger.debug('MainWindow trigger %s.', trigger_name)

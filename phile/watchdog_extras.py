@@ -13,12 +13,13 @@ import typing
 import watchdog.events  # type: ignore[import]
 import watchdog.observers  # type: ignore[import]
 
+_D_co = typing.TypeVar('_D_co', covariant=True)
 _D_contra = typing.TypeVar('_D_contra', contravariant=True)
 
 
-class SingleParameterCallback(typing.Protocol[_D_contra]):
+class SingleParameterCallback(typing.Protocol[_D_contra, _D_co]):
     """
-    Replacement for ``Callable[[_D_contra], None]``.
+    Replacement for ``Callable[[_D_contra], _D_co]``.
 
     Calling a callable member is not handled correctly by mypy yet.
     Specifically, ``self.load(0)`` is treated as a two-argument call
@@ -26,19 +27,26 @@ class SingleParameterCallback(typing.Protocol[_D_contra]):
     See: https://github.com/python/mypy/issues/708#issuecomment-667989040
     """
 
-    def __call__(self, __arg_1: _D_contra) -> None:
+    def __call__(self, __arg_1: _D_contra) -> _D_co:
         ...
 
 
-EventHandler = SingleParameterCallback[watchdog.events.FileSystemEvent]
+EventHandler = (
+    SingleParameterCallback[watchdog.events.FileSystemEvent, typing.Any]
+)
 """
 Signature of callables
 receiveing :class:`~watchdog.events.FileSystemEvent`-s.
 """
 
-PathsHandler = SingleParameterCallback[typing.Iterator[pathlib.Path]]
+PathHandler = SingleParameterCallback[pathlib.Path, typing.Any]
 """
-Signature of callables for processing multiple :class:`~pathlib.Path`-s.
+Signature of callables for processing a :class:`~pathlib.Path`.
+"""
+
+PathFilter = SingleParameterCallback[pathlib.Path, bool]
+"""
+Signature of callables for pre-process :class:`~pathlib.Path`-s checking.
 """
 
 
@@ -164,136 +172,103 @@ class Observer(watchdog.observers.Observer):
         return self._stopped_event.is_set()
 
 
-class Dispatcher(watchdog.events.FileSystemEventHandler):
+class Scheduler(watchdog.events.FileSystemEventHandler):
     """
-    Forwards watchdog events to a callable.
-
-    The :attr:`~watchdog.observers.Observer`
-    gives :class:`~watchdog.events.FileSystemEvent`-s
-    to :class:`~watchdog.events.FileSystemEventHandler`
-    by :meth:`~watchdog.events.FileSystemEventHandler.dispatch`-ing them.
-    This :meth:`~dispatch`-es to a ``event_handler``
-    for a more flexible event handling.
-
-    Example::
-
-        from datetime import timedelta
-        from phile.watchdog_extras import Dispatcher, Observer
-
-        observer = Observer()
-        dispatcher = Dispatcher(event_handler=lambda x: print(x))
-        observer.add_handler(
-            event_handler=dispatcher,
-            path=pathlib.Path(),  # Current directory.
-        )
-        observer.start()
-        try:
-            while observer.is_alive():
-                observer.join(timedelta(seconds=1).total_seconds())
-        except KeyboardInterrupt:
-            observer.stop()
-        observer.join()
-    """
-
-    def __init__(
-        self, *args, event_handler: EventHandler, **kwargs
-    ) -> None:
-        """
-        :param event_handler: Callable to dispatch events to.
-        :type event_handler: :data:`EventHandler`
-        """
-        super().__init__(*args, **kwargs)
-        self._event_handler = event_handler
-
-    def dispatch(self, event: watchdog.events.FileSystemEvent) -> None:
-        """Internal. Forward given event to ``event_handler``."""
-        self._event_handler(event)
-
-
-class Scheduler:
-    """
-    Represents whether a :class:`~watchdog.events.FileSystemEventHandler`
+    Represents whether a :data:`PathHandler`
     is :meth:`~watchdog.observers.api.BaseObserver.schedule`-d
-    in an :attr:`~watchdog.observers.Observer`.
+    to receive paths of file system events
+    from an :attr:`~watchdog.observers.Observer`.
 
-    Remembers infomation necessary to start watching a directory or file
+    Each instane remembers infomation necessary
+    to start watching a directory or file
     so that starting requires only a single method call.
+
+    There is a delay between the event being detected
+    and the event being processed.
+    This time may be sufficient for the files involved to be deleted
+    or changed into a directory, etc.
+    So the event type itself is not so useful.
+    In particular, the user of file system events
+    needs to handle such cases anyway at the point of file access.
+    So the only reliable data from the event are the file paths
+    indicating that some changes occured to the files of the path.
+    It is then up to the user to determine what to do with the path
+    depending on whether the path still exists, is still a file,
+    has valid data or was already known about using their own data.
+    So this scheduler accepts a handler that takes paths as an parameter
+    instead of file system events.
     """
 
     def __init__(
         self,
         *args,
+        path_filter: PathFilter = lambda _: True,
+        path_handler: PathHandler = lambda _: None,
         watch_recursive: bool = False,
-        watchdog_handler: watchdog.events.FileSystemEventHandler,
         watched_path: pathlib.Path,
         watching_observer: watchdog.observers.Observer,
         **kwargs,
     ) -> None:
         """
+        :param PathFilter path_filter:
+            A callback that returns :data:`True`
+            if a given :class:`pathlib.Path`
+            should be passed on to :data:`path_handlers`.
         :param bool watch_recursive:
             Whether to watch subdirectories of ``watched_path``
             if ``watched_path`` is a directory.
-        :param ~watchdog.events.FileSystemEventHandler watchdog_handler:
-            Handler to dispatched events to
+        :param ~PathHandler path_handler:
+            Handler to dispatched event paths to
             when there are changes to ``watched_path``.
         :param ~pathlib.Path watched_path:
             Path to watch for changes.
         :param watching_observer:
-            The instance that dispatches events to ``watchdog_handler``.
+            The instance that dispatches events to ``path_handler``.
         :type watching_observer: :attr:`~watchdog.observers.Observer`
         """
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._watchdog_handler = watchdog_handler
+        self.watch_recursive = watch_recursive
+        self.watched_path = watched_path
+        self.path_filter = path_filter
+        """Callable determining whether a paths hould be dispatched."""
+        self.path_handler = path_handler
         """Callable for forward event dispatch to."""
-        self._is_scheduled = False
-        """
-        Whether ``watching_observer`` has scheduled ``watchdog_handler``.
-        """
-        self._watching_observer = watching_observer
+        self.watching_observer = watching_observer
         """
         The :attr:`watchdog.observers.Observer` instance
-        to which ``watchdog_handler`` is to be scheduled in.
+        to which ``path_handler`` is to be scheduled in.
         """
-        self._watchdog_watch = watchdog.observers.api.ObservedWatch(
-            path=str(watched_path), recursive=watch_recursive
-        )
+        self.watchdog_watch: typing.Optional[
+            watchdog.observers.api.ObservedWatch] = None
         """Description of watch data from :mod:`watchdog`."""
 
+    @property
     def is_scheduled(self) -> bool:
         """
-        Return whether ``watching_observer``
-        has scheduled ``watchdog_handler``.
+        Returns whether :data:`watching_observer`
+        is set to forward paths to :data:`path_handler`.
         """
-        return self._is_scheduled
+        return self.watchdog_watch is not None
 
     def schedule(self) -> None:
-        """Schedule events to be dispatched to ``watchdog_handler``."""
-        if self.is_scheduled():
-            return
-        # The returned handle compares equal to the stored handle.
-        # But they are different instances.
-        # We save the returned copy to aid removal
-        # which will compare the handle stored by ``watching_observer``
-        # and the copy we pass to it.
-        # If they happen to be the same instance, comparison is easier.
-        self._watchdog_watch = self._watching_observer.schedule(
-            self._watchdog_handler,
-            self._watchdog_watch.path,
-            self._watchdog_watch.is_recursive,
-        )
-        self._is_scheduled = True
+        """Schedule events to be dispatched to :data`path_handler`."""
+        if not self.is_scheduled:
+            self.watched_path.mkdir(exist_ok=True, parents=True)
+            self.watchdog_watch = self.watching_observer.schedule(
+                self, str(self.watched_path), self.watch_recursive
+            )
 
     def unschedule(self) -> None:
-        """Stop dispatching events to ``watchdog_handler``."""
-        if not self.is_scheduled():
+        """Stop dispatching events to `path_handler``."""
+        if not self.is_scheduled:
             return
-        watching_observer = self._watching_observer
+        watching_observer = self.watching_observer
         # This should ideally have been just::
         #
-        #     self._watching_observer.remove_handle_for_watch(
-        #         self._watchdog_handler,
-        #         self._watchdog_watch,
+        #     self.watching_observer.remove_handle_for_watch(
+        #         self,
+        #         self.watchdog_watch,
         #     )
         #
         # But there is a potential inotify watch leak
@@ -307,11 +282,12 @@ class Scheduler:
         # and there might be state changes in between their locking.
         # Alternatively, we can accept only `watchdog_extras.Observer`
         # but that is not particularly flexible.
-        watchdog_watch = self._watchdog_watch
+        watchdog_watch = self.watchdog_watch
+        self.watchdog_watch = None
         with watching_observer._lock:
             handlers = watching_observer._handlers.get(watchdog_watch)
             if handlers is not None:
-                handlers.remove(self._watchdog_handler)
+                handlers.remove(self)
                 if not handlers:
                     watching_observer._remove_handlers_for_watch(
                         watchdog_watch
@@ -320,47 +296,31 @@ class Scheduler:
                         watchdog_watch]
                     watching_observer._remove_emitter(emitter)
                     watching_observer._watches.remove(watchdog_watch)
-        self._is_scheduled = False
 
+    def dispatch(self, event: watchdog.events.FileSystemEvent) -> None:
+        """
+        Internal. Calls :data:`path_handler` with paths in the ``event``.
 
-def to_file_paths(
-    source_event: watchdog.events.FileSystemEvent
-) -> typing.List[pathlib.Path]:
-    """
-    Returns a :class:`list` of :class:`~pathlib.Path`-s of files
-    involved in the given :class:`~watchdog.events.FileSystemEvent`.
+        :param source_event:
+            The :class:`~watchdog.events.FileSystemEvent`
+            from which to extract file paths.
 
-    :param source_event:
-        The :class:`~watchdog.events.FileSystemEvent`
-        from which to extract file paths.
-    :returns:
-        The file paths extracted from ``source_event``.
+        The file paths to call :data:`path_handler` with
+        are extracted from ``source_event``.
         If ``source_event`` is a directory event,
-        an empty :class:`list` is returned.
+        it is not called.
         If it is a file move event,
-        the :class:`list` contains both file paths
+        it is called with an iterator of both file paths
         in an unspecified order.
-        Otherwise, the :class:`list` contains one path.
-
-    There is a delay between the event being detected
-    and the event being processed.
-    This time may be sufficient for the files involved to be deleted
-    or changed to a directory, etc.
-    So the event type itself is not so useful.
-    In particular, the user of the event
-    needs to handle such cases anyway at the point of file access.
-    So the only reliable data from the event are the file paths
-    indicating that some changes occured to the files of the path.
-    It is then up to the user to determine what to do with the path
-    depending on whether the path still exists, is still a file,
-    has valid data or was already known about using their own data.
-    """
-    if source_event.is_directory:
-        return []
-    elif source_event.event_type != watchdog.events.EVENT_TYPE_MOVED:
-        return [pathlib.Path(source_event.src_path)]
-    else:
-        return [
-            pathlib.Path(source_event.src_path),
-            pathlib.Path(source_event.dest_path)
-        ]
+        Otherwise, its argument iterates through one path.
+        """
+        if event.is_directory:
+            return
+        path = pathlib.Path(event.src_path)
+        if self.path_filter(path):
+            self.path_handler(path)
+        if event.event_type != watchdog.events.EVENT_TYPE_MOVED:
+            return
+        path = pathlib.Path(event.dest_path)
+        if self.path_filter(path):
+            self.path_handler(path)

@@ -11,6 +11,7 @@ Test :mod:`phile.notify`
 # Standard library.
 import dataclasses
 import datetime
+import functools
 import pathlib
 import tempfile
 import unittest
@@ -42,26 +43,50 @@ def round_up_to_two_seconds(
 class TestFileCheckPath(unittest.TestCase):
     """Tests :meth:`~phile.notify.File.check_path`."""
 
-    def setUp(self) -> None:
+    def set_up_configuration(self) -> None:
         notification_directory = tempfile.TemporaryDirectory()
         self.addCleanup(notification_directory.cleanup)
-        self.configuration = phile.configuration.Configuration(
-            notification_directory=pathlib.Path(
-                notification_directory.name
-            ),
-            notification_suffix='.nn'
+        self.configuration = configuration = (
+            phile.configuration.Configuration(
+                notification_directory=pathlib.Path(
+                    notification_directory.name
+                ),
+                notification_suffix='.nn'
+            )
         )
+        self.notification_directory = (
+            configuration.notification_directory
+        )
+        self.notification_suffix = configuration.notification_suffix
+
+    def set_up_path_filter(self) -> None:
+        self.path_filter = path_filter = functools.partial(
+            phile.notify.File.check_path,
+            configuration=self.configuration
+        )
+
+    def setUp(self) -> None:
+        self.set_up_configuration()
+        self.set_up_path_filter()
 
     def test_match(self) -> None:
         """Check an explicit path that should pass."""
-        configuration = self.configuration
-        name = 'name' + configuration.notification_suffix
-        path = configuration.notification_directory / name
+        name = 'name' + self.notification_suffix
+        path = self.notification_directory / name
         self.assertTrue(
             phile.notify.File.check_path(
-                configuration=configuration, path=path
+                configuration=self.configuration, path=path
             )
         )
+
+    def test_partial_for_filter(self) -> None:
+        """
+        Usable as a single parameter callback
+        using :func:`~functools.partial`.
+        """
+        name = 'name' + self.notification_suffix
+        path = self.notification_directory / name
+        self.assertTrue(self.path_filter(path))
 
     def test_make_path_result(self) -> None:
         """Result of :meth:`~phile.notify.File.make_path` should pass."""
@@ -69,33 +94,17 @@ class TestFileCheckPath(unittest.TestCase):
         path = phile.notify.File.make_path(
             configuration=self.configuration, path_stem=path_stem
         )
-        self.assertTrue(
-            phile.notify.File.check_path(
-                configuration=self.configuration, path=path
-            )
-        )
+        self.assertTrue(self.path_filter(path))
 
     def test_directory_mismatch(self) -> None:
-        configuration = self.configuration
-        name = 'name' + configuration.notification_suffix
-        path = configuration.notification_directory / name / name
-        self.assertTrue(
-            not phile.notify.File.check_path(
-                configuration=configuration,
-                path=path,
-            )
-        )
+        name = 'name' + self.notification_suffix
+        path = self.notification_directory / name / name
+        self.assertTrue(not self.path_filter(path))
 
     def test_suffix_mismatch(self) -> None:
-        configuration = self.configuration
-        name = 'name' + configuration.notification_suffix + '_not'
-        path = configuration.notification_directory / name
-        self.assertTrue(
-            not phile.notify.File.check_path(
-                configuration=self.configuration,
-                path=path,
-            )
-        )
+        name = 'name' + self.notification_suffix + '_not'
+        path = self.notification_directory / name
+        self.assertTrue(not self.path_filter(path))
 
 
 class TestFile(unittest.TestCase):

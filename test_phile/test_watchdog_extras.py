@@ -27,7 +27,7 @@ _logger = logging.getLogger(
 )
 """Logger whose name is the module name."""
 
-IntCallback = phile.watchdog_extras.SingleParameterCallback[int]
+IntCallback = (phile.watchdog_extras.SingleParameterCallback[int, None])
 
 
 class TestSingleParameterCallback(unittest.TestCase):
@@ -118,20 +118,38 @@ class TestEventHandler(unittest.TestCase):
         _: phile.watchdog_extras.EventHandler = event_handle_function
 
 
-class TestPathsHandler(unittest.TestCase):
-    """Tests :data:`~phile.watchdog_extras.PathsHandler`."""
+class TestPathFilter(unittest.TestCase):
+    """Tests :data:`~phile.watchdog_extras.PathFilter`."""
 
     def test_function(self) -> None:
         """
-        A function can be a :data:`~phile.watchdog_extras.PathsHandler`.
+        A function can be a :data:`~phile.watchdog_extras.PathFilter`.
         """
 
-        def paths_handle_function(
-            paths: typing.Iterable[pathlib.Path]
-        ) -> None:
+        def path_handle_function(path: pathlib.Path) -> bool:
+            return True
+
+        path_filter: phile.watchdog_extras.PathFilter = (
+            path_handle_function
+        )
+        self.assertTrue(path_filter(pathlib.Path()))
+
+
+class TestPathHandler(unittest.TestCase):
+    """Tests :data:`~phile.watchdog_extras.PathHandler`."""
+
+    def test_function(self) -> None:
+        """
+        A function can be a :data:`~phile.watchdog_extras.PathHandler`.
+        """
+
+        def path_handle_function(path: pathlib.Path) -> None:
             pass
 
-        _: phile.watchdog_extras.PathsHandler = paths_handle_function
+        handler: phile.watchdog_extras.PathHandler = (
+            path_handle_function
+        )
+        handler(pathlib.Path())
 
 
 class TestObserver(unittest.TestCase):
@@ -255,23 +273,6 @@ class TestObserver(unittest.TestCase):
         self.assertTrue(self.observer.has_handlers())
 
 
-class TestDispatcher(unittest.TestCase):
-    """Unit test for :class:`~phile.PySide2_extras.Dispatcher`."""
-
-    def setUp(self) -> None:
-        """Create a handler to forward to."""
-        self.event_handler = unittest.mock.Mock()
-        self.dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=self.event_handler
-        )
-
-    def test_dispatch(self) -> None:
-        """Dispatching calls the given handler."""
-        event_to_dispatch = watchdog.events.FileCreatedEvent(None)
-        self.dispatcher.dispatch(event_to_dispatch)
-        self.event_handler.assert_called_with(event_to_dispatch)
-
-
 def has_handlers(
     target_observer: watchdog.observers.Observer,
     watch_to_check: watchdog.observers.api.ObservedWatch
@@ -284,30 +285,57 @@ class TestScheduler(unittest.TestCase):
 
     def setUp(self) -> None:
         """Create a handler to forward to."""
-        self.observer = watchdog.observers.Observer()
+        self.observer = observer = watchdog.observers.Observer()
         self.addCleanup(self.observer.stop)
-        self.watched_path = pathlib.Path()
+        self.watched_path = watched_path = pathlib.Path()
+        self.path_filter = path_filter = unittest.mock.Mock()
+        self.path_handler = path_handler = unittest.mock.Mock()
         self.scheduler = phile.watchdog_extras.Scheduler(
-            watchdog_handler=unittest.mock.Mock(),
+            path_filter=path_filter,
+            path_handler=path_handler,
+            watched_path=watched_path,
+            watching_observer=observer,
+        )
+
+    def test_init_with_path_and_observer(self) -> None:
+        """
+        Provides a constructor without callbacks.
+
+        So that other properties can be provided later,
+        making the constructor less of a mess.
+        Observer and paths are mandatory
+        since creating a new constructor
+        means creating a possibly unused thread
+        and there is no good default paths to use as a default.
+        """
+        other_scheduler = phile.watchdog_extras.Scheduler(
             watched_path=self.watched_path,
             watching_observer=self.observer,
         )
-        self.watchdog_watch = self.scheduler._watchdog_watch
+        file_path = pathlib.Path('created')
+        source_event = watchdog.events.FileCreatedEvent(str(file_path))
+        other_scheduler.dispatch(source_event)
 
-    def test_schedule_and_unschedule_and_is_scheduled(self) -> None:
+    def test_is_scheduled(self) -> None:
         """Dispatching calls the given handler."""
-        self.assertFalse(self.scheduler.is_scheduled())
-        self.assertFalse(
-            has_handlers(self.observer, self.watchdog_watch)
+        self.assertTrue(
+            not has_handlers(
+                self.observer, self.scheduler.watchdog_watch
+            )
         )
+        self.assertTrue(not self.scheduler.is_scheduled)
         self.scheduler.schedule()
-        self.assertTrue(self.scheduler.is_scheduled())
-        self.assertTrue(has_handlers(self.observer, self.watchdog_watch))
-        self.scheduler.unschedule()
-        self.assertFalse(self.scheduler.is_scheduled())
-        self.assertFalse(
-            has_handlers(self.observer, self.watchdog_watch)
+        self.assertTrue(
+            has_handlers(self.observer, self.scheduler.watchdog_watch)
         )
+        self.assertTrue(self.scheduler.is_scheduled)
+        self.scheduler.unschedule()
+        self.assertTrue(
+            not has_handlers(
+                self.observer, self.scheduler.watchdog_watch
+            )
+        )
+        self.assertTrue(not self.scheduler.is_scheduled)
 
     def test_sheduled_when_already_scheduled(self) -> None:
         """Scheduling a second time gets ignored."""
@@ -321,15 +349,17 @@ class TestScheduler(unittest.TestCase):
     def test_unschedule_with_other_handlers(self) -> None:
         """Do not remove emitter when there are other handlers."""
         other_scheduler = phile.watchdog_extras.Scheduler(
-            watchdog_handler=unittest.mock.Mock(),
             watched_path=self.watched_path,
             watching_observer=self.observer,
         )
         other_scheduler.schedule()
         self.scheduler.schedule()
-        self.assertTrue(has_handlers(self.observer, self.watchdog_watch))
+        self.assertTrue(self.scheduler.is_scheduled)
         self.scheduler.unschedule()
-        self.assertTrue(has_handlers(self.observer, self.watchdog_watch))
+        self.assertTrue(not self.scheduler.is_scheduled)
+        self.assertTrue(
+            has_handlers(self.observer, other_scheduler.watchdog_watch)
+        )
 
     def test_unschedule_manually_unscheduled_handler(self) -> None:
         """
@@ -339,58 +369,87 @@ class TestScheduler(unittest.TestCase):
         So just say it is succeeded.
         """
         self.scheduler.schedule()
-        self.assertTrue(has_handlers(self.observer, self.watchdog_watch))
-        self.observer.unschedule(self.watchdog_watch)
-        self.assertFalse(
-            has_handlers(self.observer, self.watchdog_watch)
-        )
+        self.assertTrue(self.scheduler.is_scheduled)
+        self.observer.unschedule(self.scheduler.watchdog_watch)
         self.scheduler.unschedule()
-        self.assertFalse(
-            has_handlers(self.observer, self.watchdog_watch)
-        )
+        self.assertTrue(not self.scheduler.is_scheduled)
 
-
-class TestToFilePaths(unittest.TestCase):
-    """Tests :func:`~phile.PySide2_extras.to_file_paths`."""
-
-    def test_forward_file_creation_events_passes(self) -> None:
+    def test_dispatch_file_creation_events(self) -> None:
         """File creation events passes through."""
         file_path = pathlib.Path('created')
         source_event = watchdog.events.FileCreatedEvent(str(file_path))
-        self.assertListEqual(
-            phile.watchdog_extras.to_file_paths(source_event),
-            [file_path]
-        )
+        self.scheduler.dispatch(source_event)
+        self.assertEqual(self.path_handler.call_args.args[0], file_path)
 
-    def test_ignores_directory_events(self) -> None:
+    def test_dispatch_ignores_directory_events(self) -> None:
         """Directory events are not considered as file events here."""
         file_path = pathlib.Path('directory')
         source_event = watchdog.events.DirCreatedEvent(str(file_path))
-        self.assertListEqual(
-            phile.watchdog_extras.to_file_paths(source_event), []
-        )
+        self.scheduler.dispatch(source_event)
+        self.path_handler.assert_not_called()
 
-    def test_splitting_move_events(self) -> None:
+    def test_dispatch_splits_move_events(self) -> None:
         """Move events should be split into two paths."""
         source_path = pathlib.Path('source')
         dest_path = pathlib.Path('dest')
         source_event = watchdog.events.FileMovedEvent(
             str(source_path), str(dest_path)
         )
+        self.scheduler.dispatch(source_event)
         self.assertSetEqual(
-            set(phile.watchdog_extras.to_file_paths(source_event)),
-            {source_path, dest_path}
+            set(
+                call_args.args[0]
+                for call_args in self.path_handler.call_args_list
+            ), {source_path, dest_path}
         )
 
-    def test_ignores_directory_move_events(self) -> None:
+    def test_dispatch_ignores_directory_move_events(self) -> None:
         """Directory events should be ignored even for move events."""
         source_path = pathlib.Path('source')
         dest_path = pathlib.Path('dest')
         source_event = watchdog.events.DirMovedEvent(
             str(source_path), str(dest_path)
         )
-        self.assertListEqual(
-            phile.watchdog_extras.to_file_paths(source_event), []
+        self.scheduler.dispatch(source_event)
+        self.path_handler.assert_not_called()
+
+    def test_filter_fails_path(self) -> None:
+        """Paths that fails the filter are not passed to the handler."""
+        self.path_filter.side_effect = [False, False]
+        source_path = pathlib.Path('source')
+        dest_path = pathlib.Path('dest')
+        source_event = watchdog.events.FileMovedEvent(
+            str(source_path), str(dest_path)
+        )
+        self.scheduler.dispatch(source_event)
+        self.assertSetEqual(
+            set(
+                call_args.args[0]
+                for call_args in self.path_filter.call_args_list
+            ), {source_path, dest_path}
+        )
+        self.path_handler.assert_not_called()
+
+    def test_filter_passes_path(self) -> None:
+        """Paths that pass the filter goes to the handler."""
+        self.path_filter.side_effect = [True, True]
+        source_path = pathlib.Path('source')
+        dest_path = pathlib.Path('dest')
+        source_event = watchdog.events.FileMovedEvent(
+            str(source_path), str(dest_path)
+        )
+        self.scheduler.dispatch(source_event)
+        self.assertSetEqual(
+            set(
+                call_args.args[0]
+                for call_args in self.path_filter.call_args_list
+            ), {source_path, dest_path}
+        )
+        self.assertSetEqual(
+            set(
+                call_args.args[0]
+                for call_args in self.path_handler.call_args_list
+            ), {source_path, dest_path}
         )
 
 

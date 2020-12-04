@@ -119,99 +119,77 @@ class GuiIconList(QObject):
     def _set_up_tray_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
     ):
-        self._tray_sorter = phile.tray.event.Sorter(
-            configuration=self._configuration,
+        configuration = self._configuration
+        self._tray_sorter = tray_sorter = phile.tray.event.Sorter(
+            configuration=configuration,
             insert=self.insert,
             pop=(lambda index, tray_file: self.remove(index)),
             set_item=self.set,
         )
-        # Convert events to tray files.
-        # It does not matter whether the event say a file is changed
-        # or it has been deleted.
-        # It may have been changed again between the event being emitted
-        # and the event being processed.
-        # So we get the tray file out of the event
-        # and process based on the file instead of the event.
-        event_converter = phile.tray.event.Converter(
-            configuration=self._configuration,
-            tray_handler=self._tray_sorter
-        )
         # Forward watchdog events into Qt signal and handle it there.
-        call_soon = (
-            phile.PySide2_extras.event_loop.CallSoon(
-                parent=self,
-                call_target=event_converter,
+        self._tray_scheduler = scheduler = (
+            phile.watchdog_extras.Scheduler(
+                path_filter=(
+                    lambda path:
+                    (path.suffix == configuration.tray_suffix)
+                ),
+                path_handler=phile.PySide2_extras.event_loop.CallSoon(
+                    parent=self,
+                    call_target=(
+                        lambda path:
+                        tray_sorter(phile.tray.File(path=path))
+                    )
+                ),
+                watched_path=configuration.tray_directory,
+                watching_observer=watching_observer,
             )
         )
-        # Figure out whether an event is relevant before giving it to Qt.
-        event_filter = phile.tray.event.Filter(
-            configuration=self._configuration, event_handler=call_soon
-        )
-        # Use a scheduler to toggle the event handling on and off.
-        dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=event_filter
-        )
-        watched_path = self._configuration.tray_directory
-        watched_path.mkdir(exist_ok=True, parents=True)
-        self._tray_scheduler = phile.watchdog_extras.Scheduler(
-            watchdog_handler=dispatcher,
-            watched_path=watched_path,
-            watching_observer=watching_observer,
-        )
         # Make sure to remove handler from observer
-        # when ``self`` is destroyed
+        # when ``self`` is closed
         # so the observer would not call non-existence handlers.
-        self.destroyed.connect(self._tray_scheduler.unschedule)
-        self._closed.connect(self._tray_scheduler.unschedule)
+        self.destroyed.connect(scheduler.unschedule)
+        self._closed.connect(scheduler.unschedule)
 
     def _set_up_trigger_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
     ) -> None:
+        configuration = self._configuration
         # Take cooperative ownership of the directory
         # containing trigger file for trays.
-        self._entry_point = phile.trigger.EntryPoint(
-            configuration=self._configuration,
+        self._entry_point = entry_point = phile.trigger.EntryPoint(
+            configuration=configuration,
             trigger_directory=pathlib.Path('phile-tray-gui'),
         )
-        self._entry_point.bind()
-        self.destroyed.connect(self._entry_point.unbind)
-        # Turn file system events into trigger names to process.
-        event_conveter = phile.trigger.EventConverter(
-            configuration=self._configuration,
-            trigger_handler=self.process_trigger,
-        )
+        trigger_directory = entry_point.trigger_directory
+        entry_point.bind()
+        self.destroyed.connect(entry_point.unbind)
         # Forward watchdog events into Qt signal and handle it there.
-        call_soon = (
-            phile.PySide2_extras.event_loop.CallSoon(
-                parent=self,
-                call_target=event_conveter,
+        self._trigger_scheduler = scheduler = (
+            phile.watchdog_extras.Scheduler(
+                path_filter=(
+                    lambda path:
+                    (path.suffix == configuration.trigger_suffix)
+                ),
+                path_handler=phile.PySide2_extras.event_loop.CallSoon(
+                    parent=self,
+                    call_target=(
+                        lambda path: self.process_trigger(path.stem)
+                        if not path.is_file() else None
+                    )
+                ),
+                watched_path=entry_point.trigger_directory,
+                watching_observer=watching_observer,
             )
         )
-        # Filter out non-trigger activation events
-        # to reduce cross-thread communications.
-        event_filter = phile.trigger.EventFilter(
-            configuration=self._configuration,
-            event_handler=call_soon,
-            trigger_directory=self._entry_point.trigger_directory,
-        )
-        # Use a scheduler to toggle the event handling on and off.
-        dispatcher = phile.watchdog_extras.Dispatcher(
-            event_handler=event_filter
-        )
-        self._trigger_scheduler = phile.watchdog_extras.Scheduler(
-            watchdog_handler=dispatcher,
-            watched_path=self._entry_point.trigger_directory,
-            watching_observer=watching_observer,
-        )
-        self._trigger_scheduler.schedule()
+        scheduler.schedule()
         # Make sure to remove handler from observer
-        # when ``self`` is destroyed
+        # when ``self`` is closed
         # so the observer would not call non-existence handlers.
-        self.destroyed.connect(self._trigger_scheduler.unschedule)
-        self._closed.connect(self._trigger_scheduler.unschedule)
+        self.destroyed.connect(scheduler.unschedule)
+        self._closed.connect(scheduler.unschedule)
         # Allow closing with a trigger.
-        self._entry_point.add_trigger('close')
-        self._entry_point.add_trigger('show')
+        entry_point.add_trigger('close')
+        entry_point.add_trigger('show')
 
     def process_trigger(self, trigger_name: str) -> None:
         if trigger_name == 'hide':
@@ -243,7 +221,7 @@ class GuiIconList(QObject):
 
     def is_hidden(self) -> bool:
         """Returns whether the tray icon is hidden."""
-        return not self._tray_scheduler.is_scheduled()
+        return not self._tray_scheduler.is_scheduled
 
     def show(self) -> None:
         """Show tray icons if not already shown."""

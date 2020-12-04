@@ -308,43 +308,67 @@ class CompletionCheckingThread(threading.Thread):
 class TestIconList(unittest.TestCase):
     """Tests :class:`~phile.tray.tmux.IconList`."""
 
-    def setUp(self) -> None:
+    def set_up_configuration(self) -> None:
         """
-        Create a directory for storing tray files.
-
-        This will be used to test for file change responses.
+        Use unique data directories to not interfere with other tests.
         """
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
         self.configuration = phile.configuration.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
-        # Override ControlMode to not create a tmux session every test.
+        self.trigger_directory = (
+            self.configuration.trigger_root / 'phile-tray-gui'
+        )
+
+    def set_up_observer(self) -> None:
+        """
+        Use unique observers to ensure handlers do not linger.
+
+        Start immediately to allow file changes propagate.
+        The observer does not join, as that can take a long time.
+        """
+        self.observer = observer = watchdog.observers.Observer()
+        observer.daemon = True
+        observer.start()
+        self.addCleanup(observer.stop)
+
+    def set_up_control_mode(self) -> None:
+        """Use unique control modes to not have commands linger."""
         control_mode_patch = unittest.mock.patch(
             'phile.tray.tmux.ControlMode'
         )
         self.ControlModeMock = control_mode_patch.start()
         self.addCleanup(control_mode_patch.stop)
-        # Create the actual icon list to test.
-        self.observer = Observer()
+
+    def set_up_icon_list(self) -> None:
+        """
+        Override ControlMode to not create a tmux session every test.
+
+        Create the actual icon list to test.
+        """
         self.icon_list = IconList(
             configuration=self.configuration,
             watching_observer=self.observer,
         )
-        self.observer.start()
-        self.addCleanup(self.observer.stop)
         # For detecting commands sent to control mode.
         # Creating a new mock to make mypy happy,
         # since it detects `send_command` as a method,
         # and so assigning to it raises errors in mypy.
-        self.control_mode = unittest.mock.Mock()
-        self.control_mode.send_command = (
+        self.control_mode = control_mode = unittest.mock.Mock()
+        control_mode.send_command = (
             test_phile.threaded_mock.ThreadedMock()
         )
-        self.icon_list._control_mode = self.control_mode
+        self.icon_list._control_mode = control_mode
         self.trigger_directory = (
             self.icon_list._entry_point.trigger_directory
         )
+
+    def setUp(self) -> None:
+        self.set_up_configuration()
+        self.set_up_observer()
+        self.set_up_control_mode()
+        self.set_up_icon_list()
 
     def test_initialisation_creates_triggers(self) -> None:
         """
@@ -551,35 +575,28 @@ class TestIconList(unittest.TestCase):
         """Tray GUI has show, hide and close triggers."""
         icon_list = self.icon_list
         # Use a threaded mock to check when events are queued into Qt.
-        dispatcher = icon_list._trigger_scheduler._watchdog_handler
-        dispatch_patch = unittest.mock.patch.object(
-            dispatcher,
-            'dispatch',
-            new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=dispatcher.dispatch,
-        )
         trigger_directory = self.trigger_directory
         trigger_suffix = self.configuration.trigger_suffix
         trigger_path = trigger_directory / ('show' + trigger_suffix)
         # Respond to a show trigger.
         with unittest.mock.patch.object(
-            icon_list, 'show', wraps=icon_list.show
-        ) as show_mock, dispatch_patch as dispatch_mock:
+            icon_list,
+            'show',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=icon_list.show
+        ) as show_mock:
             trigger_path.unlink()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
-            show_mock.assert_called()
+            show_mock.assert_called_soon()
         # Respond to a hide trigger.
         trigger_path = trigger_directory / ('hide' + trigger_suffix)
         with unittest.mock.patch.object(
-            icon_list, 'hide', wraps=icon_list.hide
-        ) as hide_mock, dispatch_patch as dispatch_mock:
+            icon_list,
+            'hide',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=icon_list.hide
+        ) as hide_mock:
             trigger_path.unlink()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
-            hide_mock.assert_called()
+            hide_mock.assert_called_soon()
         # Do not respond to an unknown trigger.
         # Cannot really test that it has no side effects.
         # Just run it for coverage to ensure it does not error.
@@ -590,33 +607,35 @@ class TestIconList(unittest.TestCase):
         trigger_path = trigger_directory / (
             trigger_name + trigger_suffix
         )
-        with dispatch_patch as dispatch_mock:
+        scheduler = self.icon_list._trigger_scheduler
+        with unittest.mock.patch.object(
+            scheduler,
+            'path_handler',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=scheduler.path_handler
+        ) as handler_mock:
             # Create the fake trigger.
             # Make sure appropriate events are processed.
             trigger_path.touch()
-            dispatch_mock.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(str(trigger_path))
-            )
-            dispatch_mock.reset_mock()
+            handler_mock.assert_called_with_soon(trigger_path)
+            handler_mock.reset_mock()
             # Activate the fake trigger.
             # It should still be detected.
             with self.assertLogs(
                 logger='phile.tray.tmux', level=logging.WARNING
             ) as logs:
                 trigger_path.unlink()
-                dispatch_mock.assert_called_with_soon(
-                    watchdog.events.FileDeletedEvent(str(trigger_path))
-                )
+                handler_mock.assert_called_with_soon(trigger_path)
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
         with unittest.mock.patch.object(
-            icon_list, 'close', wraps=icon_list.close
-        ) as close_mock, dispatch_patch as dispatch_mock:
+            icon_list,
+            'close',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=icon_list.close
+        ) as close_mock:
             trigger_path.unlink()
-            dispatch_mock.assert_called_soon(
-                watchdog.events.FileDeletedEvent(str(trigger_path))
-            )
-            close_mock.assert_called()
+            close_mock.assert_called_soon()
 
 
 if __name__ == '__main__':

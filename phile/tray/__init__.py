@@ -147,6 +147,7 @@ class File:
             content_stream.write('\n')
             json.dump(json_content, content_stream)
         # Copy over the buffer.
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open('w+') as file_stream:
             content_stream.seek(0)
             shutil.copyfileobj(content_stream, file_stream)

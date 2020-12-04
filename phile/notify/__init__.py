@@ -48,9 +48,9 @@ class File(phile.data.File):
 
     @staticmethod
     def check_path(
+        path: pathlib.Path,
         *,
         configuration: phile.configuration.Configuration,
-        path: pathlib.Path,
     ) -> bool:
         return (
             path.parent == configuration.notification_directory
@@ -62,6 +62,7 @@ class File(phile.data.File):
         return self.text
 
     def write(self, new_content: str) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.text = new_content + '\n'
         self.save()
 
@@ -72,6 +73,7 @@ class File(phile.data.File):
 
     def save(self) -> None:
         """Write content to file, and read new modified time."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(self.text)
         self.load_modified_at()
 
