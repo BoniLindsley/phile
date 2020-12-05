@@ -6,6 +6,7 @@ Test :mod:`phile.data`
 """
 
 # Standard library.
+import functools
 import pathlib
 import tempfile
 import typing
@@ -13,6 +14,7 @@ import unittest
 import unittest.mock
 
 # Internal packages.
+import phile.configuration
 import phile.data
 
 
@@ -30,6 +32,116 @@ class TestSortableLoadData(unittest.TestCase):
         data == data
         data < data
         data.load()
+
+
+class SubFile(phile.data.File):
+
+    suffix = '.home'
+
+    @classmethod
+    def make_path(
+        cls, path_stem: str, *,
+        configuration: phile.configuration.Configuration
+    ) -> pathlib.Path:
+        del configuration
+        return pathlib.Path(path_stem + cls.suffix)
+
+
+class TestFileMakePath(unittest.TestCase):
+    """Tests :meth:`~phile.data.File.make_path`."""
+
+    def set_up_configuration(self) -> None:
+        data_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(data_directory.cleanup)
+        self.configuration = configuration = (
+            phile.configuration.Configuration(
+                user_state_directory=pathlib.Path(data_directory.name)
+            )
+        )
+        self.data_directory = configuration.user_state_directory
+        self.data_suffix = '.phile'
+
+    def set_up_path_filter(self) -> None:
+        self.path_filter = path_filter = functools.partial(
+            phile.data.File.check_path, configuration=self.configuration
+        )
+
+    def setUp(self) -> None:
+        self.set_up_configuration()
+        self.set_up_path_filter()
+
+    def test_make_path(self) -> None:
+        """Call make_path."""
+        stem = 'name'
+        expected_path = self.data_directory / (stem + self.data_suffix)
+        file_path = phile.data.File.make_path(
+            stem, configuration=self.configuration
+        )
+        self.assertEqual(file_path, expected_path)
+
+    def test_from_path_stem(self) -> None:
+        """Constructing with just path stem should be possible."""
+        stem = 'name'
+        path = self.data_directory / (stem + self.data_suffix)
+        file = phile.data.File.from_path_stem(
+            stem, configuration=self.configuration
+        )
+        self.assertEqual(file.path, path)
+
+    def test_subclass_from_path_stem(self) -> None:
+        """Subclasses can create by implementing ``make_path``."""
+        stem = 'name'
+        path = pathlib.Path(stem + SubFile.suffix)
+        file = SubFile.from_path_stem(
+            stem, configuration=self.configuration
+        )
+        self.assertEqual(file.path, path)
+
+    def test_match(self) -> None:
+        """Check an explicit path that should pass."""
+        name = 'name' + self.data_suffix
+        path = self.data_directory / name
+        self.assertTrue(
+            phile.data.File.check_path(
+                configuration=self.configuration, path=path
+            )
+        )
+
+    def test_subclass_match(self) -> None:
+        """Subclasses can match by implementing ``make_path``."""
+        self.assertTrue(
+            SubFile.check_path(
+                configuration=self.configuration,
+                path=pathlib.Path('a.home')
+            )
+        )
+
+    def test_partial_for_filter(self) -> None:
+        """
+        Usable as a single parameter callback
+        using :func:`~functools.partial`.
+        """
+        name = 'name' + self.data_suffix
+        path = self.data_directory / name
+        self.assertTrue(self.path_filter(path))
+
+    def test_make_path_result(self) -> None:
+        """Result of :meth:`~phile.data.File.make_path` should pass."""
+        path_stem = 'stem'
+        path = phile.data.File.make_path(
+            configuration=self.configuration, path_stem=path_stem
+        )
+        self.assertTrue(self.path_filter(path))
+
+    def test_directory_mismatch(self) -> None:
+        name = 'name' + self.data_suffix
+        path = self.data_directory / name / name
+        self.assertTrue(not self.path_filter(path))
+
+    def test_suffix_mismatch(self) -> None:
+        name = 'name' + self.data_suffix + '_not'
+        path = self.data_directory / name
+        self.assertTrue(not self.path_filter(path))
 
 
 class TestFile(unittest.TestCase):

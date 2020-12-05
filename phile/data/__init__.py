@@ -8,6 +8,9 @@ import itertools
 import pathlib
 import typing
 
+# Internal packages.
+import phile.configuration
+
 
 class SortableLoadData(typing.Protocol):
     """Requirements for use in :class:`~phile.data.SortedLoadCache`."""
@@ -23,6 +26,9 @@ class SortableLoadData(typing.Protocol):
 
     def load(self) -> bool:
         return self.path.is_file()
+
+
+_F = typing.TypeVar('_F', bound='File')
 
 
 @dataclasses.dataclass
@@ -49,6 +55,34 @@ class File(SortableLoadData):
             return pair < (other.name, other.parent)
         else:
             return NotImplemented
+
+    @classmethod
+    def from_path_stem(
+        cls: typing.Type[_F],
+        path_stem: str,
+        *args,
+        configuration: phile.configuration.Configuration,
+        **kwargs,
+    ) -> _F:
+        """Dataclasses do not allow keyword-only arguments."""
+        assert 'path' not in kwargs
+        kwargs['path'] = cls.make_path(
+            path_stem, configuration=configuration
+        )
+        return cls(*args, **kwargs)
+
+    @classmethod
+    def check_path(cls, path: pathlib.Path, *args, **kwargs) -> bool:
+        return cls.make_path(path.stem, *args, **kwargs) == path
+
+    @staticmethod
+    def make_path(
+        path_stem: str, *,
+        configuration: phile.configuration.Configuration
+    ) -> pathlib.Path:
+        return configuration.user_state_directory / (
+            path_stem + '.phile'
+        )
 
 
 _D = typing.TypeVar('_D', bound=SortableLoadData)

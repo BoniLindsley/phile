@@ -26,40 +26,14 @@ class File(phile.data.File):
     icon_path: typing.Optional[pathlib.Path] = None
     text_icon: typing.Optional[str] = None
 
-    @classmethod
-    def from_path_stem(
-        cls,
-        path_stem: str,
-        *args,
-        configuration: phile.configuration.Configuration,
-        **kwargs,
-    ) -> 'File':
-        """Dataclasses do not allow keyword-only arguments."""
-        assert 'path' not in kwargs
-        kwargs['path'] = cls.make_path(
-            configuration=configuration, path_stem=path_stem
-        )
-        return cls(*args, **kwargs)
-
     @staticmethod
     def make_path(
+        path_stem: str,
         *,
         configuration: phile.configuration.Configuration,
-        path_stem: str,
     ) -> pathlib.Path:
         return configuration.tray_directory / (
             path_stem + configuration.tray_suffix
-        )
-
-    @staticmethod
-    def check_path(
-        path: pathlib.Path,
-        *,
-        configuration: phile.configuration.Configuration,
-    ) -> bool:
-        return (
-            path.parent == configuration.tray_directory
-            and path.suffix == configuration.tray_suffix
         )
 
     def load(self) -> bool:

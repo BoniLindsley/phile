@@ -21,40 +21,14 @@ class File(phile.data.File):
     modified_at: datetime.datetime = datetime.datetime.fromtimestamp(0)
     text: str = ''
 
-    @classmethod
-    def from_path_stem(
-        cls,
-        path_stem: str,
-        *args,
-        configuration: phile.configuration.Configuration,
-        **kwargs,
-    ) -> 'File':
-        """Dataclasses do not allow keyword-only arguments."""
-        assert 'path' not in kwargs
-        kwargs['path'] = cls.make_path(
-            configuration=configuration, path_stem=path_stem
-        )
-        return cls(*args, **kwargs)
-
     @staticmethod
     def make_path(
+        path_stem: str,
         *,
         configuration: phile.configuration.Configuration,
-        path_stem: str,
     ) -> pathlib.Path:
         return configuration.notification_directory / (
             path_stem + configuration.notification_suffix
-        )
-
-    @staticmethod
-    def check_path(
-        path: pathlib.Path,
-        *,
-        configuration: phile.configuration.Configuration,
-    ) -> bool:
-        return (
-            path.parent == configuration.notification_directory
-            and path.suffix == configuration.notification_suffix
         )
 
     def read(self) -> str:
