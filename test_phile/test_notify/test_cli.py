@@ -119,19 +119,22 @@ class TestProcessArguments(unittest.TestCase):
             name='VeCat',
             content='There is a kitty.',
         )
-        notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
-        )
         original_text = 'Once up a time.'
-        notification.write(original_text)
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name,
+            configuration=configuration,
+            text=original_text
+        )
+        notification.save()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
             configuration=configuration
         )
         self.assertEqual(return_value, 0)
+        self.assertTrue(notification.load())
         self.assertEqual(
-            notification.read(),
-            original_text + '\n' + argument_namespace.content + '\n'
+            notification.text,
+            original_text + argument_namespace.content + '\n'
         )
 
     def test_list(self) -> None:
@@ -180,7 +183,7 @@ class TestProcessArguments(unittest.TestCase):
         self.assertTrue(not output_stream.getvalue())
 
     def test_read(self) -> None:
-        """Process append request."""
+        """Process read request."""
         configuration = phile.configuration.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
@@ -190,9 +193,11 @@ class TestProcessArguments(unittest.TestCase):
             command='read', name='VeCat'
         )
         notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
+            argument_namespace.name,
+            configuration=configuration,
+            text=original_text
         )
-        notification.write(original_text)
+        notification.save()
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
@@ -200,7 +205,30 @@ class TestProcessArguments(unittest.TestCase):
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
-        self.assertEqual(output_stream.getvalue(), original_text + '\n')
+        self.assertEqual(output_stream.getvalue(), original_text)
+
+    def test_read_bad_file(self) -> None:
+        """Fail read request if loading fails."""
+        configuration = phile.configuration.Configuration(
+            notification_directory=self.notification_directory_path,
+            notification_suffix='.notification'
+        )
+        original_text = 'Once up a time.'
+        argument_namespace = argparse.Namespace(
+            command='read', name='VeCat'
+        )
+        notification = phile.notify.File.from_path_stem(
+            argument_namespace.name,
+            configuration=configuration,
+            text=original_text
+        )
+        output_stream = io.StringIO()
+        return_value = process_arguments(
+            argument_namespace=argument_namespace,
+            configuration=configuration,
+            output_stream=output_stream
+        )
+        self.assertEqual(return_value, 1)
 
     def test_remove(self) -> None:
         """Process remove request."""
@@ -247,8 +275,9 @@ class TestProcessArguments(unittest.TestCase):
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
         )
+        self.assertTrue(notification.load())
         self.assertEqual(
-            notification.read(), argument_namespace.content + '\n'
+            notification.text, argument_namespace.content + '\n'
         )
 
     def test_make_notification_directory(self) -> None:

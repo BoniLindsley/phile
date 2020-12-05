@@ -31,20 +31,6 @@ class File(phile.data.File):
             path_stem + configuration.notification_suffix
         )
 
-    def read(self) -> str:
-        self.load()
-        return self.text
-
-    def write(self, new_content: str) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.text = new_content + '\n'
-        self.save()
-
-    def append(self, additional_content: str) -> None:
-        self.load()
-        self.text += additional_content + '\n'
-        self.save()
-
     def save(self) -> None:
         """Write content to file, and read new modified time."""
         self.path.parent.mkdir(parents=True, exist_ok=True)

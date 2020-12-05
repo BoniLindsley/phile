@@ -631,16 +631,18 @@ class TestMainWindow(unittest.TestCase):
         """Showing should list existing notifications."""
         # Create a notification.
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat',
+            configuration=self.configuration,
+            text='Happy birthday!\n'
         )
-        content = 'Happy birthday!'
-        notification.write(content)
+        notification.save()
         # Show all notifications. Pretend there are more than one.
         notification_2 = phile.notify.File.from_path_stem(
-            'Disco', configuration=self.configuration
+            'Disco',
+            configuration=self.configuration,
+            text='Happy April Fools\' Day!\n'
         )
-        content_2 = 'Happy April Fools\' Day!'
-        notification_2.write(content_2)
+        notification_2.save()
         # Throw in a file with a wrong suffix.
         (
             self.configuration.notification_directory /
@@ -657,13 +659,14 @@ class TestMainWindow(unittest.TestCase):
         self.assert_tracked_data_length(2)
         self.assertEqual(
             self.main_window.sorter.tracked_data[0].text,
-            content_2 + '\n'
+            notification_2.text
         )
         self.assertIsNotNone(
             self.main_window.sorter.tracked_data[0].sub_window
         )
         self.assertEqual(
-            self.main_window.sorter.tracked_data[1].text, content + '\n'
+            self.main_window.sorter.tracked_data[1].text,
+            notification.text
         )
         self.assertIsNotNone(
             self.main_window.sorter.tracked_data[1].sub_window
@@ -673,10 +676,11 @@ class TestMainWindow(unittest.TestCase):
         """Closing sub-window should delete notification."""
         main_window = self.main_window
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat',
+            configuration=self.configuration,
+            text='Happy birthday!'
         )
-        content = 'Happy birthday!'
-        notification.write(content)
+        notification.save()
         self.assertTrue(notification.path.is_file())
         main_window.show()
         sub_window = main_window.sorter.tracked_data[0].sub_window
@@ -750,15 +754,16 @@ class TestMainWindow(unittest.TestCase):
         """Writing a new notification creates a sub-window."""
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat',
+            configuration=self.configuration,
+            text='Happy birthday!'
         )
         self.main_window.show()
         self.assert_tracked_data_length(0)
         # Create the notification and wait for watchdog to find it.
         self.assertTrue(not notification.path.is_file())
-        content = 'Happy birthday!'
         with self.notify_path_handler_patch as handler_mock:
-            notification.write(content)
+            notification.save()
             self.assertTrue(notification.path.is_file())
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
@@ -766,17 +771,19 @@ class TestMainWindow(unittest.TestCase):
         self.app.process_events()
         self.assert_tracked_data_length(1)
         self.assertEqual(
-            self.main_window.sorter.tracked_data[0].text, content + '\n'
+            self.main_window.sorter.tracked_data[0].text,
+            notification.text
         )
 
     def test_deleting_notification_destroys_sub_window(self) -> None:
         """Removing a notification destroys its sub-window."""
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat',
+            configuration=self.configuration,
+            text='Happy birthday!'
         )
-        content = 'Happy birthday!'
-        notification.write(content)
+        notification.save()
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assert_tracked_data_length(1)
@@ -793,18 +800,20 @@ class TestMainWindow(unittest.TestCase):
     def test_modifying_notification_updates_sub_window(self) -> None:
         """Modifying a notification updates sub-window content."""
         # There should be no sub-window at the beginning.
+        content = 'Happy birthday!\n'
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat', configuration=self.configuration, text=content
         )
-        content = 'Happy birthday!'
-        notification.write(content)
+        notification.save()
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assert_tracked_data_length(1)
         # Remove the notification and wait for watchdog to notice.
         new_content = 'Happy New Year!'
         with self.notify_path_handler_patch as handler_mock:
-            notification.append(new_content)
+            notification.load()
+            notification.text += new_content
+            notification.save()
             self.assertTrue(notification.path.is_file())
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
@@ -813,17 +822,18 @@ class TestMainWindow(unittest.TestCase):
         self.assert_tracked_data_length(1)
         self.assertEqual(
             self.main_window.sorter.tracked_data[0].text,
-            content + '\n' + new_content + '\n'
+            content + new_content
         )
 
     def test_moving_notification_recreates_sub_window(self) -> None:
         """Moving a notification is treated as delete and create."""
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat',
+            configuration=self.configuration,
+            text='Happy birthday!'
         )
-        content = 'Happy birthday!'
-        notification.write(content)
+        notification.save()
         self.assertTrue(notification.path.is_file())
         self.main_window.show()
         self.assert_tracked_data_length(1)
@@ -842,7 +852,8 @@ class TestMainWindow(unittest.TestCase):
         self.app.process_events()
         self.assert_tracked_data_length(1)
         self.assertEqual(
-            self.main_window.sorter.tracked_data[0].text, content + '\n'
+            self.main_window.sorter.tracked_data[0].text,
+            notification.text
         )
 
     def test_create_and_delete_before_processing(self) -> None:
@@ -858,11 +869,11 @@ class TestMainWindow(unittest.TestCase):
         main_window.show()
         # Create the notification.
         notification = phile.notify.File.from_path_stem(
-            'VeCat', configuration=self.configuration
+            'VeCat', configuration=self.configuration, text='Meow.'
         )
         self.assertTrue(not notification.path.is_file())
         with self.notify_path_handler_patch as handler_mock:
-            notification.write('Meow.')
+            notification.save()
             self.assertTrue(notification.path.is_file())
             # Wait for watchdog to notice it.
             handler_mock.assert_called_soon()

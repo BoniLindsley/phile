@@ -43,7 +43,9 @@ def process_arguments(
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
         )
-        notification.append(argument_namespace.content)
+        notification.load()
+        notification.text += argument_namespace.content + '\n'
+        notification.save()
     elif command == 'list':
         notification_directory = configuration.notification_directory
         notification_suffix = configuration.notification_suffix
@@ -54,8 +56,9 @@ def process_arguments(
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
         )
-        content = notification.read()
-        print(content, end='', file=output_stream)
+        if not notification.load():
+            return 1
+        print(notification.text, end='', file=output_stream)
     elif command == 'remove':
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
@@ -65,7 +68,8 @@ def process_arguments(
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
         )
-        notification.write(argument_namespace.content)
+        notification.text = argument_namespace.content + '\n'
+        notification.save()
     # The following two scopes should be unreachable,
     # since the commands are filtered by ArgumentParser
     # and "no command" is filtered manually before calling this.
