@@ -67,7 +67,7 @@ class File(SortableLoadData):
         """Dataclasses do not allow keyword-only arguments."""
         assert 'path' not in kwargs
         kwargs['path'] = cls.make_path(
-            path_stem, configuration=configuration
+            path_stem, *args, configuration=configuration, **kwargs
         )
         return cls(*args, **kwargs)
 
@@ -77,8 +77,8 @@ class File(SortableLoadData):
 
     @staticmethod
     def make_path(
-        path_stem: str, *,
-        configuration: phile.configuration.Configuration
+        path_stem: str, *args,
+        configuration: phile.configuration.Configuration, **kwargs
     ) -> pathlib.Path:
         return configuration.user_state_directory / (
             path_stem + '.phile'

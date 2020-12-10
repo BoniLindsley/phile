@@ -39,6 +39,40 @@ class TestHandler(unittest.TestCase):
         _: phile.trigger.Handler = trigger_handle_function
 
 
+class TestFile(unittest.TestCase):
+    """Tests :class:`~phile.trigger.File`."""
+
+    def set_up_configuration(self) -> None:
+        trigger_root = tempfile.TemporaryDirectory()
+        self.addCleanup(trigger_root.cleanup)
+        self.trigger_root_path = pathlib.Path(trigger_root.name)
+        self.configuration = phile.configuration.Configuration(
+            trigger_root=self.trigger_root_path
+        )
+
+    def test_inherited_init(self) -> None:
+        """Has default and keyword initialisation."""
+        file = phile.trigger.File(path=pathlib.Path())
+        self.assertTrue(hasattr(file, 'path'))
+
+    def test_from_path_stem(self) -> None:
+        """Create from configuration and trigger directory."""
+        self.set_up_configuration()
+        trigger_directory = pathlib.Path('tickle')
+        file = phile.trigger.File.from_path_stem(
+            'config',
+            configuration=self.configuration,
+            trigger_directory=trigger_directory
+        )
+        self.assertTrue(
+            phile.trigger.File.check_path(
+                configuration=self.configuration,
+                trigger_directory=trigger_directory,
+                path=file.path
+            )
+        )
+
+
 class TestPidLock(unittest.TestCase):
     """Tests :class:`~phile.trigger.PidLock`."""
 

@@ -28,9 +28,8 @@ class File(phile.data.File):
 
     @staticmethod
     def make_path(
-        path_stem: str,
-        *,
-        configuration: phile.configuration.Configuration,
+        path_stem: str, *args,
+        configuration: phile.configuration.Configuration, **kwargs
     ) -> pathlib.Path:
         return configuration.tray_directory / (
             path_stem + configuration.tray_suffix

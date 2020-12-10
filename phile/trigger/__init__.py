@@ -6,22 +6,44 @@ Phile triggers
 """
 
 # Standard libraries.
+import dataclasses
 import os
 import pathlib
 import typing
 import warnings
 
 # External dependencies.
+import pathlib
 import pathvalidate
 import portalocker  # type: ignore[import]
 import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
+import phile.data
 import phile.watchdog_extras
 
 Handler = typing.Callable[[str], None]
 """Signature of callables processing triggers."""
+
+
+@dataclasses.dataclass(eq=False)
+class File(phile.data.File):
+
+    trigger_directory: dataclasses.InitVar[typing.Optional[pathlib.Path]
+                                           ] = None
+
+    @staticmethod
+    def make_path(
+        path_stem: str,
+        *args,
+        configuration: phile.configuration.Configuration,
+        trigger_directory: pathlib.Path = pathlib.Path(),
+        **kwargs
+    ) -> pathlib.Path:
+        return configuration.trigger_root / trigger_directory / (
+            path_stem + configuration.trigger_suffix
+        )
 
 
 class PidLock:
