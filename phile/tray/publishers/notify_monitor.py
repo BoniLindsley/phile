@@ -4,7 +4,6 @@
 import asyncio
 import contextlib
 import functools
-import logging
 import pathlib
 import sys
 import typing
@@ -18,32 +17,6 @@ import phile.notify
 import phile.tray
 import phile.trigger
 import phile.watchdog_extras
-
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
-)
-"""Logger whose name is the module name."""
-
-
-class TriggerSwitch:  # pragma: no cover
-
-    def __init__(self, *args, **kwargs) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.callback_map: typing.Dict[str, phile.trigger.Handler] = {}
-
-    def on_cache_pop(
-        self, _index: int, trigger_file: phile.trigger.File,
-        _tracked_files: typing.List[phile.trigger.File]
-    ) -> None:
-        trigger_name = trigger_file.path.stem
-        callback_to_forward_to = self.callback_map.get(
-            trigger_name, self.unimplemented_trigger
-        )
-        callback_to_forward_to(trigger_name)
-
-    def unimplemented_trigger(self, trigger_name: str) -> None:
-        _logger.warning('Unknown trigger command: %s', trigger_name)
 
 
 class Monitor:
@@ -66,7 +39,7 @@ class Monitor:
             configuration=configuration,
             trigger_directory=pathlib.Path('phile-notify-tray'),
         )
-        self.trigger_switch = TriggerSwitch()
+        self.trigger_switch = phile.trigger.Switch()
         self.trigger_cache = (
             phile.data.SortedLoadCache[phile.trigger.File](
                 create_file=phile.trigger.File,

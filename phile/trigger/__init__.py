@@ -7,6 +7,7 @@ Phile triggers
 
 # Standard libraries.
 import dataclasses
+import logging
 import os
 import pathlib
 import typing
@@ -22,6 +23,11 @@ import watchdog.events  # type: ignore[import]
 import phile.configuration
 import phile.data
 import phile.watchdog_extras
+
+_logger = logging.getLogger(
+    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
+)
+"""Logger whose name is the module name."""
 
 Handler = typing.Callable[[str], None]
 """Signature of callables processing triggers."""
@@ -263,3 +269,24 @@ class EntryPoint:
             except FileNotFoundError:  # pragma: no cover  # Defensive.
                 pass
         self._pid_lock.release()
+
+
+class Switch:  # pragma: no cover
+
+    def __init__(self, *args, **kwargs) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.callback_map: typing.Dict[str, Handler] = {}
+
+    def on_cache_pop(
+        self, _index: int, trigger_file: File,
+        _tracked_files: typing.List[File]
+    ) -> None:
+        trigger_name = trigger_file.path.stem
+        callback_to_forward_to = self.callback_map.get(
+            trigger_name, self.unimplemented_trigger
+        )
+        callback_to_forward_to(trigger_name)
+
+    def unimplemented_trigger(self, trigger_name: str) -> None:
+        _logger.warning('Unknown trigger command: %s', trigger_name)
