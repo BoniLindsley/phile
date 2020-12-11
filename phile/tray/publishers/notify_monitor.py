@@ -32,7 +32,11 @@ class TriggerSwitch:  # pragma: no cover
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.callback_map: typing.Dict[str, phile.trigger.Handler] = {}
 
-    def __call__(self, trigger_name: str) -> None:
+    def on_cache_pop(
+        self, _index: int, trigger_file: phile.trigger.File,
+        _tracked_files: typing.List[phile.trigger.File]
+    ) -> None:
+        trigger_name = trigger_file.path.stem
         callback_to_forward_to = self.callback_map.get(
             trigger_name, self.unimplemented_trigger
         )
@@ -50,7 +54,6 @@ class Monitor:
     ) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-
         self._configuration = configuration
         self.notify_tray_file = phile.tray.File.from_path_stem(
             configuration=configuration,
@@ -64,6 +67,12 @@ class Monitor:
             trigger_directory=pathlib.Path('phile-notify-tray'),
         )
         self.trigger_switch = TriggerSwitch()
+        self.trigger_cache = (
+            phile.data.SortedLoadCache[phile.trigger.File](
+                create_file=phile.trigger.File,
+                on_pop=self.trigger_switch.on_cache_pop
+            )
+        )
         self.notify_sorter = (
             phile.data.SortedLoadCache[phile.notify.File](
                 create_file=phile.notify.File,
@@ -81,9 +90,8 @@ class Monitor:
             path_filter=(
                 lambda path: path.suffix == configuration.trigger_suffix
             ),
-            path_handler=lambda path: (
-                call_soon_threadsafe(self.trigger_switch, path.stem)
-                if not path.is_file() else None
+            path_handler=functools.partial(
+                call_soon_threadsafe, self.trigger_cache.update
             ),
             watched_path=self.entry_point.trigger_directory,
             watching_observer=watching_observer,
@@ -102,9 +110,13 @@ class Monitor:
         with contextlib.ExitStack() as exit_stack:
             exit_stack.callback(self.entry_point.unbind)
             self.entry_point.bind()
-            self.entry_point.add_trigger('close')
             close_event = asyncio.Event()
+            # The callback map can only be changed when unscheduled
+            # for thread safety
+            # because the callback is done in a different thread.
+            # So clear after unscheduling.
             exit_stack.callback(self.trigger_switch.callback_map.clear)
+            # And set them before scheduling.
             self.trigger_switch.callback_map.update(
                 close=lambda trigger_name: close_event.set(),
                 hide=lambda trigger_name: self._hide(),
@@ -113,6 +125,18 @@ class Monitor:
             exit_stack.callback(self.trigger_scheduler.unschedule)
             self.trigger_scheduler.schedule()
             exit_stack.callback(self._hide)
+            # This has to be done after scheduling
+            # so that its deletion will be detected.
+            self.entry_point.add_trigger('close')
+            # Add the close trigger file to cache manually here first,
+            # in case it is removed before the creation is processed.
+            # This ensures deletion is processed as deletion
+            # and not a vacuous deletion of an untracked file.
+            # Since the update checks for the file,
+            # this has to be done after the trigger is added.
+            self.trigger_cache.update(
+                self.entry_point.get_trigger_path('close')
+            )
             self._show()
             await close_event.wait()
 
@@ -125,6 +149,10 @@ class Monitor:
         )
         self.entry_point.remove_trigger('show')
         self.entry_point.add_trigger('hide')
+        self.trigger_cache.update_paths((
+            self.entry_point.get_trigger_path('show'),
+            self.entry_point.get_trigger_path('hide')
+        ))
 
     def _hide(self) -> None:
         self.notify_scheduler.unschedule()
@@ -132,6 +160,10 @@ class Monitor:
         self._remove_tray_file()
         self.entry_point.remove_trigger('hide')
         self.entry_point.add_trigger('show')
+        self.trigger_cache.update_paths((
+            self.entry_point.get_trigger_path('hide'),
+            self.entry_point.get_trigger_path('hide')
+        ))
 
     def _refresh_tray_file(
         self, index: int, loaded_data: phile.notify.File,
