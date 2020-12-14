@@ -6,6 +6,7 @@ Test phile.watchdog_extras
 """
 
 # Standard library.
+import contextlib
 import dataclasses
 import pathlib
 import logging
@@ -373,6 +374,12 @@ class TestScheduler(unittest.TestCase):
         self.observer.unschedule(self.scheduler.watchdog_watch)
         self.scheduler.unschedule()
         self.assertTrue(not self.scheduler.is_scheduled)
+
+    def test_schedule_in_context_manager(self) -> None:
+        scheduler = self.scheduler
+        with scheduler as scheduler_context:
+            self.assertTrue(scheduler.is_scheduled)
+        self.assertTrue(not scheduler.is_scheduled)
 
     def test_dispatch_file_creation_events(self) -> None:
         """File creation events passes through."""

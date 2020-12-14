@@ -196,6 +196,13 @@ class TestEntryPoint(unittest.TestCase):
         with self.assertRaises(portalocker.LockException):
             extra_entry_point.bind()
 
+    def test_bind_in_context_manager(self) -> None:
+        entry_point = self.entry_point
+        with entry_point as entry_point_context:
+            self.assertEqual(entry_point_context, entry_point)
+            self.assertTrue(entry_point.is_bound())
+        self.assertTrue(not entry_point.is_bound())
+
     def test_get_trigger_path(self) -> None:
         """Fetch the trigger path of a given name."""
         trigger_path = self.entry_point.get_trigger_path(

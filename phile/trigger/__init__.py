@@ -10,6 +10,7 @@ import dataclasses
 import logging
 import os
 import pathlib
+import types
 import typing
 import warnings
 
@@ -179,6 +180,18 @@ class EntryPoint:
             self.bind()
             for trigger_name in available_triggers:
                 self.add_trigger(trigger_name)
+
+    def __enter__(self) -> 'EntryPoint':
+        self.bind()
+        return self
+
+    def __exit__(
+        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_value: typing.Optional[BaseException],
+        traceback: typing.Optional[types.TracebackType]
+    ) -> typing.Optional[bool]:
+        self.unbind()
+        return None
 
     def activate_trigger(self, trigger_path: pathlib.Path) -> None:
         """

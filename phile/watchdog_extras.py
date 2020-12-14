@@ -7,6 +7,7 @@ watchdog observer wrapper
 
 # Standard library.
 import pathlib
+import types
 import typing
 
 # External dependencies.
@@ -242,6 +243,18 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
         self.watchdog_watch: typing.Optional[
             watchdog.observers.api.ObservedWatch] = None
         """Description of watch data from :mod:`watchdog`."""
+
+    def __enter__(self) -> 'Scheduler':
+        self.schedule()
+        return self
+
+    def __exit__(
+        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_value: typing.Optional[BaseException],
+        traceback: typing.Optional[types.TracebackType]
+    ) -> typing.Optional[bool]:
+        self.unschedule()
+        return None
 
     @property
     def is_scheduled(self) -> bool:

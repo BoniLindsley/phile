@@ -105,23 +105,15 @@ class TestMonitorStart(unittest.TestCase):
             configuration=self.configuration,
             watching_observer=self.observer
         )
-        self.trigger_directory = (
-            self.monitor.entry_point.trigger_directory
-        )
-        self.extra_entry_point = phile.trigger.EntryPoint(
-            configuration=self.configuration,
-            trigger_directory=self.trigger_directory
-        )
 
     def test_start_initialises_directories_and_triggers(self) -> None:
         self.set_up_worker_thread()
+        entry_point = self.monitor.entry_point
         self.assertTrue(
             self.configuration.notification_directory.is_dir()
         )
-        self.assertTrue(self.trigger_directory.is_dir())
-        self.assertTrue(
-            self.extra_entry_point.get_trigger_path('close').is_file()
-        )
+        self.assertTrue(entry_point.trigger_directory.is_dir())
+        self.assertTrue(entry_point.get_trigger_path('close').is_file())
         self.assertTrue(not self.monitor.notify_tray_file.path.exists())
 
     def test_init_with_existing_notify_file(self) -> None:
@@ -161,10 +153,12 @@ class TestMonitorStart(unittest.TestCase):
         )
 
     def test_close_trigger_closes(self) -> None:
-        trigger_path = self.monitor.entry_point.get_trigger_path(
-            trigger_name='close',
+        extra_entry_point = phile.trigger.EntryPoint(
+            configuration=self.configuration,
+            trigger_directory=self.monitor.trigger_directory
         )
-        trigger_path.parent.mkdir(parents=True)
+        trigger_path = extra_entry_point.get_trigger_path('close')
+        trigger_path.parent.mkdir(parents=True, exist_ok=True)
         dispatch_mock = test_phile.threaded_mock.ThreadedMock()
         self.observer.add_handler(dispatch_mock, trigger_path.parent)
         self.set_up_worker_thread()

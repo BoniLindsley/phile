@@ -3,6 +3,7 @@
 # Standard library.
 import asyncio
 import contextlib
+import dataclasses
 import functools
 import pathlib
 import sys
@@ -19,75 +20,66 @@ import phile.trigger
 import phile.watchdog_extras
 
 
+@dataclasses.dataclass
 class Monitor:
 
-    def __init__(
-        self, *args, configuration: phile.configuration.Configuration,
-        watching_observer: watchdog.observers.Observer, **kwargs
-    ) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._configuration = configuration
-        self.notify_tray_file = phile.tray.File.from_path_stem(
-            configuration=configuration,
-            path_stem='30-phile-notify-tray',
-            text_icon='N'
-        )
-        """Read-only."""
-        self._watching_observer = watching_observer
-        self.entry_point = phile.trigger.EntryPoint(
-            configuration=configuration,
-            trigger_directory=pathlib.Path('phile-notify-tray'),
-        )
-        self.notify_sorter = (
-            phile.data.SortedLoadCache[phile.notify.File](
-                create_file=phile.notify.File,
-                on_insert=self._refresh_tray_file,
-                on_pop=self._refresh_tray_file,
-            )
-        )
+    configuration: phile.configuration.Configuration
+    watching_observer: watchdog.observers.Observer
+    trigger_directory: pathlib.Path = pathlib.Path('phile-notify-tray')
 
     async def start(self) -> None:
-        configuration = self._configuration
-        watching_observer = self._watching_observer
-        running_loop = asyncio.get_running_loop()
-        call_soon_threadsafe = running_loop.call_soon_threadsafe
-        self.trigger_scheduler = phile.watchdog_extras.Scheduler(
-            path_filter=self.entry_point.check_path,
-            path_handler=functools.partial(
-                call_soon_threadsafe, self.entry_point.activate_trigger
-            ),
-            watched_path=self.entry_point.trigger_directory,
-            watching_observer=watching_observer,
-        )
-        self.notify_scheduler = phile.watchdog_extras.Scheduler(
-            path_filter=functools.partial(
-                phile.notify.File.check_path,
-                configuration=configuration
-            ),
-            path_handler=functools.partial(
-                call_soon_threadsafe, self.notify_sorter.update
-            ),
-            watched_path=configuration.notification_directory,
-            watching_observer=watching_observer,
-        )
         with contextlib.ExitStack() as exit_stack:
-            exit_stack.callback(self.entry_point.unbind)
-            self.entry_point.bind()
-            close_event = asyncio.Event()
-            # The callback map can only be changed when unscheduled
-            # for thread safety
-            # because the callback is done in a different thread.
-            # So clear after unscheduling.
-            exit_stack.callback(self.entry_point.callback_map.clear)
-            # And set them before scheduling.
-            self.entry_point.callback_map.update(
-                close=lambda trigger_name: close_event.set(),
-                hide=lambda trigger_name: self._hide(),
-                show=lambda trigger_name: self._show(),
+            configuration = self.configuration
+            watching_observer = self.watching_observer
+            call_soon_threadsafe = (
+                asyncio.get_running_loop().call_soon_threadsafe
             )
-            exit_stack.callback(self.trigger_scheduler.unschedule)
-            self.trigger_scheduler.schedule()
+            self.notify_tray_file = phile.tray.File.from_path_stem(
+                configuration=configuration,
+                path_stem='30-phile-notify-tray',
+                text_icon='N'
+            )
+            close_event = asyncio.Event()
+            self.entry_point = exit_stack.enter_context(
+                phile.trigger.EntryPoint(
+                    callback_map={
+                        'close': lambda trigger_name: close_event.set(),
+                        'hide': lambda trigger_name: self._hide(),
+                        'show': lambda trigger_name: self._show(),
+                    },
+                    configuration=configuration,
+                    trigger_directory=self.trigger_directory,
+                )
+            )
+            self.notify_sorter = (
+                phile.data.SortedLoadCache[phile.notify.File](
+                    create_file=phile.notify.File,
+                    on_insert=self._refresh_tray_file,
+                    on_pop=self._refresh_tray_file,
+                )
+            )
+            self.trigger_scheduler = exit_stack.enter_context(
+                phile.watchdog_extras.Scheduler(
+                    path_filter=self.entry_point.check_path,
+                    path_handler=functools.partial(
+                        call_soon_threadsafe,
+                        self.entry_point.activate_trigger
+                    ),
+                    watched_path=self.entry_point.trigger_directory,
+                    watching_observer=watching_observer,
+                )
+            )
+            self.notify_scheduler = phile.watchdog_extras.Scheduler(
+                path_filter=functools.partial(
+                    phile.notify.File.check_path,
+                    configuration=configuration
+                ),
+                path_handler=functools.partial(
+                    call_soon_threadsafe, self.notify_sorter.update
+                ),
+                watched_path=configuration.notification_directory,
+                watching_observer=watching_observer,
+            )
             exit_stack.callback(self._hide)
             # This has to be done after scheduling
             # so that its deletion will be detected.
@@ -96,7 +88,7 @@ class Monitor:
             await close_event.wait()
 
     def _show(self) -> None:
-        configuration = self._configuration
+        configuration = self.configuration
         self.notify_scheduler.schedule()
         self.notify_sorter.refresh(
             data_directory=configuration.notification_directory,
