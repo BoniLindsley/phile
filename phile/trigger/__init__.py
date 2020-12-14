@@ -29,27 +29,12 @@ _logger = logging.getLogger(
 )
 """Logger whose name is the module name."""
 
-Handler = typing.Callable[[str], None]
+Handler = typing.Callable[[str], typing.Any]
 """Signature of callables processing triggers."""
 
 
-@dataclasses.dataclass(eq=False)
-class File(phile.data.File):
-
-    trigger_directory: dataclasses.InitVar[typing.Optional[pathlib.Path]
-                                           ] = None
-
-    @staticmethod
-    def make_path(
-        path_stem: str,
-        *args,
-        configuration: phile.configuration.Configuration,
-        trigger_directory: pathlib.Path = pathlib.Path(),
-        **kwargs
-    ) -> pathlib.Path:
-        return configuration.trigger_root / trigger_directory / (
-            path_stem + configuration.trigger_suffix
-        )
+def noop_handler(_trigger_name: str) -> None:
+    pass
 
 
 class PidLock:
@@ -156,10 +141,17 @@ class EntryPoint:
     def __init__(
         self,
         *,
+        available_triggers: typing.Set[str] = set(),
+        bind: bool = False,
+        callback_map: typing.Dict[str, Handler] = {},
         configuration: phile.configuration.Configuration,
         trigger_directory: pathlib.Path,
     ) -> None:
         """
+        :param available_triggers:
+            Triggers to add.
+            This must be empty if `bind` is `False`.
+        :parm bind: Whether to bind immediately.
         :param ~phile.configuration.Configuration configuration:
             Information on where data are saved.
         :param ~pathlib.Path trigger_directory:
@@ -178,6 +170,37 @@ class EntryPoint:
             self.trigger_directory / configuration.pid_path
         )
         """Lock representing ownership of watched directory."""
+        self.callback_map: typing.Dict[
+            str, Handler] = (callback_map if callback_map else {})
+        """Keeps track which callback handles which trigger."""
+        self.available_triggers: typing.Set[str] = set()
+        """Triggers that has been added and not removed nor used."""
+        if bind:
+            self.bind()
+            for trigger_name in available_triggers:
+                self.add_trigger(trigger_name)
+
+    def activate_trigger(self, trigger_path: pathlib.Path) -> None:
+        """
+        Calls callback associated with the given ``trigger_path``.
+
+        :param trigger_path:
+            Must be a trigger path, as determined by :meth:`check_path`.
+
+        It is only activated if the path does not exist anymore,
+        if the trigger is available,
+        and if there is an associated callback.
+        The trigger becomes unavailable after activation.
+        """
+        if trigger_path.exists():
+            return
+        trigger_name = trigger_path.stem
+        try:
+            self.available_triggers.remove(trigger_name)
+            trigger_callback = self.callback_map[trigger_name]
+        except KeyError:
+            return
+        trigger_callback(trigger_name)
 
     def add_trigger(self, trigger_name: str) -> None:
         """
@@ -187,13 +210,16 @@ class EntryPoint:
         :raises ResourceWarning:
             If ``self`` is not bound, as determined by :meth:`is_bound`.
         :raises ValueError: If the ``trigger_name`` is not valid.
+
+        The trigger added must already have a callback.
         """
         if not self.is_bound():
             raise ResourceWarning(
                 'Not adding trigger. Entry point not bound.'
             )
-        trigger_path = self.get_trigger_path(trigger_name)
-        trigger_path.touch()
+        assert trigger_name in self.callback_map
+        self.available_triggers.add(trigger_name)
+        self.get_trigger_path(trigger_name).touch()
 
     def remove_trigger(self, trigger_name: str) -> None:
         """
@@ -208,11 +234,15 @@ class EntryPoint:
             raise ResourceWarning(
                 'Not removing trigger. Entry point not bound.'
             )
-        trigger_path = self.get_trigger_path(trigger_name)
+        self.available_triggers.discard(trigger_name)
+        self.get_trigger_path(trigger_name).unlink(missing_ok=True)
+
+    def check_path(self, path: pathlib.Path) -> bool:
         try:
-            trigger_path.unlink()
-        except FileNotFoundError:
-            pass
+            valid_trigger_path = self.get_trigger_path(path.stem)
+        except ValueError:
+            return False
+        return valid_trigger_path == path
 
     def get_trigger_path(self, trigger_name: str) -> pathlib.Path:
         """
@@ -262,31 +292,5 @@ class EntryPoint:
         for trigger_path in self.trigger_directory.glob(
             '*' + self._trigger_suffix
         ):
-            # When Python 3.7 becomes deprecated,
-            # replace with `trigger_path.unlink(missing_ok=True)`.
-            try:
-                trigger_path.unlink()
-            except FileNotFoundError:  # pragma: no cover  # Defensive.
-                pass
+            trigger_path.unlink(missing_ok=True)
         self._pid_lock.release()
-
-
-class Switch:  # pragma: no cover
-
-    def __init__(self, *args, **kwargs) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.callback_map: typing.Dict[str, Handler] = {}
-
-    def on_cache_pop(
-        self, _index: int, trigger_file: File,
-        _tracked_files: typing.List[File]
-    ) -> None:
-        trigger_name = trigger_file.path.stem
-        callback_to_forward_to = self.callback_map.get(
-            trigger_name, self.unimplemented_trigger
-        )
-        callback_to_forward_to(trigger_name)
-
-    def unimplemented_trigger(self, trigger_name: str) -> None:
-        _logger.warning('Unknown trigger command: %s', trigger_name)

@@ -258,31 +258,6 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
             self.assertTrue(gui_icon_list.is_hidden())
-        # Do not respond to an unknown trigger.
-        # Cannot really test that it has no side effects.
-        # Just run it for coverage to ensure it does not error.
-        # Cannot mock process_trigger since its reference is given
-        # to a wrapping handler.
-        # So mocking the method does not replace it.
-        trigger_name = 'unknown'
-        trigger_path = trigger_directory / (
-            trigger_name + trigger_suffix
-        )
-        with self.trigger_path_handler_patch as handler_mock:
-            # Create the fake trigger.
-            # Make sure appropriate events are processed.
-            trigger_path.touch()
-            handler_mock.assert_called_with_soon(trigger_path)
-            self.app.process_events()
-            handler_mock.reset_mock()
-            # Activate the fake trigger.
-            # It should still be detected.
-            trigger_path.unlink()
-            handler_mock.assert_called_with_soon(trigger_path)
-            with self.assertLogs(
-                logger='phile.tray.gui', level=logging.WARNING
-            ) as logs:
-                self.app.process_events()
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
         with unittest.mock.patch.object(

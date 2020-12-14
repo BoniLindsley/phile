@@ -351,6 +351,7 @@ class TestIconList(unittest.TestCase):
             configuration=self.configuration,
             watching_observer=self.observer,
         )
+        self.addCleanup(self.icon_list._entry_point.unbind)
         # For detecting commands sent to control mode.
         # Creating a new mock to make mypy happy,
         # since it detects `send_command` as a method,
@@ -597,35 +598,6 @@ class TestIconList(unittest.TestCase):
         ) as hide_mock:
             trigger_path.unlink()
             hide_mock.assert_called_soon()
-        # Do not respond to an unknown trigger.
-        # Cannot really test that it has no side effects.
-        # Just run it for coverage to ensure it does not error.
-        # Cannot mock process_trigger since its reference is given
-        # to a wrapping handler.
-        # So mocking the method does not replace it.
-        trigger_name = 'unknown'
-        trigger_path = trigger_directory / (
-            trigger_name + trigger_suffix
-        )
-        scheduler = self.icon_list._trigger_scheduler
-        with unittest.mock.patch.object(
-            scheduler,
-            'path_handler',
-            new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=scheduler.path_handler
-        ) as handler_mock:
-            # Create the fake trigger.
-            # Make sure appropriate events are processed.
-            trigger_path.touch()
-            handler_mock.assert_called_with_soon(trigger_path)
-            handler_mock.reset_mock()
-            # Activate the fake trigger.
-            # It should still be detected.
-            with self.assertLogs(
-                logger='phile.tray.tmux', level=logging.WARNING
-            ) as logs:
-                trigger_path.unlink()
-                handler_mock.assert_called_with_soon(trigger_path)
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
         with unittest.mock.patch.object(

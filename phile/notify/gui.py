@@ -308,25 +308,24 @@ class MainWindow(QMainWindow):
         # Take cooperative ownership of the directory
         # containing trigger file for trays.
         self._entry_point = entry_point = phile.trigger.EntryPoint(
+            available_triggers={'close', 'show'},
+            bind=True,
+            callback_map={
+                'close': lambda path: self.close(),
+                'hide': lambda path: self.hide(),
+                'show': lambda path: self.show(),
+            },
             configuration=configuration,
             trigger_directory=pathlib.Path('phile-notify-gui'),
         )
-        trigger_directory = entry_point.trigger_directory
-        entry_point.bind()
         self.destroyed.connect(entry_point.unbind)
         # Forward watchdog events into Qt signal and handle it there.
         self._trigger_scheduler = scheduler = (
             phile.watchdog_extras.Scheduler(
-                path_filter=(
-                    lambda path:
-                    (path.suffix == configuration.trigger_suffix)
-                ),
+                path_filter=entry_point.check_path,
                 path_handler=phile.PySide2_extras.event_loop.CallSoon(
                     parent=self,
-                    call_target=(
-                        lambda path: self.process_trigger(path.stem)
-                        if not path.is_file() else None
-                    )
+                    call_target=entry_point.activate_trigger
                 ),
                 watched_path=entry_point.trigger_directory,
                 watching_observer=watching_observer,
@@ -338,20 +337,6 @@ class MainWindow(QMainWindow):
         # so the observer would not call non-existence handlers.
         self.destroyed.connect(scheduler.unschedule)
         self._closed.connect(scheduler.unschedule)
-        # Allow closing with a trigger.
-        entry_point.add_trigger('close')
-        entry_point.add_trigger('show')
-
-    def process_trigger(self, trigger_name: str) -> None:
-        _logger.debug('MainWindow trigger %s.', trigger_name)
-        if trigger_name == 'hide':
-            self.hide()
-        elif trigger_name == 'show':
-            self.show()
-        elif trigger_name == 'close':
-            self.close()
-        else:
-            _logger.warning('Unknown trigger command: %s', trigger_name)
 
     def closeEvent(self, close_event: QCloseEvent) -> None:
         """Internal. Handle cleanup."""

@@ -464,40 +464,26 @@ class IconList:
         # Take cooperative ownership of the directory
         # containing trigger file for trays.
         self._entry_point = entry_point = phile.trigger.EntryPoint(
+            available_triggers={'close', 'show'},
+            bind=True,
+            callback_map={
+                'hide': lambda path: self.hide(),
+                'show': lambda path: self.show(),
+                'close': lambda path: self.close(),
+            },
             configuration=configuration,
             trigger_directory=pathlib.Path('phile-tray-tmux'),
         )
-        trigger_directory = entry_point.trigger_directory
-        entry_point.bind()
         # Forward watchdog events into Qt signal and handle it there.
         self._trigger_scheduler = scheduler = (
             phile.watchdog_extras.Scheduler(
-                path_filter=(
-                    lambda path:
-                    (path.suffix == configuration.trigger_suffix)
-                ),
-                path_handler=(
-                    lambda path: self.process_trigger(path.stem)
-                    if not path.is_file() else None
-                ),
+                path_filter=entry_point.check_path,
+                path_handler=entry_point.activate_trigger,
                 watched_path=entry_point.trigger_directory,
                 watching_observer=watching_observer,
             )
         )
         scheduler.schedule()
-        # Allow closing with a trigger.
-        entry_point.add_trigger('close')
-        entry_point.add_trigger('show')
-
-    def process_trigger(self, trigger_name: str) -> None:
-        if trigger_name == 'hide':
-            self.hide()
-        elif trigger_name == 'show':
-            self.show()
-        elif trigger_name == 'close':
-            self.close()
-        else:
-            _logger.warning('Unknown trigger command: %s', trigger_name)
 
     def run(self) -> None:
         """
@@ -527,10 +513,10 @@ class IconList:
                     exit_found = next_line.startswith(('%exit'))
 
     def close(self) -> None:
-        self.hide()
         self._control_mode.send_command(CommandBuilder.exit_client())
         self._trigger_scheduler.unschedule()
         self._tray_scheduler.unschedule()
+        self.hide()
         self._entry_point.unbind()
 
     def hide(self) -> None:

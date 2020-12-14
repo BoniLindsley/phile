@@ -161,10 +161,8 @@ class TestMonitorStart(unittest.TestCase):
         )
 
     def test_close_trigger_closes(self) -> None:
-        trigger_path = phile.trigger.File.make_path(
-            path_stem='close',
-            configuration=self.configuration,
-            trigger_directory=pathlib.Path('phile-notify-tray')
+        trigger_path = self.monitor.entry_point.get_trigger_path(
+            trigger_name='close',
         )
         trigger_path.parent.mkdir(parents=True)
         dispatch_mock = test_phile.threaded_mock.ThreadedMock()

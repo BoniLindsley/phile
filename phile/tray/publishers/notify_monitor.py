@@ -39,13 +39,6 @@ class Monitor:
             configuration=configuration,
             trigger_directory=pathlib.Path('phile-notify-tray'),
         )
-        self.trigger_switch = phile.trigger.Switch()
-        self.trigger_cache = (
-            phile.data.SortedLoadCache[phile.trigger.File](
-                create_file=phile.trigger.File,
-                on_pop=self.trigger_switch.on_cache_pop
-            )
-        )
         self.notify_sorter = (
             phile.data.SortedLoadCache[phile.notify.File](
                 create_file=phile.notify.File,
@@ -60,11 +53,9 @@ class Monitor:
         running_loop = asyncio.get_running_loop()
         call_soon_threadsafe = running_loop.call_soon_threadsafe
         self.trigger_scheduler = phile.watchdog_extras.Scheduler(
-            path_filter=(
-                lambda path: path.suffix == configuration.trigger_suffix
-            ),
+            path_filter=self.entry_point.check_path,
             path_handler=functools.partial(
-                call_soon_threadsafe, self.trigger_cache.update
+                call_soon_threadsafe, self.entry_point.activate_trigger
             ),
             watched_path=self.entry_point.trigger_directory,
             watching_observer=watching_observer,
@@ -88,9 +79,9 @@ class Monitor:
             # for thread safety
             # because the callback is done in a different thread.
             # So clear after unscheduling.
-            exit_stack.callback(self.trigger_switch.callback_map.clear)
+            exit_stack.callback(self.entry_point.callback_map.clear)
             # And set them before scheduling.
-            self.trigger_switch.callback_map.update(
+            self.entry_point.callback_map.update(
                 close=lambda trigger_name: close_event.set(),
                 hide=lambda trigger_name: self._hide(),
                 show=lambda trigger_name: self._show(),
@@ -101,15 +92,6 @@ class Monitor:
             # This has to be done after scheduling
             # so that its deletion will be detected.
             self.entry_point.add_trigger('close')
-            # Add the close trigger file to cache manually here first,
-            # in case it is removed before the creation is processed.
-            # This ensures deletion is processed as deletion
-            # and not a vacuous deletion of an untracked file.
-            # Since the update checks for the file,
-            # this has to be done after the trigger is added.
-            self.trigger_cache.update(
-                self.entry_point.get_trigger_path('close')
-            )
             self._show()
             await close_event.wait()
 
@@ -122,10 +104,6 @@ class Monitor:
         )
         self.entry_point.remove_trigger('show')
         self.entry_point.add_trigger('hide')
-        self.trigger_cache.update_paths((
-            self.entry_point.get_trigger_path('show'),
-            self.entry_point.get_trigger_path('hide')
-        ))
 
     def _hide(self) -> None:
         self.notify_scheduler.unschedule()
@@ -133,10 +111,6 @@ class Monitor:
         self._remove_tray_file()
         self.entry_point.remove_trigger('hide')
         self.entry_point.add_trigger('show')
-        self.trigger_cache.update_paths((
-            self.entry_point.get_trigger_path('hide'),
-            self.entry_point.get_trigger_path('hide')
-        ))
 
     def _refresh_tray_file(
         self, index: int, loaded_data: phile.notify.File,
