@@ -72,7 +72,9 @@ class TestMonitorStart(unittest.TestCase):
         self.monitor_stopped = threading.Event()
         self.monitor_started = threading.Event()
         self.worker_thread = threading.Thread(
-            target=asyncio.run, args=(self.run_monitor_start(), )
+            target=asyncio.run,
+            args=(self.run_monitor_start(), ),
+            daemon=True
         )
         self.addCleanup(self.tear_down_worker_thread)
         self.worker_thread.start()
