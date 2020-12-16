@@ -37,7 +37,7 @@ class Monitor:
             self.notify_tray_file = phile.tray.File.from_path_stem(
                 configuration=configuration,
                 path_stem='30-phile-notify-tray',
-                text_icon='N'
+                text_icon=' N'
             )
             close_event = asyncio.Event()
             self.entry_point = exit_stack.enter_context(
