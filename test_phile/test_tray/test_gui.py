@@ -264,7 +264,7 @@ class TestGuiIconList(unittest.TestCase):
             gui_icon_list, 'close', wraps=gui_icon_list.close
         ) as close_mock, self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            handler_mock.assert_called_soon(trigger_path)
+            handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
             close_mock.assert_called()
         # Give cleanup something to delete.
