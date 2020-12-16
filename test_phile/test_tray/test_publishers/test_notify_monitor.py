@@ -95,9 +95,8 @@ class TestMonitorStart(unittest.TestCase):
         self.monitor_stopped.set()
 
     def tear_down_worker_thread(self) -> None:
-        if not self.worker_thread.is_alive():
-            return
-        self.running_loop.call_soon_threadsafe(self.main_task.cancel)
+        with contextlib.suppress(RuntimeError):
+            self.running_loop.call_soon_threadsafe(self.main_task.cancel)
         self.monitor_stopped.wait(timeout=wait_time.total_seconds())
 
     def setUp(self) -> None:
