@@ -39,7 +39,7 @@ class _TrayFiles(contextlib.AbstractContextManager):
         self.files = tuple(
             File.from_path_stem(
                 configuration=configuration,
-                path_stem='90-phile-datetime-display-' + suffix
+                path_stem='90-phile-tray-datetime-' + suffix
             ) for suffix in (
                 '1-year', '2-month', '3-day', '4-weekday', '5-hour',
                 '6-minute'
@@ -61,7 +61,7 @@ class _TrayFiles(contextlib.AbstractContextManager):
     def update(self, now: datetime.datetime) -> None:
         datetime_values = (
             now.strftime(' %Y'), now.strftime('-%m'),
-            now.strftime('-%d'), now.strftime(' %w'),
+            now.strftime('-%d'), now.strftime('w%w'),
             now.strftime(' %H'), now.strftime(':%M')
         )
         for value, file in zip(datetime_values, self.files):
@@ -73,8 +73,7 @@ class _TrayFiles(contextlib.AbstractContextManager):
 def _prepare(
     configuration: phile.configuration.Configuration,
     watching_observer: watchdog.observers.Observer,
-    trigger_directory: pathlib.Path = pathlib.
-    Path('phile-datetime-display')
+    trigger_directory: pathlib.Path
 ) -> typing.Iterator:
     with contextlib.ExitStack() as exit_stack:
         close_event = asyncio.Event()
@@ -113,7 +112,7 @@ async def run(
     configuration: phile.configuration.Configuration,
     watching_observer: watchdog.observers.Observer,
     trigger_directory: pathlib.
-    Path = (pathlib.Path('phile-datetime-display'))
+    Path = (pathlib.Path('phile-tray-datetime'))
 ) -> None:
     with _prepare(
         configuration, watching_observer, trigger_directory

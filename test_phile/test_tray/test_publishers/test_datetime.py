@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
---------------------------------------------------
-Test :mod:`phile.tray.publishers.datetime_display`
---------------------------------------------------
+------------------------------------------
+Test :mod:`phile.tray.publishers.datetime`
+------------------------------------------
 """
 
 # Standard library.
@@ -23,7 +23,7 @@ import watchdog.observers  # type: ignore[import]
 # Internal packages.
 import phile.configuration
 import phile.notify
-import phile.tray.publishers.datetime_display
+import phile.tray.publishers.datetime
 import phile.trigger
 import phile.watchdog_extras
 import test_phile.threaded_mock
@@ -43,22 +43,22 @@ class TestTrayFiles(unittest.TestCase):
     def setUp(self) -> None:
         self.set_up_configuration()
         self.tray_files = (
-            phile.tray.publishers.datetime_display._TrayFiles(
+            phile.tray.publishers.datetime._TrayFiles(
                 configuration=self.configuration
             )
         )
         self.now = datetime.datetime(2222, 11, 1, 00, 59)
         tray_directory = self.configuration.tray_directory
         self.expected_tray_files = (
-            tray_directory / '90-phile-datetime-display-1-year.tray',
-            tray_directory / '90-phile-datetime-display-2-month.tray',
-            tray_directory / '90-phile-datetime-display-3-day.tray',
-            tray_directory / '90-phile-datetime-display-4-weekday.tray',
-            tray_directory / '90-phile-datetime-display-5-hour.tray',
-            tray_directory / '90-phile-datetime-display-6-minute.tray',
+            tray_directory / '90-phile-tray-datetime-1-year.tray',
+            tray_directory / '90-phile-tray-datetime-2-month.tray',
+            tray_directory / '90-phile-tray-datetime-3-day.tray',
+            tray_directory / '90-phile-tray-datetime-4-weekday.tray',
+            tray_directory / '90-phile-tray-datetime-5-hour.tray',
+            tray_directory / '90-phile-tray-datetime-6-minute.tray',
         )
         self.expected_text_icons = (
-            ' 2222', '-11', '-01', ' 5', ' 00', ':59'
+            ' 2222', '-11', '-01', 'w5', ' 00', ':59'
         )
 
     def assert_files_updated(self) -> None:
@@ -118,12 +118,12 @@ class TestRun(unittest.TestCase):
             watch=watch
         )
         self.expected_tray_files = (
-            tray_directory / '90-phile-datetime-display-1-year.tray',
-            tray_directory / '90-phile-datetime-display-2-month.tray',
-            tray_directory / '90-phile-datetime-display-3-day.tray',
-            tray_directory / '90-phile-datetime-display-4-weekday.tray',
-            tray_directory / '90-phile-datetime-display-5-hour.tray',
-            tray_directory / '90-phile-datetime-display-6-minute.tray',
+            tray_directory / '90-phile-tray-datetime-1-year.tray',
+            tray_directory / '90-phile-tray-datetime-2-month.tray',
+            tray_directory / '90-phile-tray-datetime-3-day.tray',
+            tray_directory / '90-phile-tray-datetime-4-weekday.tray',
+            tray_directory / '90-phile-tray-datetime-5-hour.tray',
+            tray_directory / '90-phile-tray-datetime-6-minute.tray',
         )
 
     def assert_files_created(self) -> None:
@@ -153,7 +153,7 @@ class TestRun(unittest.TestCase):
     async def run_start(self) -> None:
         running_loop = self.running_loop = asyncio.get_running_loop()
         main_task = self.main_task = running_loop.create_task(
-            phile.tray.publishers.datetime_display.run(
+            phile.tray.publishers.datetime.run(
                 configuration=self.configuration,
                 watching_observer=self.observer
             )
@@ -173,7 +173,7 @@ class TestRun(unittest.TestCase):
     def set_up_new_entry_point(self) -> None:
         self.entry_point = entry_point = phile.trigger.EntryPoint(
             configuration=self.configuration,
-            trigger_directory=pathlib.Path('phile-datetime-display')
+            trigger_directory=pathlib.Path('phile-tray-datetime')
         )
         self.trigger_directory = entry_point.trigger_directory
 
