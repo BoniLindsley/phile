@@ -467,9 +467,9 @@ class IconList:
             available_triggers={'close', 'show'},
             bind=True,
             callback_map={
-                'hide': lambda path: self.hide(),
-                'show': lambda path: self.show(),
-                'close': lambda path: self.close(),
+                'hide': self.hide,
+                'show': self.show,
+                'close': self.close,
             },
             configuration=configuration,
             trigger_directory=pathlib.Path('phile-tray-tmux'),

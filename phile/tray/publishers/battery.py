@@ -116,9 +116,9 @@ def _prepare(
         entry_point = exit_stack.enter_context(
             phile.trigger.EntryPoint(
                 callback_map={
-                    'close': lambda _trigger_name: close_event.set(),
-                    'hide': lambda _trigger_name: hide_event.set(),
-                    'show': lambda _trigger_name: show_event.set(),
+                    'close': close_event.set,
+                    'hide': hide_event.set,
+                    'show': show_event.set,
                 },
                 configuration=configuration,
                 trigger_directory=trigger_directory,

@@ -715,13 +715,13 @@ class TestMainWindow(unittest.TestCase):
             self.assertTrue(main_window.isHidden())
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
-        with unittest.mock.patch.object(
-            main_window, 'close', wraps=main_window.close
-        ) as close_mock, self.trigger_path_handler_patch as handler_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
-            close_mock.assert_called()
+            self.assertTrue(
+                not main_window._trigger_scheduler.is_scheduled
+            )
         # Give cleanup something to delete.
         self.main_window = unittest.mock.Mock()
 

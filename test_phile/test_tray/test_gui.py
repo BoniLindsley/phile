@@ -260,13 +260,13 @@ class TestGuiIconList(unittest.TestCase):
             self.assertTrue(gui_icon_list.is_hidden())
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
-        with unittest.mock.patch.object(
-            gui_icon_list, 'close', wraps=gui_icon_list.close
-        ) as close_mock, self.trigger_path_handler_patch as handler_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
             self.app.process_events()
-            close_mock.assert_called()
+            self.assertTrue(
+                not gui_icon_list._trigger_scheduler.is_scheduled
+            )
         # Give cleanup something to delete.
         self.gui_icon_list = unittest.mock.Mock()
 

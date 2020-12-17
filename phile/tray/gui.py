@@ -161,9 +161,9 @@ class GuiIconList(QObject):
             available_triggers={'close', 'show'},
             bind=True,
             callback_map={
-                'close': lambda path: self.close(),
-                'hide': lambda path: self.hide(),
-                'show': lambda path: self.show(),
+                'close': self.close,
+                'hide': self.hide,
+                'show': self.show,
             },
             configuration=configuration,
             trigger_directory=pathlib.Path('phile-tray-gui'),

@@ -23,32 +23,25 @@ import phile.watchdog_extras
 import test_phile.threaded_mock
 
 
-class TestHandler(unittest.TestCase):
-    """Tests :data:`~phile.trigger.Handler`."""
-
-    def test_lambda(self) -> None:
-        """A lambda can be a :data:`~phile.trigger.Handler`."""
-        _: phile.trigger.Handler = lambda _: None
-
-    def test_function(self) -> None:
-        """A function can be a :data:`~phile.trigger.Handler`."""
-
-        def trigger_handle_function(trigger_name: str) -> None:
-            pass
-
-        _: phile.trigger.Handler = trigger_handle_function
+def noop_nullary() -> None:
+    pass
 
 
-class TestNoopHandler(unittest.TestCase):
-    """Tests :data:`~phile.trigger.noop_handler`."""
+class TestNullaryCallable(unittest.TestCase):
+    """Tests :data:`~phile.trigger.NullaryCallable`."""
 
-    def test_is_handler(self) -> None:
-        """The noop handler must be a trigger handler."""
-        _: phile.trigger.Handler = phile.trigger.noop_handler
+    def test_compatible_lambda(self) -> None:
+        _: phile.trigger.NullaryCallable = lambda: None
 
-    def test_is_callable(self) -> None:
-        """The noop handler must be callable. (Called for coverage.)"""
-        phile.trigger.noop_handler('yellow')
+    def test_compatible_function(self) -> None:
+
+        def constant_function() -> int:
+            return 1
+
+        _: phile.trigger.NullaryCallable = constant_function
+
+    def test_noop_function(self) -> None:
+        _: phile.trigger.NullaryCallable = noop_nullary
 
 
 class TestPidLock(unittest.TestCase):
@@ -252,9 +245,7 @@ class TestEntryPoint(unittest.TestCase):
 
     def test_add_and_remove_trigger(self) -> None:
         """Adding and removing trigger creates and deletes files."""
-        self.entry_point.callback_map = {
-            self.trigger_name: phile.trigger.noop_handler
-        }
+        self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
         self.entry_point.add_trigger(self.trigger_name)
@@ -282,8 +273,8 @@ class TestEntryPoint(unittest.TestCase):
             available_triggers={'red', 'yellow'},
             bind=True,
             callback_map={
-                'red': phile.trigger.noop_handler,
-                'yellow': phile.trigger.noop_handler
+                'red': noop_nullary,
+                'yellow': noop_nullary
             },
             configuration=self.configuration,
             trigger_directory=pathlib.Path(self.trigger_directory_name),
@@ -303,7 +294,7 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.add_trigger(self.trigger_name)
         self.trigger_path.unlink()
         self.entry_point.activate_trigger(self.trigger_path)
-        trigger_callback.assert_called_once_with(self.trigger_name)
+        trigger_callback.assert_called_once_with()
 
     def test_activate_trigger_fails_if_not_deleted(self) -> None:
         """Activation checks that the trigger path is deleted."""
@@ -330,9 +321,7 @@ class TestEntryPoint(unittest.TestCase):
 
     def test_activate_trigger_fails_without_callback(self) -> None:
         """Activation checks that the trigger has a callback."""
-        self.entry_point.callback_map = {
-            self.trigger_name: phile.trigger.noop_handler
-        }
+        self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
         self.entry_point.add_trigger(self.trigger_name)
@@ -342,9 +331,7 @@ class TestEntryPoint(unittest.TestCase):
 
     def test_unbind_removes_triggers(self) -> None:
         """Unbinding cleans up any remaining triggers."""
-        self.entry_point.callback_map = {
-            self.trigger_name: phile.trigger.noop_handler
-        }
+        self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
         self.entry_point.add_trigger(self.trigger_name)

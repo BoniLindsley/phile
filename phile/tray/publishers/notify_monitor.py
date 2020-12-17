@@ -43,9 +43,9 @@ class Monitor:
             self.entry_point = exit_stack.enter_context(
                 phile.trigger.EntryPoint(
                     callback_map={
-                        'close': lambda trigger_name: close_event.set(),
-                        'hide': lambda trigger_name: self._hide(),
-                        'show': lambda trigger_name: self._show(),
+                        'close': close_event.set,
+                        'hide': self._hide,
+                        'show': self._show,
                     },
                     configuration=configuration,
                     trigger_directory=self.trigger_directory,

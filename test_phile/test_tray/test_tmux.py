@@ -333,6 +333,16 @@ class TestIconList(unittest.TestCase):
         observer.start()
         self.addCleanup(observer.stop)
 
+    def set_up_trigger_dispatcher(self) -> None:
+        """Patch for detecting when trigger dispatch has been called."""
+        scheduler = self.icon_list._trigger_scheduler
+        self.trigger_path_handler_patch = unittest.mock.patch.object(
+            scheduler,
+            'path_handler',
+            new_callable=test_phile.threaded_mock.ThreadedMock,
+            wraps=scheduler.path_handler
+        )
+
     def set_up_control_mode(self) -> None:
         """Use unique control modes to not have commands linger."""
         control_mode_patch = unittest.mock.patch(
@@ -572,42 +582,71 @@ class TestIconList(unittest.TestCase):
             CommandBuilder.exit_client()
         )
 
+    #def test_triggers(self) -> None:
+    #    """Tray GUI has show, hide and close triggers."""
+    #    icon_list = self.icon_list
+    #    # Use a threaded mock to check when events are queued into Qt.
+    #    trigger_directory = self.trigger_directory
+    #    trigger_suffix = self.configuration.trigger_suffix
+    #    trigger_path = trigger_directory / ('show' + trigger_suffix)
+    #    # Respond to a show trigger.
+    #    with unittest.mock.patch.object(
+    #        icon_list,
+    #        'show',
+    #        new_callable=test_phile.threaded_mock.ThreadedMock,
+    #        wraps=icon_list.show
+    #    ) as show_mock:
+    #        trigger_path.unlink()
+    #        show_mock.assert_called_soon()
+    #    # Respond to a hide trigger.
+    #    trigger_path = trigger_directory / ('hide' + trigger_suffix)
+    #    with unittest.mock.patch.object(
+    #        icon_list,
+    #        'hide',
+    #        new_callable=test_phile.threaded_mock.ThreadedMock,
+    #        wraps=icon_list.hide
+    #    ) as hide_mock:
+    #        trigger_path.unlink()
+    #        hide_mock.assert_called_soon()
+    #    # Respond to a close trigger.
+    #    trigger_path = trigger_directory / ('close' + trigger_suffix)
+    #    with unittest.mock.patch.object(
+    #        icon_list,
+    #        'close',
+    #        new_callable=test_phile.threaded_mock.ThreadedMock,
+    #        wraps=icon_list.close
+    #    ) as close_mock:
+    #        trigger_path.unlink()
+    #        close_mock.assert_called_soon()
+
     def test_triggers(self) -> None:
-        """Tray GUI has show, hide and close triggers."""
+        """Tray tmux has show, hide and close triggers."""
+        self.set_up_trigger_dispatcher()
         icon_list = self.icon_list
-        # Use a threaded mock to check when events are queued into Qt.
         trigger_directory = self.trigger_directory
         trigger_suffix = self.configuration.trigger_suffix
         trigger_path = trigger_directory / ('show' + trigger_suffix)
         # Respond to a show trigger.
-        with unittest.mock.patch.object(
-            icon_list,
-            'show',
-            new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=icon_list.show
-        ) as show_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            show_mock.assert_called_soon()
+            handler_mock.assert_called_with_soon(trigger_path)
+            self.assertTrue(not icon_list.is_hidden())
         # Respond to a hide trigger.
         trigger_path = trigger_directory / ('hide' + trigger_suffix)
-        with unittest.mock.patch.object(
-            icon_list,
-            'hide',
-            new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=icon_list.hide
-        ) as hide_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            hide_mock.assert_called_soon()
+            handler_mock.assert_called_with_soon(trigger_path)
+            self.assertTrue(icon_list.is_hidden())
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
-        with unittest.mock.patch.object(
-            icon_list,
-            'close',
-            new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=icon_list.close
-        ) as close_mock:
+        with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
-            close_mock.assert_called_soon()
+            handler_mock.assert_called_with_soon(trigger_path)
+            self.assertTrue(
+                not icon_list._trigger_scheduler.is_scheduled
+            )
+        # Give cleanup something to delete.
+        self.icon_list = unittest.mock.Mock()
 
 
 if __name__ == '__main__':

@@ -30,12 +30,7 @@ _logger = logging.getLogger(
 )
 """Logger whose name is the module name."""
 
-Handler = typing.Callable[[str], typing.Any]
-"""Signature of callables processing triggers."""
-
-
-def noop_handler(_trigger_name: str) -> None:
-    pass
+NullaryCallable = typing.Callable[[], typing.Any]
 
 
 class PidLock:
@@ -144,7 +139,7 @@ class EntryPoint:
         *,
         available_triggers: typing.Set[str] = set(),
         bind: bool = False,
-        callback_map: typing.Dict[str, Handler] = {},
+        callback_map: typing.Dict[str, NullaryCallable] = {},
         configuration: phile.configuration.Configuration,
         trigger_directory: pathlib.Path,
     ) -> None:
@@ -172,7 +167,8 @@ class EntryPoint:
         )
         """Lock representing ownership of watched directory."""
         self.callback_map: typing.Dict[
-            str, Handler] = (callback_map if callback_map else {})
+            str,
+            NullaryCallable] = (callback_map if callback_map else {})
         """Keeps track which callback handles which trigger."""
         self.available_triggers: typing.Set[str] = set()
         """Triggers that has been added and not removed nor used."""
@@ -213,7 +209,7 @@ class EntryPoint:
             trigger_callback = self.callback_map[trigger_name]
         except KeyError:
             return
-        trigger_callback(trigger_name)
+        trigger_callback()
 
     def add_trigger(self, trigger_name: str) -> None:
         """
