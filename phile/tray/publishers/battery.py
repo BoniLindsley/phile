@@ -3,15 +3,16 @@
 # Standard library.
 import asyncio
 import contextlib
-import dataclasses
 import datetime
 import psutil  # type: ignore[import]
 import sys
+import types
 import typing
 
 # Internal packages.
 import phile.configuration
 import phile.tray
+from . import update
 
 BatteryStatus = typing.Optional[psutil._common.sbattery]
 
@@ -46,17 +47,21 @@ class TimeFile(File):
         self.text_icon = f'{remaining_text}'
 
 
-@dataclasses.dataclass
-class UpdateLoop:
+class TrayFilesUpdater(update.SelfTarget):
 
-    configuration: dataclasses.InitVar[phile.configuration.Configuration]
-    prefix: dataclasses.InitVar[str] = '70-phile-tray-battery-'
-    refresh_interval: datetime.timedelta = datetime.timedelta(seconds=5)
-
-    def __post_init__(
-        self, configuration: phile.configuration.Configuration,
-        prefix: str
-    ) -> None:
+    def __init__(
+        self,
+        *args,
+        configuration: phile.configuration.Configuration,
+        prefix: str = '70-phile-tray-battery-',
+        refresh_interval: datetime.timedelta = datetime.timedelta(
+            seconds=5
+        ),
+        **kwargs
+    ):
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.refresh_interval = refresh_interval
         self.files: typing.Tuple[File, ...] = (
             PercentageFile.from_path_stem(
                 configuration=configuration,
@@ -67,17 +72,11 @@ class UpdateLoop:
             ),
         )
 
-    def close(self) -> None:
+    def on_exit(self) -> None:
         for file in self.files:
             file.path.unlink(missing_ok=True)
 
-    async def run(self):
-        with contextlib.closing(self):
-            while True:
-                timeout = self.update().total_seconds()
-                await asyncio.sleep(timeout)
-
-    def update(self) -> typing.Optional[datetime.timedelta]:
+    def __call__(self) -> datetime.timedelta:
         battery_state = psutil.sensors_battery()
         for file in self.files:
             file.update(battery_state)
@@ -89,8 +88,8 @@ class UpdateLoop:
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     configuration = phile.configuration.Configuration()
     with contextlib.suppress(KeyboardInterrupt):
-        run = UpdateLoop(configuration=configuration).run()
-        asyncio.run(run)
+        target = TrayFilesUpdater(configuration=configuration)
+        asyncio.run(update.sleep_loop(target))
     return 0
 
 

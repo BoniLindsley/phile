@@ -3,26 +3,28 @@
 # Standard library.
 import asyncio
 import contextlib
-import dataclasses
 import datetime
 import sys
+import types
 import typing
 
 # Internal packages.
 import phile.configuration
 import phile.tray
+from . import update
 
 
-@dataclasses.dataclass
-class UpdateLoop:
+class TrayFilesUpdater(update.SelfTarget):
 
-    configuration: dataclasses.InitVar[phile.configuration.Configuration]
-    prefix: dataclasses.InitVar[str] = '90-phile-tray-datetime-'
-
-    def __post_init__(
-        self, configuration: phile.configuration.Configuration,
-        prefix: str
-    ) -> None:
+    def __init__(
+        self,
+        *args,
+        configuration: phile.configuration.Configuration,
+        prefix: str = '90-phile-tray-datetime-',
+        **kwargs
+    ):
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         File = phile.tray.File
         self.files = tuple(
             File.from_path_stem(
@@ -33,17 +35,11 @@ class UpdateLoop:
             )
         )
 
-    def close(self) -> None:
+    def on_exit(self) -> None:
         for file in self.files:
             file.path.unlink(missing_ok=True)
 
-    async def run(self) -> None:
-        with contextlib.closing(self):
-            while True:
-                timeout = self.update().total_seconds()
-                await asyncio.sleep(timeout)
-
-    def update(self) -> datetime.timedelta:
+    def __call__(self) -> datetime.timedelta:
         now = datetime.datetime.now()
         datetime_values = (
             now.strftime(' %Y'), now.strftime('-%m'),
@@ -62,8 +58,8 @@ class UpdateLoop:
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     configuration = phile.configuration.Configuration()
     with contextlib.suppress(KeyboardInterrupt):
-        run = UpdateLoop(configuration=configuration).run()
-        asyncio.run(run)
+        target = TrayFilesUpdater(configuration=configuration)
+        asyncio.run(update.sleep_loop(target))
     return 0
 
 

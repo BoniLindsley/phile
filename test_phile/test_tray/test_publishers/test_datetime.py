@@ -6,32 +6,18 @@ Test :mod:`phile.tray.publishers.datetime`
 """
 
 # Standard library.
-import asyncio
-import contextlib
 import datetime
 import pathlib
 import tempfile
-import threading
 import unittest
 import unittest.mock
 
-# External dependencies.
-import portalocker  # type: ignore[import]
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
-
 # Internal packages.
 import phile.configuration
-import phile.notify
 import phile.tray.publishers.datetime
-import phile.trigger
-import phile.watchdog_extras
-import test_phile.threaded_mock
-
-wait_time = datetime.timedelta(seconds=2)
 
 
-class TestUpdateLoop(unittest.TestCase):
+class TestTrayFiles(unittest.TestCase):
 
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
@@ -72,8 +58,8 @@ class TestUpdateLoop(unittest.TestCase):
     def setUp(self) -> None:
         self.set_up_configuration()
         self.set_up_datetime_now()
-        self.tray_files = (
-            phile.tray.publishers.datetime.UpdateLoop(
+        self.updater = (
+            phile.tray.publishers.datetime.TrayFilesUpdater(
                 configuration=self.configuration
             )
         )
@@ -90,32 +76,16 @@ class TestUpdateLoop(unittest.TestCase):
         for path in self.expected_tray_files:
             self.assertTrue(not path.exists())
 
-    def test_update_writes_tray_files(self) -> None:
-        self.tray_files.update()
+    def test_writes_tray_files_when_called(self) -> None:
+        self.updater()
         self.assert_files_updated()
 
-    def test_close_removes_tray_files(self) -> None:
-        self.tray_files.update()
-        self.tray_files.close()
+    def test_context_close_removes_tray_files(self) -> None:
+        updater = self.updater
+        with updater:
+            updater()
+            self.assert_files_updated()
         self.assert_files_missing()
-
-    def test_run_can_be_cancelled(self) -> None:
-        with unittest.mock.patch(
-            'asyncio.sleep',
-            side_effect=[unittest.mock.DEFAULT, asyncio.CancelledError]
-        ), self.assertRaises(asyncio.CancelledError):
-            asyncio.run(self.tray_files.run())
-
-    def test_run_calls_update(self) -> None:
-        tray_files = self.tray_files
-        with unittest.mock.patch(
-            'asyncio.sleep',
-            side_effect=[unittest.mock.DEFAULT, asyncio.CancelledError]
-        ), unittest.mock.patch.object(
-            tray_files, 'update', wraps=tray_files.update
-        ) as update_mock, self.assertRaises(asyncio.CancelledError):
-            asyncio.run(tray_files.run())
-            update_mock.assert_called_once_with()
 
 
 if __name__ == '__main__':
