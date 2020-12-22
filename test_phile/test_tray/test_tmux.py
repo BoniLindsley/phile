@@ -625,23 +625,25 @@ class TestIconList(unittest.TestCase):
         icon_list = self.icon_list
         trigger_directory = self.trigger_directory
         trigger_suffix = self.configuration.trigger_suffix
-        trigger_path = trigger_directory / ('show' + trigger_suffix)
+        close_path = trigger_directory / ('close' + trigger_suffix)
+        hide_path = trigger_directory / ('hide' + trigger_suffix)
+        show_path = trigger_directory / ('show' + trigger_suffix)
         # Respond to a show trigger.
         with self.trigger_path_handler_patch as handler_mock:
-            trigger_path.unlink()
-            handler_mock.assert_called_with_soon(trigger_path)
+            show_path.unlink()
+            handler_mock.assert_called_with_soon(hide_path)
+            handler_mock.assert_called_with_soon(show_path)
             self.assertTrue(not icon_list.is_hidden())
         # Respond to a hide trigger.
-        trigger_path = trigger_directory / ('hide' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
-            trigger_path.unlink()
-            handler_mock.assert_called_with_soon(trigger_path)
+            hide_path.unlink()
+            handler_mock.assert_called_with_soon(hide_path)
+            handler_mock.assert_called_with_soon(show_path)
             self.assertTrue(icon_list.is_hidden())
         # Respond to a close trigger.
-        trigger_path = trigger_directory / ('close' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
-            trigger_path.unlink()
-            handler_mock.assert_called_with_soon(trigger_path)
+            close_path.unlink()
+            handler_mock.assert_called_with_soon(close_path)
             self.assertTrue(
                 not icon_list._trigger_scheduler.is_scheduled
             )

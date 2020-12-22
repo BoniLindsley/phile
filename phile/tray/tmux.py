@@ -464,7 +464,6 @@ class IconList:
         # Take cooperative ownership of the directory
         # containing trigger file for trays.
         self._entry_point = entry_point = phile.trigger.EntryPoint(
-            available_triggers={'close', 'show'},
             bind=True,
             callback_map={
                 'hide': self.hide,
@@ -484,6 +483,8 @@ class IconList:
             )
         )
         scheduler.schedule()
+        entry_point.add_trigger('close')
+        entry_point.add_trigger('show')
 
     def run(self) -> None:
         """
