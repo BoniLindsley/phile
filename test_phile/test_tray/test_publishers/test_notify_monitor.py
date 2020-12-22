@@ -16,7 +16,6 @@ import unittest
 import unittest.mock
 
 # External dependencies.
-import portalocker  # type: ignore[import]
 import watchdog.events  # type: ignore[import]
 import watchdog.observers  # type: ignore[import]
 
@@ -24,7 +23,6 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 import phile.notify
 import phile.tray.publishers.notify_monitor
-import phile.trigger
 import phile.watchdog_extras
 import test_phile.threaded_mock
 
@@ -32,7 +30,7 @@ wait_time = datetime.timedelta(seconds=2)
 
 
 class TestMonitorStart(unittest.TestCase):
-    """Tests :func:`~phile.tray.notify.start`."""
+    """Tests :func:`~phile.tray.publishers.notify_monitor.monitor`."""
 
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
@@ -47,9 +45,7 @@ class TestMonitorStart(unittest.TestCase):
         self.observer.start()
 
     def set_up_tray_event_dispatcher(self) -> None:
-        self.tray_dispatcher = dispatcher = (
-            watchdog.events.FileSystemEventHandler()
-        )
+        dispatcher = watchdog.events.FileSystemEventHandler()
         dispatch_patcher = unittest.mock.patch.object(
             dispatcher,
             'dispatch',
@@ -85,7 +81,7 @@ class TestMonitorStart(unittest.TestCase):
     async def run_monitor_start(self) -> None:
         running_loop = self.running_loop = asyncio.get_running_loop()
         main_task = self.main_task = running_loop.create_task(
-            self.monitor.start()
+            self.monitor
         )
         # Callbacks are called in schedule order.
         # So `start` will be polled once before `started` event is set.
@@ -102,20 +98,25 @@ class TestMonitorStart(unittest.TestCase):
     def setUp(self) -> None:
         self.set_up_configuration()
         self.set_up_observer()
-        self.monitor = phile.tray.publishers.notify_monitor.Monitor(
-            configuration=self.configuration,
-            watching_observer=self.observer
+        configuration = self.configuration
+        self.notify_tray_file = phile.tray.File.from_path_stem(
+            configuration=configuration,
+            path_stem='30-phile-notify-tray',
+            text_icon=' N'
+        )
+        self.monitor = phile.tray.publishers.notify_monitor.monitor(
+            configuration=configuration, watching_observer=self.observer
         )
 
-    def test_start_initialises_directories_and_triggers(self) -> None:
+    def test_can_be_cancelled(self) -> None:
         self.set_up_worker_thread()
-        entry_point = self.monitor.entry_point
+
+    def test_start_initialises_directories(self) -> None:
+        self.set_up_worker_thread()
         self.assertTrue(
             self.configuration.notification_directory.is_dir()
         )
-        self.assertTrue(entry_point.trigger_directory.is_dir())
-        self.assertTrue(entry_point.get_trigger_path('close').is_file())
-        self.assertTrue(not self.monitor.notify_tray_file.path.exists())
+        self.assertTrue(not self.notify_tray_file.path.exists())
 
     def test_init_with_existing_notify_file(self) -> None:
         self.notify_file_to_find = notify_file = (
@@ -128,7 +129,7 @@ class TestMonitorStart(unittest.TestCase):
         self.assertTrue(
             self.monitor_started.wait(timeout=wait_time.total_seconds())
         )
-        self.assertTrue(self.monitor.notify_tray_file.path.is_file())
+        self.assertTrue(self.notify_tray_file.path.is_file())
 
     def test_detects_new_notify_file(self) -> None:
         self.set_up_worker_thread()
@@ -139,7 +140,7 @@ class TestMonitorStart(unittest.TestCase):
         new_file.save()
         self.tray_dispatch.assert_called_with_soon(
             watchdog.events.FileModifiedEvent(
-                src_path=str(self.monitor.notify_tray_file.path)
+                src_path=str(self.notify_tray_file.path)
             )
         )
 
@@ -149,26 +150,8 @@ class TestMonitorStart(unittest.TestCase):
         self.notify_file_to_find.path.unlink(missing_ok=True)
         self.tray_dispatch.assert_called_with_soon(
             watchdog.events.FileDeletedEvent(
-                src_path=str(self.monitor.notify_tray_file.path)
+                src_path=str(self.notify_tray_file.path)
             )
-        )
-
-    def test_close_trigger_closes(self) -> None:
-        extra_entry_point = phile.trigger.EntryPoint(
-            configuration=self.configuration,
-            trigger_directory=self.monitor.trigger_directory
-        )
-        trigger_path = extra_entry_point.get_trigger_path('close')
-        trigger_path.parent.mkdir(parents=True, exist_ok=True)
-        dispatch_mock = test_phile.threaded_mock.ThreadedMock()
-        self.observer.add_handler(dispatch_mock, trigger_path.parent)
-        self.set_up_worker_thread()
-        dispatch_mock.dispatch.assert_called_with_soon(
-            watchdog.events.FileCreatedEvent(str(trigger_path))
-        )
-        trigger_path.unlink()
-        self.assertTrue(
-            self.monitor_stopped.wait(timeout=wait_time.total_seconds())
         )
 
 
