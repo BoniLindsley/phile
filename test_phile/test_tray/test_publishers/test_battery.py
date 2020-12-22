@@ -6,7 +6,6 @@ Test :mod:`phile.tray.publishers.battery`
 """
 
 # Standard library.
-import asyncio
 import datetime
 import pathlib
 import tempfile
@@ -19,8 +18,6 @@ import psutil  # type: ignore[import]
 # Internal packages.
 import phile.configuration
 import phile.tray.publishers.battery
-
-wait_time = datetime.timedelta(seconds=2)
 
 
 class TestFile(unittest.TestCase):
