@@ -17,7 +17,6 @@ from . import update
 class MemoryFile(phile.tray.File):
 
     def update(self, memory) -> None:
-        # TODO(BoniLindsley): Need to round down.
         self.text_icon = f' M{memory.available//1000**3:.0f}'
 
 
