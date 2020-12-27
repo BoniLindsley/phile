@@ -80,6 +80,7 @@ default_launchers: typing.Dict[str, Launcher] = {
 
 @dataclasses.dataclass
 class TaskRegistry:
+    """Keeps track of existing tasks and how to start new tasks."""
 
     context: Context
     launchers: types.MappingProxyType[
@@ -105,6 +106,7 @@ class TaskRegistry:
 
 
 class TriggerEntryPoint(phile.trigger.EntryPoint):
+    """Provides triggers to start and stop tasks."""
 
     def __init__(self, *args, context: Context, **kwargs) -> None:
         # See: https://github.com/python/mypy/issues/4001
