@@ -13,10 +13,12 @@ in control mode.
 """
 
 # Standard libraries.
-import bisect
+import asyncio
+import contextlib
+import dataclasses
 import datetime
 import functools
-import json
+import io
 import logging
 import os
 import pathlib
@@ -26,8 +28,8 @@ import shlex
 import signal
 import subprocess
 import sys
+import types
 import typing
-import warnings
 
 # External dependencies.
 import watchdog.events  # type: ignore[import]
@@ -36,7 +38,6 @@ import watchdog.events  # type: ignore[import]
 from phile.configuration import Configuration
 import phile.data
 import phile.tray
-import phile.trigger
 import phile.watchdog_extras
 
 _logger = logging.getLogger(
@@ -129,29 +130,6 @@ def timedelta_to_seconds(
         return timedelta.total_seconds()
 
 
-def get_server_pid(
-    *, timeout: typing.Optional[datetime.timedelta] = None
-) -> int:
-    """
-    Returns the PID of the default tmux server.
-
-    Same parameters and exception
-    as :func:`~phile.tray.tmux.kill_server`.
-    """
-    # Fetch tmux server information.
-    _logger.debug('Get server PID started.')
-    pid_process = subprocess.run(
-        args=['tmux', 'display-message', '-pF', '#{pid}'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timedelta_to_seconds(timeout),
-    )
-    pid_process.check_returncode()
-    pid = int(pid_process.stdout)
-    _logger.debug('Get server PID done: %s', pid)
-    return pid
-
-
 def kill_server(
     *, timeout: typing.Optional[datetime.timedelta] = None
 ) -> None:
@@ -163,9 +141,6 @@ def kill_server(
         unless it is :data:`None`,
         in which case block until it returns.
     :type timeout: :class:`~datetime.timedelta` or :data:`None`
-    :raises ~subprocess.CalledProcessError:
-        If the the command fails.
-        This can happen, for example, no tmux server is found.
     """
     # Fetch tmux server information.
     _logger.debug('Kill server started.')
@@ -175,434 +150,426 @@ def kill_server(
         stderr=subprocess.PIPE,
         timeout=timedelta_to_seconds(timeout),
     )
-    pid_process.check_returncode()
     _logger.debug('Kill server completed.')
     _logger.debug('Kill server stdout: %s', pid_process.stdout)
     _logger.debug('Kill server stderr: %s', pid_process.stderr)
 
 
-class ControlMode:
-    """A tmux control mode client for sending commands."""
+@dataclasses.dataclass
+class ControlModeArguments:
+    session_name: str = 'ctrl'
+    tmux_configuration_path: typing.Optional[pathlib.Path] = None
 
-    def __init__(
-        self,
-        *args,
-        configuration_file_path: typing.Optional[pathlib.Path] = None,
-        session_name: typing.Optional[str] = 'ctrl',
-        timeout: typing.Optional[datetime.timedelta] = None,
-        **kwargs
-    ):
+    def to_list(self) -> typing.List[str]:
         """
-        :param configuration_file_path:
-            Configuration file to give to the control mode client.
-            This is used if the tmux command starts a tmux server.
-            If :data:`None`,
-            let tmux determine the default file(s) to use.
-        :type configuration_file_path:
-            :class:`~pathlib.Path` or :data:`None`
-        :param session_name:
-            If :data:`None`, create a new session to connect to,
-            and let the tmux server determine the new session name.
-            Otherwise, it indicates the session to connect to.
-            If there are no session of the given name,
-            create a new session of the given name.
-        :type session_name: :class:`str` or :data:`None`
-        :param timeout:
-            The time duration to wait for a server response.
-            If :data:`None`, waits block indefinitely.
-        :type timeout: :class:`~datetime.timedelta` or :data:`None`
-        """
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        Returns a list of string arguments represented by ``self``.
 
-        self.timeout_seconds = timedelta_to_seconds(timeout)
-        """Time to wait for when reading stdout from the tmux client."""
-        _logger.debug(
-            'Control mode using timeout: %s', self.timeout_seconds
-        )
-        subprocess_args = ['tmux', '-CC', '-u']
+        This is for use with :func:`~asyncio.create_subprocess_exec`.
+        In particular, the returned list
+        does not specify the program to be called.
+        """
+        arguments = ['-CC', '-u']
         """Command arguments for creating control mode client."""
-        if configuration_file_path:
-            _logger.debug(
-                'Control mode using configuration: %s',
-                configuration_file_path
-            )
-            subprocess_args.extend(['-f', str(configuration_file_path)])
-        if session_name is not None:
-            subprocess_args.extend([
+        if self.tmux_configuration_path is not None:
+            arguments.extend(('-f', str(self.tmux_configuration_path)))
+        if self.session_name:
+            arguments.extend((
                 'new-session',
                 '-A',
                 '-s',
-                session_name,
-            ])
-        _logger.debug(
-            'Control mode creating tmux client: %s.', subprocess_args
-        )
-        self.tty_fd, tmux_tty_fd = pty.openpty()
-        """
-        File to comminucate with the control mode client.
+                self.session_name,
+            ))
+        return arguments
 
-        A terminal is required for communicating with tmux.
-        So the default pipes are not enough.
-        """
-        self.tmux_client = subprocess.Popen(
-            subprocess_args,
-            stdin=tmux_tty_fd,
-            stdout=tmux_tty_fd,
-            stderr=subprocess.PIPE,
-            encoding='utf-8',
-        )
-        """
-        The control mode client process.
 
-        The ``stderr`` stream is separated from the ``stdout`` stream
-        since outputs from ``tmux`` will be parsed.
-        """
-        _logger.debug('Control mode closing terminal fd given to tmux.')
-        os.close(tmux_tty_fd)
-        _logger.debug('Control mode creating file objects from pty fd.')
-        self.stdin = os.fdopen(self.tty_fd, buffering=0, mode='wb')
-        """
-        Control mode client stdin stream.
+async def close_subprocess(
+    subprocess: asyncio.subprocess.Process
+) -> None:
+    """Ensure the given subprocess is terminated."""
+    # We do not know what state the process is in.
+    # We assume the user had already exhausted
+    # all nice ways to terminate it.
+    # So just kill it.
+    with contextlib.suppress(ProcessLookupError):
+        subprocess.kill()
+    # Killing just sends the request / signal.
+    # Wait to make sure it is actually terminated.
+    # And automatically-created pipes and inherited fds,
+    # such as any given in stdin, stdout, stderr,
+    # are closed after termination.
+    await subprocess.communicate()
 
-        Wraps the terminal stream so that file object API can be used.
-        Uses binary stream since tmux sometimes sends DSC control codes.
-        Buffering is disabled to detect whether further read is possible.
+
+class ControlModeProtocol(asyncio.Protocol):
+
+    class PrefixNotFound(RuntimeError):
+        pass
+
+    def __init__(self, *args, **kwargs):
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.received_data = asyncio.Queue()
+        self.lines: typing.List[bytes] = []
+        self.buffer = b''
+        self.new_line_received = asyncio.Event()
+        self.new_data_received = asyncio.Event()
         """
-        self.stdout = os.fdopen(
-            self.tty_fd, buffering=0, mode='rb', closefd=False
-        )
+        Cleared or set depending on
+        whether `buffer` is empty or not.
         """
-        Control mode client stdout stream.
+        self.at_eof = asyncio.Event()
+        self._next_line: typing.Optional[bytes] = None
 
-        Wraps the terminal stream so that file object API can be used.
-        Uses binary stream since tmux cares about line ending.
-        For example, a lone ``\\n`` ends the client connection.
+    def data_received(self, data: bytes) -> None:
+        newline = b'\r\n'
+        separator = newline  # Loop entry condition
+        while separator:
+            content, separator, data = data.partition(newline)
+            self.buffer += content + separator
+            if separator:
+                self.lines.append(self.buffer)
+                self.buffer = b''
+                self.new_line_received.set()
+        self.new_data_received.set()
+
+    def eof_received(self) -> bool:
+        self.at_eof.set()
+        return False
+
+    async def peek_line(self) -> bytes:
         """
-        _logger.debug('Control mode waiting for startup response.')
-        startup_output_block = self.read_block()
-        _logger.debug('Control mode client started.')
-
-    def __del__(self):
+        Blocks forever if disconnected and drained.
+        Up to the user to check :attr:`disconnected`.
         """
-        Kill the control mode client process if not already terminated.
-        """
-        _logger.debug('Control mode finalising.')
-        return_code = self.tmux_client.returncode
-        if return_code is not None:
-            _logger.debug(
-                'Control mode already terminated. Return code: %s.',
-                return_code
-            )
-            return
-        # We do not know what state the client is in.
-        # So just kill the process.
-        _logger.debug('Control client killing process.')
-        self.tmux_client.kill()
-        return_code = self.tmux_client.wait()
-        _logger.debug('Control mode return code: %s.', return_code)
-        # Print out errors if any.
-        # This drains and closes automatically created pipes.
-        # For us, stderr is closed.
-        _, errors = self.tmux_client.communicate()
-        _logger.debug('Control mode errors: %s.', errors)
-        # With this, all pty fd are closed.
-        _logger.debug('Control mode closing pty fd.')
-        self.stdin.close()
+        with contextlib.suppress(IndexError):
+            return self.lines[0]
+        await self.new_line_received.wait()
+        return self.lines[0]
 
-        getattr(super(), "__del__", lambda _: None)(self)
+    async def read_line(self) -> str:
+        await self.peek_line()
+        line = self.lines.pop(0).decode()
+        if not self.lines:
+            self.new_line_received.clear()
+        return line
 
-    def send_command(self, command_string: str) -> None:
-        """Send a command to the attached tmux client."""
-        _logger.debug(
-            'Control mode sending command: %s.', command_string
-        )
-        self.stdin.writelines([command_string.encode(), b'\n'])
+    async def remove_prefix(self, prefix: bytes) -> None:
+        """New line ``\r\n`` is not allowed in ``prefix``."""
+        # TODO[Python 3.9]: Use `str.removeprefix`.
+        assert prefix.find(b'\r\n') == -1
+        found = False
+        prefix_length = len(prefix)
+        try:
+            while not found:
+                await self.new_data_received.wait()
+                if self.lines:
+                    line = await self.peek_line()
+                    if line[0:prefix_length] != prefix:
+                        raise ControlModeProtocol.PrefixNotFound()
+                    self.lines[0] = line[len(prefix):]
+                    found = True
+                else:
+                    if len(self.buffer) >= prefix_length:
+                        if self.buffer[0:prefix_length] != prefix:
+                            raise ControlModeProtocol.PrefixNotFound()
+                        self.buffer = self.buffer[len(prefix):]
+                        if not self.buffer:
+                            self.new_data_received.clear()
+                        found = True
+                    elif self.buffer != prefix[0:len(self.buffer)]:
+                        raise ControlModeProtocol.PrefixNotFound()
+                    # Breaks invariant of having data but cleared event.
+                    # This is needed to detect incoming data.
+                    # This is restored in the next iteration
+                    # when data arrives.
+                    self.new_data_received.clear()
+        finally:
+            # Restore invariant of event.
+            if self.buffer:
+                self.new_data_received.set()
+            else:
+                self.new_data_received.clear()
 
-    def read_block(self, *, rstrip_newline: bool = False) -> str:
-        """
-        Returns the next output block from the :data:`stdout` stream.
-
-        :param rstrip_newline:
-            Whether the returned string
-            should include any trailing newline.
-        :type rstrip_newline: :class:`bool`
-        :raises TimeoutError:
-            If no data is available from the stream
-            as determined by :meth:`is_stdout_ready()`
-            before the end of a block is found.
-
-        Data between the start of the stream
-        and the start of the block are discarded.
-        The guard lines ``%begin``, ``%end`` and ``%error``
-        are not included in the returned string.
-        """
-        _logger.debug('Control mode reading a block.')
-        self.readline_until_starts_with(
-            stop_prefix=('%begin ', '\x1bP1000p%begin')
-        )
-        _logger.debug('Control mode found begin block.')
-        block_content = self.readline_until_starts_with(
-            stop_prefix=('%end ', '%error '),
-            preserve_content=True,
-        )
-        _logger.debug('Control mode found end block.')
-        if rstrip_newline:
-            return block_content.rstrip('\n\r')
-        else:
-            return block_content
-
-    def readline_until_starts_with(
+    async def drop_lines_until_starts_with(
         self,
-        *,
-        stop_prefix: typing.Union[str, typing.Tuple[str, ...]],
-        preserve_content: bool = False,
+        prefix: typing.Union[str, typing.Tuple[str, ...]],
     ) -> str:
-        prefix_found = False
-        content = ''
-        next_line = ''
-        while not prefix_found:
-            if preserve_content:
-                content += next_line
-            next_line = self.readline(rstrip_newline=False)
-            prefix_found = next_line.startswith(stop_prefix)
-        return content
+        next_line = await self.read_line()
+        while not next_line.startswith(prefix):
+            next_line = await self.read_line()
+        return next_line
 
-    def readline(self, *, rstrip_newline: bool = False) -> str:
-        """
-        Reads a single line of data from the :data:`stdout` stream.
+    async def drop_lines_not_starting_with(
+        self,
+        prefix: typing.Union[str, typing.Tuple[str, ...]],
+    ) -> str:
+        line = await self.drop_lines_until_starts_with(prefix)
+        self.lines.insert(0, line.encode())
+        return line
 
-        :param rstrip_newline:
-            Whether the returned string
-            should include any trailing newline.
-        :type rstrip_newline: :class:`bool`
-        :raises TimeoutError:
-            If no data is available from the stream
-            as determined by :meth:`is_stdout_ready()`.
-        """
-        if not self.is_stdout_ready():
-            raise TimeoutError('Control mode reading timeout.')
-        next_line = self.stdout.readline().decode()
-        stripped_next_line = next_line.rstrip('\n\r')
-        _logger.debug('Control mode stdout: %s.', stripped_next_line)
-        return stripped_next_line if rstrip_newline else next_line
+    async def read_lines_until_starts_with(
+        self,
+        prefix: typing.Union[str, typing.Tuple[str, ...]],
+    ) -> typing.List[str]:
+        next_line = await self.read_line()
+        lines = [next_line]
+        while not next_line.startswith(prefix):
+            next_line = await self.read_line()
+            lines.append(next_line)
+        return lines
 
-    def is_stdout_ready(self) -> bool:
-        """
-        Returns whether the ``stdout`` stream from the client has data.
-
-        If :data:`timeout_seconds` is :data:`None`,
-        this blocks until there is data, and returns :data:`True`.
-        If not :data:`None`, returns :data:`True`
-        if data becomes available within :data:`timeout_seconds`.
-        Returns :data:`False`
-        if no data is available within that time frame.
-        """
-        timeout = self.timeout_seconds
-        ready_list, _, _ = select.select([self.tty_fd], [], [], timeout)
-        return bool(ready_list)
+    async def read_block(self) -> typing.List[str]:
+        begin_line = await self.drop_lines_until_starts_with('%begin ')
+        content_lines = await self.read_lines_until_starts_with(
+            ('%end ', '%error ')
+        )
+        content_lines.insert(0, begin_line)
+        return content_lines
 
 
-class IconList:
+@dataclasses.dataclass
+class ControlMode:
+
+    transport: asyncio.WriteTransport
+    protocol: ControlModeProtocol
+    subprocess: asyncio.subprocess.Process
+
+    def __post_init__(self) -> None:
+        self._commands: asyncio.Queue[str] = asyncio.Queue()
+
+    def send_soon(self, command: str) -> None:
+        # Cannot await on a put directly here.
+        # The tmux client is not allowed to send commands
+        # in the middle of a response block,
+        # so that needs to be synchronised.
+        self._commands.put_nowait(command)
+
+    async def run_message_loop(self) -> None:
+        await self.protocol.remove_prefix(b'\x1bP' b'1000p')
+        command = 'NotCommand-EnterLoop'
+        # Exit command is an empty line.
+        while command:
+            # The server sends one block at the beginniing.
+            await self.protocol.read_block()
+            with contextlib.ExitStack() as stack:
+                exit_task = asyncio.create_task(
+                    self.protocol.drop_lines_not_starting_with('%exit')
+                )
+                stack.callback(exit_task.cancel)
+                command_task = asyncio.create_task(self._commands.get())
+                stack.callback(command_task.cancel)
+                done, pending = await asyncio.wait(
+                    (exit_task, command_task),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if exit_task in done:
+                    break
+                command = await command_task
+            self._commands.task_done()
+            self.transport.write(command.encode() + b'\n')
+        # This is for graceful shutdown. Not really needed.
+        # Left here for documentation purposes on shutdown responses.
+        if False:  # pragma: no cover
+            exit_response = '%exit\r\n' '\x1b\\'
+            await self.protocol.drop_lines_until_starts_with(
+                exit_response
+            )
+            await self.protocol.remove_prefix(exit_response.encode())
+
+    async def run(self) -> None:
+        with contextlib.ExitStack() as stack:
+            message_task = asyncio.create_task(self.run_message_loop())
+            stack.callback(message_task.cancel)
+            eof_task = asyncio.create_task(self.protocol.at_eof.wait())
+            stack.callback(eof_task.cancel)
+            terminate_task = asyncio.create_task(self.subprocess.wait())
+            stack.callback(terminate_task.cancel)
+            await asyncio.wait(
+                (message_task, eof_task, terminate_task),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+
+@contextlib.asynccontextmanager
+async def open_control_mode(
+    control_mode_arguments: ControlModeArguments
+) -> typing.AsyncIterator:
+    async with contextlib.AsyncExitStack() as stack:
+        tty_fd, subprocess_tty_fd = pty.openpty()
+        stack.callback(os.close, tty_fd)
+        # Close the other fd immediately after giving it to subprocess.
+        # It is not used by us.
+        try:
+            # Since stdout is parsed, stderr has to be sent elsewhere.
+            subprocess = await asyncio.create_subprocess_exec(
+                'tmux',
+                *control_mode_arguments.to_list(),
+                stdin=subprocess_tty_fd,
+                stdout=subprocess_tty_fd,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stack.push_async_callback(close_subprocess, subprocess)
+        finally:
+            os.close(subprocess_tty_fd)
+        loop = asyncio.get_running_loop()
+        transport: asyncio.WriteTransport
+        transport, _ = (  # Variable type
+            await loop.connect_write_pipe(  # type: ignore[assignment]
+                asyncio.Protocol,
+                open(tty_fd, buffering=0, mode='wb', closefd=False),
+            )
+        )
+        stack.callback(transport.close)
+        protocol: ControlModeProtocol
+        read_transport, protocol = (  # Variable type.
+            await loop.connect_read_pipe(  # type: ignore[assignment]
+                ControlModeProtocol,
+                open(tty_fd, buffering=0, mode='rb', closefd=False),
+            )
+        )
+        stack.callback(read_transport.close)
+        yield ControlMode(
+            transport=transport,
+            protocol=protocol,
+            subprocess=subprocess
+        )
+
+
+class StatusRight:
 
     def __init__(
-        self,
-        *args,
-        configuration: Configuration,
-        watching_observer: watchdog.observers.Observer,
-        **kwargs,
+        self, *args, control_mode: ControlMode, **kwargs
     ) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._configuration = configuration
-        """Information on where tray files are."""
-        self._control_mode = ControlMode()
-        """Control mode client for communicating with tmux."""
-        # The status line cannot contain new lines.
-        # This forces the initial attempt to refresh
-        # to always set the status line.
-        self._status_right = '\n'
+        self._send_soon = control_mode.send_soon
+        self._current_value = '\n'
         """Current status right string for tmux."""
-        # Set up tray directory monitoring.
-        self._set_up_tray_event_handler(
-            watching_observer=watching_observer
-        )
-        self._set_up_trigger_event_handler(
-            watching_observer=watching_observer
-        )
 
-    def _set_up_tray_event_handler(
-        self, *, watching_observer: watchdog.observers.Observer
-    ):
-        configuration = self._configuration
-        sorter_handler = (
-            lambda _index, _tray_file, tracked_data:
-            (self.refresh_status_line(tracked_data))
-        )
-        self._tray_sorter = tray_sorter = (
-            phile.data.SortedLoadCache[phile.tray.File](
-                create_file=phile.tray.File,
-                on_insert=sorter_handler,
-                on_pop=sorter_handler,
-                on_set=sorter_handler,
+    def __enter__(self) -> 'StatusRight':
+        self.set('')
+        return self
+
+    def __exit__(
+        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_value: typing.Optional[BaseException],
+        traceback: typing.Optional[types.TracebackType]
+    ) -> typing.Optional[bool]:
+        self._send_soon(CommandBuilder.unset_global_status_right())
+        return None
+
+    def set(self, value: str) -> None:
+        if self._current_value != value:
+            self._current_value = value
+            self._send_soon(
+                CommandBuilder.set_global_status_right(value)
             )
-        )
-        # Forward watchdog events into Qt signal and handle it there.
-        self._tray_scheduler = phile.watchdog_extras.Scheduler(
-            path_filter=functools.partial(
-                phile.tray.File.check_path, configuration=configuration
-            ),
-            path_handler=tray_sorter.update,
-            watched_path=configuration.tray_directory,
-            watching_observer=watching_observer,
-        )
 
-    def _set_up_trigger_event_handler(
-        self, *, watching_observer: watchdog.observers.Observer
-    ) -> None:
-        configuration = self._configuration
-        # Take cooperative ownership of the directory
-        # containing trigger file for trays.
-        self._entry_point = entry_point = phile.trigger.EntryPoint(
-            bind=True,
-            callback_map={
-                'hide': self.hide,
-                'show': self.show,
-                'close': self.close,
-            },
-            configuration=configuration,
-            trigger_directory=pathlib.Path('phile-tray-tmux'),
+
+def tray_files_to_tray_text(files: typing.List[phile.tray.File]) -> str:
+    return ''.join(
+        tray_file.text_icon for tray_file in files
+        if tray_file.text_icon is not None
+    )
+
+
+async def run(
+    *,
+    configuration: Configuration,
+    control_mode: ControlMode,
+    watching_observer: watchdog.observers.Observer,
+) -> None:
+    """Start updating ``status-right`` with tray file changes."""
+    with contextlib.ExitStack() as stack:
+        status_right = stack.enter_context(
+            StatusRight(control_mode=control_mode)
         )
-        # Forward watchdog events into Qt signal and handle it there.
-        self._trigger_scheduler = scheduler = (
+        sorter_handler: phile.data.UpdateCallback[phile.tray.File] = (
+            lambda _index, _tray_file, tracked_data:
+            (status_right.set(tray_files_to_tray_text(tracked_data)))
+        )
+        tray_sorter = phile.data.SortedLoadCache[phile.tray.File](
+            create_file=phile.tray.File,
+            on_insert=sorter_handler,
+            on_pop=sorter_handler,
+            on_set=sorter_handler,
+        )
+        stack.callback(tray_sorter.tracked_data.clear)
+        # Start monitoring to not miss file events.
+        stack.enter_context(
             phile.watchdog_extras.Scheduler(
-                path_filter=entry_point.check_path,
-                path_handler=entry_point.activate_trigger,
-                watched_path=entry_point.trigger_directory,
+                path_filter=functools.partial(
+                    phile.tray.File.check_path,
+                    configuration=configuration
+                ),
+                path_handler=functools.partial(
+                    asyncio.get_running_loop().call_soon_threadsafe,
+                    tray_sorter.update,
+                ),
+                watched_path=configuration.tray_directory,
                 watching_observer=watching_observer,
             )
         )
-        scheduler.schedule()
-        entry_point.add_trigger('close')
-        entry_point.add_trigger('show')
-
-    def run(self) -> None:
-        """
-        Start updating ``status-right`` with tray file changes.
-
-        Implementation detail:
-        This calls `show` do the monitoring
-        and then blocks to drain tmux client stdout stream
-        until an exit response is detected.
-        """
-        # Start draining control mode output.
-        # Can be expanded to an event loop later.
-        control_mode = self._control_mode
-        block_started = False
-        exit_found = False
-        while not exit_found:
-            next_line = control_mode.readline(rstrip_newline=True)
-            if block_started:
-                block_started = not next_line.startswith(
-                    ('%end ', '%error '),
-                )
-            else:
-                block_started = next_line.startswith(
-                    ('%begin ', '\x1bP1000p%begin')
-                )
-                if not block_started:
-                    exit_found = next_line.startswith(('%exit'))
-
-    def close(self) -> None:
-        self._control_mode.send_command(CommandBuilder.exit_client())
-        self._trigger_scheduler.unschedule()
-        self._tray_scheduler.unschedule()
-        self.hide()
-        self._entry_point.unbind()
-
-    def hide(self) -> None:
-        """Stop updating and reset ``status-right``."""
-        if self.is_hidden():
-            return
-        self._tray_scheduler.unschedule()
-        self._tray_sorter.tracked_data.clear()
-        # Reset status line.
-        self._control_mode.send_command(
-            CommandBuilder.unset_global_status_right()
-        )
-        self._entry_point.remove_trigger('hide')
-        self._entry_point.add_trigger('show')
-
-    def show(self) -> None:
-        """
-        Start updating ``status-right`` with tray file changes.
-
-        This is non-blocking.
-        Starts thread(s) to monitor for tray file changes.
-        """
-        if not self.is_hidden():
-            return
-        # Start monitoring to not miss file events.
-        self._tray_scheduler.schedule()
         # Update all existing tray files.
-        self._tray_sorter.refresh(
-            data_directory=self._configuration.tray_directory,
-            data_file_suffix=self._configuration.tray_suffix
+        tray_sorter.refresh(
+            data_directory=configuration.tray_directory,
+            data_file_suffix=configuration.tray_suffix
         )
-        # Refresh the status line even if there are no tray files.
-        self.refresh()
-        self._entry_point.remove_trigger('show')
-        self._entry_point.add_trigger('hide')
+        await control_mode.protocol.at_eof.wait()
 
-    def is_hidden(self) -> bool:
-        """Returns whether the tray icon is hidden."""
-        return not self._tray_scheduler.is_scheduled
 
-    def refresh(self) -> None:
-        self.refresh_status_line(self._tray_sorter.tracked_data)
+async def read_byte(pipe) -> None:
+    reader = asyncio.StreamReader()
+    _, protocol = await asyncio.get_running_loop().connect_read_pipe(
+        functools.partial(asyncio.StreamReaderProtocol, reader), pipe
+    )
+    await reader.read(1)
 
-    def refresh_status_line(
-        self, tracked_data: typing.List[phile.tray.File]
-    ) -> None:
-        """
-        Update tmux `status-right` to reflect current tracked contents.
-        """
-        _logger.debug('Icon list refreshing status line.')
-        new_status_right = ''.join(
-            tray_file.text_icon for tray_file in tracked_data
-            if tray_file.text_icon is not None
-        )
-        if self._status_right != new_status_right:
-            self._status_right = new_status_right
-            self._control_mode.send_command(
-                CommandBuilder.set_global_status_right(new_status_right)
+
+async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
+    async with contextlib.AsyncExitStack() as stack:
+        watching_observer = phile.watchdog_extras.Observer()
+        watching_observer.start()
+        stack.callback(watching_observer.stop)
+        control_mode = await stack.enter_async_context(
+            open_control_mode(
+                control_mode_arguments=ControlModeArguments()
             )
-        else:
-            _logger.debug('Icon list has no visible changes.')
+        )
+        control_mode_task = asyncio.create_task(control_mode.run())
+        stack.callback(control_mode_task.cancel)
+        run_task = asyncio.create_task(
+            run(
+                configuration=Configuration(),
+                control_mode=control_mode,
+                watching_observer=watching_observer,
+            )
+        )
+        stack.callback(run_task.cancel)
+        stdin_task = asyncio.create_task(read_byte(sys.stdin))
+        stack.callback(stdin_task.cancel)
+        done, pending = await asyncio.wait(
+            (control_mode_task, run_task, stdin_task),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        # Try to reset status bar for a "graceful" exit.
+        # Still does not read exit responses though.
+        if done == {stdin_task}:
+            control_mode.send_soon(
+                CommandBuilder.unset_global_status_right()
+            )
+            control_mode.send_soon(CommandBuilder.exit_client())
+            done, pending = await asyncio.wait(
+                (control_mode_task, run_task),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+    return 0
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    """Take over tmux ``status-right`` to display tray icons."""
-    configuration = Configuration()
-    watching_observer = phile.watchdog_extras.Observer()
-    watching_observer.start()
-    icon_list = IconList(
-        configuration=configuration,
-        watching_observer=watching_observer,
-    )
-    icon_list.show()
-    # Handle SIGINT by exiting gracefully.
-    # Using a trigger to do this.
-    # Otherwise, we have to handle a race condition
-    # where we might be in a close when the interrupt occurs.
-    signal.signal(
-        signal.SIGINT, (
-            lambda signal_number, _: icon_list._entry_point.
-            remove_trigger('close')
-        )
-    )
-    icon_list.run()
-    return 0
+    with contextlib.suppress(KeyboardInterrupt):
+        return asyncio.run(async_main(argv))
+    return 1
 
 
 if __name__ == '__main__':  # pragma: no cover

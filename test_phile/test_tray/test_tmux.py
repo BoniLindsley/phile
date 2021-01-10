@@ -6,14 +6,21 @@ Test phile.tray.tmux
 """
 
 # Standard library.
+import asyncio
+import contextlib
 import datetime
+import functools
 import logging
 import os
 import pathlib
+import pty
 import signal
+import socket
 import subprocess
+import sys
 import tempfile
 import threading
+import typing
 import unittest
 import unittest.mock
 
@@ -25,8 +32,7 @@ import watchdog.events  # type: ignore[import]
 import phile.configuration
 import phile.tray
 from phile.tray.tmux import (
-    CommandBuilder, ControlMode, get_server_pid, IconList, kill_server,
-    timedelta_to_seconds
+    CommandBuilder, kill_server, timedelta_to_seconds
 )
 from phile.watchdog_extras import Observer
 from test_phile.pyside2_test_tools import EnvironBackup
@@ -38,6 +44,12 @@ _logger = logging.getLogger(
 """Logger whose name is the module name."""
 
 wait_time = datetime.timedelta(seconds=2)
+
+
+def wait(
+    coroutine: typing.Union[typing.Coroutine, asyncio.Task]
+) -> asyncio.Future:
+    return asyncio.wait_for(coroutine, timeout=wait_time.total_seconds())
 
 
 class TestCommandBuilder(unittest.TestCase):
@@ -113,20 +125,307 @@ class TestTimedeltaToSeconds(unittest.TestCase):
         self.assertEqual(timedelta_to_seconds(None), None)
 
 
-class TestControlMode(unittest.TestCase):
-    """
-    Tests :class:`~phile.tray.tmux.ControlMode`.
+class TestControlModeArguments(unittest.TestCase):
+    """Tests :class:`~phile.tray.tmux.ControlModeArguments`."""
 
-    Also tests the functions :meth:`~phile.tray.tmux.get_server_pid`
-    and :meth:`~phile.tray.tmux.kill_server`,
-    since their tests would require
-    creating a :class:`~phile.tray.tmux.ControlMode`
-    or mimicking many of its functionalities to create a server,
-    such as waiting for the server to start up
-    and then cleaning it up.
-    So instead of duplicating the set up code,
-    tests for them are implicitly done
-    in :meth:`~TestControlMode.test_initialisation` as well.
+    def test_default(self) -> None:
+        """Default joins ``ctrl`` session with no configuration."""
+        arguments = phile.tray.tmux.ControlModeArguments()
+        self.assertEqual(
+            arguments.to_list(),
+            ['-CC', '-u', 'new-session', '-A', '-s', 'ctrl']
+        )
+
+    def test_no_session(self) -> None:
+        """Session name can be removed to create a new session."""
+        arguments = phile.tray.tmux.ControlModeArguments(session_name='')
+        self.assertEqual(arguments.to_list(), ['-CC', '-u'])
+
+    def test_custom_configuration(self) -> None:
+        """Server configuration can be changed."""
+        arguments = phile.tray.tmux.ControlModeArguments(
+            tmux_configuration_path=pathlib.Path('conf')
+        )
+        self.assertEqual(
+            arguments.to_list(), [
+                '-CC', '-u', '-f', 'conf', 'new-session', '-A', '-s',
+                'ctrl'
+            ]
+        )
+
+
+class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.tray.tmux.close_subprocess`."""
+
+    async def test_terminates_subprocess(self) -> None:
+        """It should terminate the subprocess."""
+        program = sys.executable
+        subprocess = await asyncio.create_subprocess_exec(program)
+        self.addCleanup(
+            lambda: subprocess.kill()
+            if subprocess.returncode is None else None
+        )
+        assert subprocess.returncode is None
+        assert subprocess.stdin is None
+        assert subprocess.stdout is None
+        assert subprocess.stderr is None
+        await phile.tray.tmux.close_subprocess(subprocess)
+        self.assertIsNotNone(subprocess.returncode)
+
+    async def test_closes_automatic_pipes(self) -> None:
+        """It should close any automatically created pipes."""
+        program = sys.executable
+        subprocess = await asyncio.create_subprocess_exec(
+            program,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        self.addCleanup(
+            lambda: subprocess.kill()
+            if subprocess.returncode is None else None
+        )
+        assert subprocess.returncode is None
+        assert subprocess.stdin is not None
+        assert subprocess.stdout is not None
+        assert subprocess.stderr is not None
+        await phile.tray.tmux.close_subprocess(subprocess)
+        self.assertIsNotNone(subprocess.returncode)
+        self.assertTrue(subprocess.stdin.is_closing())
+        self.assertTrue(subprocess.stdout.at_eof())
+        self.assertTrue(subprocess.stderr.at_eof())
+
+
+class TestControlModeProtocol(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.tray.tmux.ControlModeProtocol`."""
+
+    async def asyncSetUp(self) -> None:
+        loop = asyncio.get_running_loop()
+        reader, self.sender = socket.socketpair()
+        self.addCleanup(reader.close)
+        self.addCleanup(self.sender.close)
+        self.protocol: phile.tray.tmux.ControlModeProtocol
+        transport, self.protocol = (
+            await loop.connect_read_pipe(  # type: ignore[assignment]
+                phile.tray.tmux.ControlModeProtocol, reader
+            )
+        )
+        self.addCleanup(transport.close)
+
+    async def test_data_received(self) -> None:
+        """New lines are detected as data are received."""
+        self.sender.send(b'\r\n')
+        await wait(self.protocol.new_data_received.wait())
+
+    async def test_peek_line(self) -> None:
+        """Can check a line which tmux says ends with ``\r\n``."""
+        self.sender.send(b'line-1\n\r\n\r')
+        line = await wait(self.protocol.peek_line())
+        self.assertEqual(line, b'line-1\n\r\n')
+        line = await wait(self.protocol.peek_line())
+        self.assertEqual(line, b'line-1\n\r\n')
+
+    async def test_read_line(self) -> None:
+        """Can read a line which tmux defines as ending with ``\r\n``."""
+        self.sender.send(b'line-1\n\r\n\r')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, 'line-1\n\r\n')
+
+    async def test_read_line_with_two_lines(self) -> None:
+        """Can read each line separately even if received together."""
+        self.sender.send(b'line-1\n\r\n\nline-2\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, 'line-1\n\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '\nline-2\r\n')
+
+    async def test_read_line_merges_trailing_lines(self) -> None:
+        """Can read a line that was broken up when sending."""
+        self.sender.send(b'line-1\n\r')
+        self.sender.send(b'\n\nline-2')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, 'line-1\n\r\n')
+
+    async def test_remove_prefix_after_reading_line(self) -> None:
+        """Remove prefix from the first line."""
+        self.sender.send(b'\x1bP1000p%begin\r\n')
+        prefix = b'\x1bP1000p'
+        await wait(self.protocol.remove_prefix(prefix))
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%begin\r\n')
+
+    async def test_remove_prefix_without_new_line(self) -> None:
+        self.sender.send(b'\x1b\\')
+        prefix = b'\x1b\\'
+        await wait(self.protocol.remove_prefix(prefix))
+        self.sender.send(b'%begin\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%begin\r\n')
+
+    async def test_remove_prefix_without_new_line_or_drain(self) -> None:
+        self.sender.send(b'\x1b\\%be')
+        prefix = b'\x1b\\'
+        await wait(self.protocol.remove_prefix(prefix))
+        self.sender.send(b'gin\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%begin\r\n')
+
+    async def test_remove_prefix_loops_if_buffer_too_short(self) -> None:
+        self.sender.send(b'%beg')
+        prefix = b'%begin'
+        remove_task = asyncio.create_task(
+            self.protocol.remove_prefix(prefix)
+        )
+        # This ensures one iteration of the loop
+        # in the `remove_prefix` coroutine is queued to be run.
+        # So the wait below for the coroutine to finish
+        # happens after that iteration.
+        # This ensures the loop in the coroutine
+        # has to go into a second iteration,
+        # and the coroutine check sent data as a whole
+        # even if sent separately.
+        await wait(self.protocol.new_data_received.wait())
+        self.sender.send(b'in')
+        await wait(remove_task)
+        self.sender.send(b'%end\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%end\r\n')
+
+    async def test_remove_prefix_raises_if_not_found_in_line(
+        self
+    ) -> None:
+        self.sender.send(b'%begin\r\n')
+        prefix = b'\x1bP1000p'
+        with self.assertRaises(
+            phile.tray.tmux.ControlModeProtocol.PrefixNotFound
+        ):
+            await wait(self.protocol.remove_prefix(prefix))
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%begin\r\n')
+
+    async def test_remove_prefix_raises_if_not_found_in_buffer(
+        self
+    ) -> None:
+        self.sender.send(b'%begin')
+        prefix = b'no'
+        with self.assertRaises(
+            phile.tray.tmux.ControlModeProtocol.PrefixNotFound
+        ):
+            await wait(self.protocol.remove_prefix(prefix))
+        self.sender.send(b'\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%begin\r\n')
+
+    async def test_remove_prefix_raises_early_if_different(self) -> None:
+        self.sender.send(b'%')
+        prefix = b'\x1b\\'
+        with self.assertRaises(
+            phile.tray.tmux.ControlModeProtocol.PrefixNotFound
+        ):
+            await wait(self.protocol.remove_prefix(prefix))
+        self.sender.send(b'begin\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%begin\r\n')
+
+    async def test_drop_lines_until_starts_with(self) -> None:
+        self.sender.send(b'line-1\n\r\n%beginner\r\n%endder\r\n')
+        line = await wait(
+            self.protocol.drop_lines_until_starts_with('%begin')
+        )
+        self.assertEqual(line, '%beginner\r\n')
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%endder\r\n')
+
+    async def test_read_lines_until_starts_with(self) -> None:
+        """Record lines until a specifix prefix is found."""
+        self.sender.send(b'line-1\n\r\n%beginner\r\n%endder\r\n')
+        line = await wait(
+            self.protocol.read_lines_until_starts_with('%begin')
+        )
+        self.assertEqual(line, ['line-1\n\r\n', '%beginner\r\n'])
+        line = await wait(self.protocol.read_line())
+        self.assertEqual(line, '%endder\r\n')
+
+    async def test_read_block(self) -> None:
+        """Reading a block between ``%begin`` and ``%end``."""
+        self.sender.send(b'line-1\n\r\n%begin er\r\n%end er\r\n')
+        content = await wait(self.protocol.read_block())
+        self.assertEqual(content, ['%begin er\r\n', '%end er\r\n'])
+
+
+class HasClient(unittest.IsolatedAsyncioTestCase):
+
+    async def async_set_up_client(self) -> None:
+        """Create sockets to send fake tmux messages."""
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        server_socket, client_socket = socket.socketpair()
+        stack.enter_context(server_socket)
+        stack.enter_context(client_socket)
+        self.server = server_socket
+        server_socket.setblocking(False)
+        loop = asyncio.get_running_loop()
+        transport: asyncio.WriteTransport
+        protocol: phile.tray.tmux.ControlModeProtocol
+        transport, protocol = (
+            await loop.create_connection(  # type: ignore[assignment]
+                phile.tray.tmux.ControlModeProtocol, sock=client_socket
+            )
+        )
+        self.addCleanup(transport.close)
+        self.subprocess = subprocess = unittest.mock.Mock()
+        self.subprocess_stopped = subprocess_stopped = asyncio.Event()
+        subprocess.wait = subprocess_stopped.wait
+        self.client = phile.tray.tmux.ControlMode(
+            transport=transport,
+            protocol=protocol,
+            subprocess=subprocess
+        )
+        self.server_sendall = (
+            lambda data: asyncio.create_task(
+                asyncio.get_running_loop().
+                sock_sendall(server_socket, data)
+            )
+        )
+
+
+class TestControlMode(HasClient, unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.tray.tmux.ControlMode`."""
+
+    async def asyncSetUp(self) -> None:
+        await self.async_set_up_client()
+
+    async def test_run_returns_on_immediate_disconnect(self) -> None:
+        run_task = asyncio.create_task(self.client.run())
+        self.addCleanup(run_task.cancel)
+        self.server.close()
+        await wait(run_task)
+
+    async def test_run_returns_on_disconnect_after_startup(self) -> None:
+        run_task = asyncio.create_task(self.client.run())
+        self.addCleanup(run_task.cancel)
+        await self.server_sendall(b'\x1bP1000p%begin 0\r\n%end 0\r\n')
+        self.server.close()
+        await wait(run_task)
+
+    async def test_send_soon_does_send_eventually(self) -> None:
+        loop = asyncio.get_running_loop()
+        run_task = asyncio.create_task(self.client.run())
+        self.addCleanup(run_task.cancel)
+        await self.server_sendall(b'\x1bP1000p%begin 0\r\n%end 0\r\n')
+        self.client.send_soon(CommandBuilder.exit_client())
+        line = await wait(loop.sock_recv(self.server, 1))
+        self.assertEqual(line, b'\n')
+        await self.server_sendall(b'%exit\r\n\x1b\\')
+        self.server.close()
+        await wait(run_task)
+
+
+class TestOpenControlMode(unittest.IsolatedAsyncioTestCase):
+    """
+    Tests :func:`~phile.tray.tmux.open_control_mode`.
+
+    Integration test on whether ``tmux`` can be communicated with.
     """
 
     def setUp(self) -> None:
@@ -162,133 +461,103 @@ class TestControlMode(unittest.TestCase):
             TMUX=None,
             TMUX_TMPDIR=str(tmux_tmpdir_path),
         )
-        _logger.debug('Creating control mode.')
-        self.control_mode = ControlMode(
-            configuration_file_path=tmux_config_path,
-            session_name=None,
-            timeout=wait_time,
+        self.control_mode_arguments = (
+            phile.tray.tmux.ControlModeArguments()
         )
-        _logger.debug('Determining tmux server PID.')
-        self.tmux_server_pid = get_server_pid()
-        _logger.debug('Got tmux server PID as %s.', self.tmux_server_pid)
 
-    def tearDown(self) -> None:
-        """Shut down the tmux server after each method test."""
-        _logger.debug('Shutting down control mode.')
-        self.control_mode.__del__()
-        _logger.debug('Sending kill-server command.')
-        try:
-            kill_server()
-        except subprocess.CalledProcessError as e:
-            _logger.debug(
-                'The kill-server command failed.\n'
-                'stdout: {stdout}\n'
-                'stderr: {stderr}'.format(
-                    stdout=e.stdout.decode().rstrip('\r\n'),
-                    stderr=e.stderr.decode().rstrip('\r\n'),
-                )
+    async def asyncSetUp(self) -> None:
+        self.stack = stack = contextlib.AsyncExitStack()
+        self.addAsyncCleanup(stack.aclose)
+        self.client = await stack.enter_async_context(
+            phile.tray.tmux.open_control_mode(
+                self.control_mode_arguments
             )
-            tmux_server_pid = self.tmux_server_pid
-            if tmux_server_pid != 0:
-                if psutil.pid_exists(tmux_server_pid):
-                    _logger.debug(
-                        'Killing tmux server (PID: %s).\n',
-                        tmux_server_pid
-                    )
-                    os.kill(tmux_server_pid, signal.SIGKILL)
-                if psutil.pid_exists(tmux_server_pid):
-                    _logger.error(
-                        'Unable to kill tmux server (PID: %s).\n',
-                        tmux_server_pid
-                    )
-
-    def test_initialisation(self) -> None:
-        """
-        Create a :class:`phile.tray.tmux.ControlMode`.
-
-        It is created in :meth:`setUp`.
-        This test flags up initialisation errors
-        that would likely affect all other tests.
-        """
-
-    def test_initialisation_with_session_name(self) -> None:
-        """
-        Create a control mode and connect to a given session.
-
-        A session name can be given
-        to :class:`phile.tray.tmux.ControlMode`
-        indicating the session to connect to,
-        and creating the session of the given name
-        if it does not exist already.
-        This tests asks the tmux server
-        for the currently connected session,
-        and checks that it is the requested session.
-        """
-        session_name = 'control'
-        new_control_mode = ControlMode(
-            session_name=session_name, timeout=wait_time
         )
-        new_control_mode.send_command(
-            'display-message -p '
-            "'#{session_name}'"
+        self.addCleanup(kill_server)
+        self.run_task = run_task = asyncio.create_task(self.client.run())
+        self.addCleanup(run_task.cancel)
+
+    async def test_exit_from_client_side(self) -> None:
+        self.client.send_soon(
+            phile.tray.tmux.CommandBuilder.exit_client()
         )
+        await wait(self.run_task)
+
+    async def test_server_terminates_early(self) -> None:
+        """The server sends ``%exit`` when it is terminated."""
+        phile.tray.tmux.kill_server()
+        await wait(self.run_task)
+
+
+class TestStatusRight(HasClient, unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.tray.tmux.StatusRight`."""
+
+    async def asyncSetUp(self) -> None:
+        await self.async_set_up_client()
+        client_task = asyncio.create_task(self.client.run())
+        self.addCleanup(client_task.cancel)
+        await self.server_sendall(b'\x1bP1000p%begin 0\r\n%end 0\r\n')
+        self.status_right = phile.tray.tmux.StatusRight(
+            control_mode=self.client
+        )
+
+    async def check_server_recieves(self, command: str) -> None:
+        expected_data = command.encode() + b'\n'
+        data = await wait(
+            asyncio.get_running_loop().sock_recv(
+                self.server, len(expected_data)
+            )
+        )
+        self.assertEqual(expected_data, data)
+        await self.server_sendall(b'%begin 1\r\n%end 1\r\n')
+
+    async def check_status_right_set_to(self, tray_text: str) -> None:
+        command = phile.tray.tmux.CommandBuilder.set_global_status_right(
+            tray_text
+        )
+        await self.check_server_recieves(command)
+
+    async def test_set(self) -> None:
+        tray_text = 'Status right set'
+        self.status_right.set(tray_text)
+        await self.check_status_right_set_to(tray_text)
+
+    async def test_use_as_context_manager(self) -> None:
+        with self.status_right as status_right:
+            await self.check_status_right_set_to('')
+        await self.check_server_recieves(
+            phile.tray.tmux.CommandBuilder.unset_global_status_right()
+        )
+        await self.server_sendall(b'%begin 1\r\n%end 1\r\n')
+
+
+class TestTrayFilesToTrayText(unittest.TestCase):
+    """Tests :func:`~phile.tray.tmux.StatusRight`."""
+
+    def test_merge(self) -> None:
+        File = phile.tray.File
         self.assertEqual(
-            new_control_mode.read_block(rstrip_newline=True),
-            session_name
+            phile.tray.tmux.tray_files_to_tray_text(
+                files=[
+                    File(path=pathlib.Path(), text_icon='Tray'),
+                    File(path=pathlib.Path(), text_icon='Files'),
+                    File(path=pathlib.Path(), text_icon='To'),
+                    File(path=pathlib.Path(), text_icon='Tray'),
+                    File(path=pathlib.Path(), text_icon='Text'),
+                ]
+            ), 'TrayFilesToTrayText'
         )
 
-    def test_read_block(self) -> None:
-        """
-        Read a block message.
 
-        Send a command to ask the server for its PID.
-        The response is wrapped in a block.
-        So :meth:`~phile.tray.tmux.read_block` should return the PID
-        after the command is sent.
-        """
-        self.control_mode.send_command('display-message -p ' "'#{pid}'")
-        self.assertEqual(
-            int(self.control_mode.read_block(rstrip_newline=True)),
-            self.tmux_server_pid
-        )
+class TestReadByte(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.tray.tmux.read_byte`."""
 
-    def test_readline_with_timeout(self) -> None:
-        """
-        Read a line should throw after timeout.
-
-        Tells the server to not send over display data.
-        Server starts a shell and then sends over what to display.
-        Turning on `no-output` tells server to not send them over.
-        This is necessary here because the server
-        takes a while to create the shell.
-        So we do not want to wait for it in a unit test.
-        If it is not turned on, then the initial display data
-        can be sent at any time,
-        and that stops us from testing a timeout from not having data.
-        """
-        self.control_mode.send_command(
-            CommandBuilder.refresh_client(no_output=True)
-        )
-        self.control_mode.read_block()
-        original_timeout_seconds = self.control_mode.timeout_seconds
-        self.control_mode.timeout_seconds = 0
-        with self.assertRaises(TimeoutError):
-            self.control_mode.readline()
-        self.control_mode.timeout_seconds = original_timeout_seconds
-
-    def test_function_kill_server_failing(self) -> None:
-        """
-        The :meth:`~phile.tray.tmux.kill_server` function
-        fails by raising an exception.
-
-        Calls the function twice.
-        The first one should succeed, killing the server.
-        The second call tries to stop a server that has been killed,
-        and should then raise an exception.
-        """
-        kill_server()
-        with self.assertRaises(subprocess.CalledProcessError):
-            kill_server()
+    async def test_run(self) -> None:
+        server, client = socket.socketpair()
+        self.addCleanup(server.close)
+        self.addCleanup(client.close)
+        server.sendall(b'x')
+        await wait(phile.tray.tmux.read_byte(client))
 
 
 class CompletionCheckingThread(threading.Thread):
@@ -305,350 +574,108 @@ class CompletionCheckingThread(threading.Thread):
         self.completed_event.set()
 
 
-class TestIconList(unittest.TestCase):
-    """Tests :class:`~phile.tray.tmux.IconList`."""
+class TestRun(HasClient, unittest.IsolatedAsyncioTestCase):
+    """Tests :class:`~phile.tray.tmux.run`."""
 
     def set_up_configuration(self) -> None:
-        """
-        Use unique data directories to not interfere with other tests.
-        """
+        """Use unique data directories for each test."""
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
         self.configuration = phile.configuration.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
-        )
-        self.trigger_directory = (
-            self.configuration.trigger_root / 'phile-tray-gui'
         )
 
     def set_up_observer(self) -> None:
         """
         Use unique observers to ensure handlers do not linger.
 
-        Start immediately to allow file changes propagate.
+        Start immediately to allow file changes to propagate.
         The observer does not join, as that can take a long time.
+        Stopping it should be sufficient.
         """
         self.observer = observer = watchdog.observers.Observer()
         observer.daemon = True
         observer.start()
         self.addCleanup(observer.stop)
 
-    def set_up_trigger_dispatcher(self) -> None:
-        """Patch for detecting when trigger dispatch has been called."""
-        scheduler = self.icon_list._trigger_scheduler
-        self.trigger_path_handler_patch = unittest.mock.patch.object(
-            scheduler,
-            'path_handler',
-            new_callable=test_phile.threaded_mock.ThreadedMock,
-            wraps=scheduler.path_handler
+    async def async_set_up_reply(self) -> None:
+        self.control_mode = self.client
+        self.client_task = client_task = (
+            asyncio.create_task(self.client.run())
         )
+        self.addCleanup(client_task.cancel)
+        await self.server_sendall(b'\x1bP1000p%begin 0\r\n%end 0\r\n')
 
-    def set_up_control_mode(self) -> None:
-        """Use unique control modes to not have commands linger."""
-        control_mode_patch = unittest.mock.patch(
-            'phile.tray.tmux.ControlMode'
+    async def async_set_up_run(self) -> None:
+        self.run_task = run_task = asyncio.create_task(
+            phile.tray.tmux.run(
+                configuration=self.configuration,
+                control_mode=self.client,
+                watching_observer=self.observer,
+            )
         )
-        self.ControlModeMock = control_mode_patch.start()
-        self.addCleanup(control_mode_patch.stop)
+        self.addCleanup(run_task.cancel)
+        await self.check_status_right_set_to('')
 
-    def set_up_icon_list(self) -> None:
-        """
-        Override ControlMode to not create a tmux session every test.
-
-        Create the actual icon list to test.
-        """
-        self.icon_list = IconList(
-            configuration=self.configuration,
-            watching_observer=self.observer,
-        )
-        self.addCleanup(self.icon_list._entry_point.unbind)
-        # For detecting commands sent to control mode.
-        # Creating a new mock to make mypy happy,
-        # since it detects `send_command` as a method,
-        # and so assigning to it raises errors in mypy.
-        self.control_mode = control_mode = unittest.mock.Mock()
-        control_mode.send_command = (
-            test_phile.threaded_mock.ThreadedMock()
-        )
-        self.icon_list._control_mode = control_mode
-        self.trigger_directory = (
-            self.icon_list._entry_point.trigger_directory
-        )
-
-    def setUp(self) -> None:
+    async def asyncSetUp(self) -> None:
         self.set_up_configuration()
         self.set_up_observer()
-        self.set_up_control_mode()
-        self.set_up_icon_list()
+        await wait(self.async_set_up_client())
+        await wait(self.async_set_up_reply())
 
-    def test_initialisation_creates_triggers(self) -> None:
-        """
-        Initialising a :class:`~phile.tray.tmux.IconList`
-        creates triggers.
-        """
-        icon_list = self.icon_list
-        trigger_directory = self.trigger_directory
-        trigger_suffix = self.configuration.trigger_suffix
-        self.assertTrue(icon_list.is_hidden())
-        self.assertTrue(
-            (trigger_directory / ('close' + trigger_suffix)).is_file()
+    async def check_server_recieves(self, command: str) -> None:
+        expected_data = command.encode() + b'\n'
+        data = await wait(
+            asyncio.get_running_loop().sock_recv(
+                self.server, len(expected_data)
+            )
         )
-        self.assertTrue(
-            (trigger_directory / ('show' + trigger_suffix)).is_file()
-        )
+        self.assertEqual(data, expected_data)
+        await self.server_sendall(b'%begin 1\r\n%end 1\r\n')
 
-    def test_refresh_with_no_tray_files(self) -> None:
-        """Change tmux status line to reflect currently tracked files."""
-        self.icon_list.refresh()
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(''),
+    async def check_status_right_set_to(self, tray_text: str) -> None:
+        command = phile.tray.tmux.CommandBuilder.set_global_status_right(
+            tray_text
         )
+        await self.check_server_recieves(command)
 
-    def test_show_with_existing_files(self) -> None:
+    async def test_returns_on_disconnect(self) -> None:
+        """Close sends an exit request to tmux."""
+        await self.async_set_up_run()
+        self.server.close()
+        await wait(self.run_task)
+
+    async def test_checks_for_existing_files(self) -> None:
         """
         Showing should display existing tray files.
 
         Directory changes should be ignored.
         Wrong suffix should be ignored.
-        Moves are treated as delete and create.
         """
-        _logger.debug('Adding a tray file.')
         year_tray_file = phile.tray.File.from_path_stem(
-            configuration=self.configuration, path_stem='year'
+            configuration=self.configuration,
+            path_stem='year',
+            text_icon='2345'
         )
-        year_tray_file.text_icon = '2345'
         year_tray_file.save()
-        _logger.debug('Adding a second tray file.')
-        month_tray_file = phile.tray.File.from_path_stem(
-            configuration=self.configuration, path_stem='month'
-        )
-        month_tray_file.text_icon = '12/'
-        month_tray_file.save()
-        _logger.debug('Creating subdirectory in tray file directory.')
+        self.year_tray_file = year_tray_file
         subdirectory = self.configuration.tray_directory / (
             'subdir' + self.configuration.tray_suffix
         )
         subdirectory.mkdir()
-        _logger.debug('Creating file with wrong suffix.')
         wrong_tray_file = self.configuration.tray_directory / (
             'wrong' + self.configuration.tray_suffix + '_wrong'
         )
         wrong_tray_file.touch()
-        _logger.debug('Showing tray.')
-        self.icon_list.show()
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(
-                month_tray_file.text_icon + year_tray_file.text_icon
-            )
-        )
+        await self.async_set_up_run()
+        await self.check_status_right_set_to('2345')
 
-    def test_file_changes_after_show_and_then_hide(self) -> None:
-        """
-        Calling show and then hide. Modify file trays in the middle.
-
-        File trays are created, renamed and deleted.
-        The tray file may be truncated before writing the real content.
-        So this test allows for other changes before the expected one.
-        """
-        _logger.debug('Showing empty tray.')
-        self.icon_list.show()
-        self.assertTrue(not self.icon_list.is_hidden())
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right('')
-        )
-        _logger.debug('Inserting event setter to monitor events.')
-        _logger.debug('Adding a tray file.')
-        year_tray_file = phile.tray.File.from_path_stem(
-            configuration=self.configuration, path_stem='year'
-        )
-        year_tray_file.text_icon = '2345'
+    async def test_checks_for_file_changes(self) -> None:
+        await self.test_checks_for_existing_files()
+        year_tray_file = self.year_tray_file
+        year_tray_file.text_icon = '3456'
         year_tray_file.save()
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(
-                year_tray_file.text_icon
-            )
-        )
-        _logger.debug('Adding a second tray file.')
-        month_tray_file = phile.tray.File.from_path_stem(
-            configuration=self.configuration, path_stem='month'
-        )
-        month_tray_file.text_icon = '12/'
-        month_tray_file.save()
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(
-                month_tray_file.text_icon + year_tray_file.text_icon
-            )
-        )
-        _logger.debug('Changing a tray file.')
-        year_tray_file.text_icon = '1234'
-        year_tray_file.save()
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(
-                month_tray_file.text_icon + year_tray_file.text_icon
-            )
-        )
-        _logger.debug('Moving a tray file.')
-        new_year_tray_file = phile.tray.File.from_path_stem(
-            configuration=self.configuration, path_stem='a_year'
-        )
-        year_tray_file.path.rename(new_year_tray_file.path)
-        year_tray_file.path = new_year_tray_file.path
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(
-                year_tray_file.text_icon + month_tray_file.text_icon
-            )
-        )
-        _logger.debug('Removing a tray file.')
-        year_tray_file.text_icon = ''
-        year_tray_file.path.unlink(missing_ok=True)
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right(
-                month_tray_file.text_icon
-            )
-        )
-        _logger.debug('Hiding system tray.')
-        self.icon_list.hide()
-        self.assertTrue(self.icon_list.is_hidden())
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.unset_global_status_right()
-        )
-
-    def test_hide_without_show(self) -> None:
-        """Hiding without showing first does nothing."""
-        _logger.debug('Hiding  empty tray.')
-        self.icon_list.hide()
-        self.assertTrue(self.icon_list.is_hidden())
-        self.control_mode.send_command.assert_not_called()
-
-    def test_double_show(self) -> None:
-        """Double show does nothing."""
-        _logger.debug('Hiding  empty tray.')
-        self.icon_list.show()
-        self.assertTrue(not self.icon_list.is_hidden())
-        self.control_mode.send_command.assert_called_with_soon(
-            CommandBuilder.set_global_status_right('')
-        )
-        self.control_mode.send_command.reset_mock()
-        self.icon_list.show()
-        self.assertTrue(not self.icon_list.is_hidden())
-        self.control_mode.send_command.assert_not_called()
-
-    def test_run_returning_on_exit_response(self) -> None:
-        """Run should return when it receives an ``%exit`` response."""
-        # Give an exit response to run.
-        self.control_mode.readline.return_value = '%exit'
-        # Running blocks, so do it in a separate thread.
-        # Detect whether it returns normally.
-        run_thread = CompletionCheckingThread(target=self.icon_list.run)
-        run_thread.start()
-        self.assertTrue(
-            run_thread.completed_event.wait(
-                timeout=wait_time.total_seconds()
-            )
-        )
-        self.assertEqual(self.control_mode.readline.call_count, 1)
-
-    def test_run_ignores_blocks(self) -> None:
-        """
-        Run ignore response blocks.
-
-        In particular,
-        if an exit response is wrapped inside a response block,
-        it should be ignored as well.
-        """
-        # Give an exit response to run.
-        self.control_mode.readline.side_effect = [
-            '%begin ',
-            '%exit',
-            '%end ',
-            '%exit',
-        ]
-        # Running blocks, so do it in a separate thread.
-        # Detect whether it returns normally.
-        run_thread = CompletionCheckingThread(target=self.icon_list.run)
-        run_thread.start()
-        self.assertTrue(
-            run_thread.completed_event.wait(
-                timeout=wait_time.total_seconds()
-            )
-        )
-        self.assertEqual(self.control_mode.readline.call_count, 4)
-
-    def test_close_sends_command(self) -> None:
-        """Close sends an exit request to tmux."""
-        self.icon_list.close()
-        self.assertTrue(self.icon_list.is_hidden())
-        self.control_mode.send_command.assert_called_with(
-            CommandBuilder.exit_client()
-        )
-
-    #def test_triggers(self) -> None:
-    #    """Tray GUI has show, hide and close triggers."""
-    #    icon_list = self.icon_list
-    #    # Use a threaded mock to check when events are queued into Qt.
-    #    trigger_directory = self.trigger_directory
-    #    trigger_suffix = self.configuration.trigger_suffix
-    #    trigger_path = trigger_directory / ('show' + trigger_suffix)
-    #    # Respond to a show trigger.
-    #    with unittest.mock.patch.object(
-    #        icon_list,
-    #        'show',
-    #        new_callable=test_phile.threaded_mock.ThreadedMock,
-    #        wraps=icon_list.show
-    #    ) as show_mock:
-    #        trigger_path.unlink()
-    #        show_mock.assert_called_soon()
-    #    # Respond to a hide trigger.
-    #    trigger_path = trigger_directory / ('hide' + trigger_suffix)
-    #    with unittest.mock.patch.object(
-    #        icon_list,
-    #        'hide',
-    #        new_callable=test_phile.threaded_mock.ThreadedMock,
-    #        wraps=icon_list.hide
-    #    ) as hide_mock:
-    #        trigger_path.unlink()
-    #        hide_mock.assert_called_soon()
-    #    # Respond to a close trigger.
-    #    trigger_path = trigger_directory / ('close' + trigger_suffix)
-    #    with unittest.mock.patch.object(
-    #        icon_list,
-    #        'close',
-    #        new_callable=test_phile.threaded_mock.ThreadedMock,
-    #        wraps=icon_list.close
-    #    ) as close_mock:
-    #        trigger_path.unlink()
-    #        close_mock.assert_called_soon()
-
-    def test_triggers(self) -> None:
-        """Tray tmux has show, hide and close triggers."""
-        self.set_up_trigger_dispatcher()
-        icon_list = self.icon_list
-        trigger_directory = self.trigger_directory
-        trigger_suffix = self.configuration.trigger_suffix
-        close_path = trigger_directory / ('close' + trigger_suffix)
-        hide_path = trigger_directory / ('hide' + trigger_suffix)
-        show_path = trigger_directory / ('show' + trigger_suffix)
-        # Respond to a show trigger.
-        with self.trigger_path_handler_patch as handler_mock:
-            show_path.unlink()
-            handler_mock.assert_called_with_soon(hide_path)
-            handler_mock.assert_called_with_soon(show_path)
-            self.assertTrue(not icon_list.is_hidden())
-        # Respond to a hide trigger.
-        with self.trigger_path_handler_patch as handler_mock:
-            hide_path.unlink()
-            handler_mock.assert_called_with_soon(hide_path)
-            handler_mock.assert_called_with_soon(show_path)
-            self.assertTrue(icon_list.is_hidden())
-        # Respond to a close trigger.
-        with self.trigger_path_handler_patch as handler_mock:
-            close_path.unlink()
-            handler_mock.assert_called_with_soon(close_path)
-            self.assertTrue(
-                not icon_list._trigger_scheduler.is_scheduled
-            )
-        # Give cleanup something to delete.
-        self.icon_list = unittest.mock.Mock()
+        await self.check_status_right_set_to(year_tray_file.text_icon)
 
 
 if __name__ == '__main__':
