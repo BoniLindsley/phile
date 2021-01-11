@@ -22,6 +22,7 @@ import phile.tray.publishers.network
 import phile.tray.publishers.notify_monitor
 import phile.tray.publishers.update
 import phile.trigger
+import phile.watchdog_extras
 
 
 class Context(phile.configuration.Configuration):
@@ -165,7 +166,7 @@ async def run(context: Context) -> None:
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    with Context(watching_observer=phile.watchdog_extras.Observer()
+    with Context(watching_observer=watchdog.observers.Observer()
                  ) as context, contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run(context=context))
     return 0

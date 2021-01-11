@@ -23,7 +23,7 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 import phile.notify
 import phile.tray.publishers.notify_monitor
-import phile.watchdog_extras
+import phile.watchdog.observers
 import test_phile.threaded_mock
 
 wait_time = datetime.timedelta(seconds=2)
@@ -40,7 +40,7 @@ class TestMonitorStart(unittest.TestCase):
         )
 
     def set_up_observer(self) -> None:
-        self.observer = phile.watchdog_extras.Observer()
+        self.observer = watchdog.observers.Observer()
         self.addCleanup(self.observer.stop)
         self.observer.start()
 
@@ -55,11 +55,14 @@ class TestMonitorStart(unittest.TestCase):
         self.addCleanup(dispatch_patcher.stop)
         tray_directory = self.configuration.tray_directory
         tray_directory.mkdir(exist_ok=True)
-        watch = self.observer.add_handler(
-            event_handler=dispatcher, path=tray_directory
+        watch = phile.watchdog.observers.add_handler(
+            observer=self.observer,
+            event_handler=dispatcher,
+            path=tray_directory,
         )
         self.addCleanup(
-            self.observer.remove_handler,
+            phile.watchdog.observers.remove_handler,
+            observer=self.observer,
             event_handler=dispatcher,
             watch=watch
         )

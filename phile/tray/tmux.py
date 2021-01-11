@@ -33,12 +33,12 @@ import typing
 
 # External dependencies.
 import watchdog.events  # type: ignore[import]
+import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
 from phile.configuration import Configuration
 import phile.data
 import phile.tray
-import phile.watchdog_extras
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -477,7 +477,7 @@ async def run(
     *,
     configuration: Configuration,
     control_mode: ControlMode,
-    watching_observer: watchdog.observers.Observer,
+    watching_observer: watchdog.observers.api.BaseObserver,
 ) -> None:
     """Start updating ``status-right`` with tray file changes."""
     with contextlib.ExitStack() as stack:
@@ -528,7 +528,7 @@ async def read_byte(pipe) -> None:
 
 async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
     async with contextlib.AsyncExitStack() as stack:
-        watching_observer = phile.watchdog_extras.Observer()
+        watching_observer = watchdog.observers.Observer()
         watching_observer.start()
         stack.callback(watching_observer.stop)
         control_mode = await stack.enter_async_context(

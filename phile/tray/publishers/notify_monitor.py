@@ -14,6 +14,7 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 import phile.notify
 import phile.tray
+import phile.watchdog.observers
 import phile.watchdog_extras
 
 
@@ -67,23 +68,10 @@ async def monitor(
                 notify_tray_file.path.unlink(missing_ok=True)
 
 
-@contextlib.contextmanager
-def _stopper(
-    observer: watchdog.observers.api.BaseObserver
-):  # pragma: no cover
-    try:
-        observer.daemon = True
-        observer.start()
-        yield observer
-    finally:
-        observer.stop()
-
-
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     configuration = phile.configuration.Configuration()
-    watching_observer = phile.watchdog_extras.Observer()
-    with _stopper(
-        watchdog.observers.Observer()
+    watching_observer = watchdog.observers.Observer()
+    with phile.watchdog.observers.open(
     ) as watching_observer, contextlib.suppress(KeyboardInterrupt):
         target = monitor(
             configuration=configuration,

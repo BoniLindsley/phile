@@ -34,7 +34,6 @@ import phile.tray
 from phile.tray.tmux import (
     CommandBuilder, kill_server, timedelta_to_seconds
 )
-from phile.watchdog_extras import Observer
 from test_phile.pyside2_test_tools import EnvironBackup
 import test_phile.threaded_mock
 
