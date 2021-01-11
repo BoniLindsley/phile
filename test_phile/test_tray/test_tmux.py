@@ -217,7 +217,7 @@ class TestControlModeProtocol(unittest.IsolatedAsyncioTestCase):
         await wait(self.protocol.new_data_received.wait())
 
     async def test_peek_line(self) -> None:
-        """Can check a line which tmux says ends with ``\r\n``."""
+        """Can check a line which tmux says ends with ``\\r\\n``."""
         self.sender.send(b'line-1\n\r\n\r')
         line = await wait(self.protocol.peek_line())
         self.assertEqual(line, b'line-1\n\r\n')
@@ -415,7 +415,19 @@ class TestControlMode(HasClient, unittest.IsolatedAsyncioTestCase):
         self.client.send_soon(CommandBuilder.exit_client())
         line = await wait(loop.sock_recv(self.server, 1))
         self.assertEqual(line, b'\n')
+
+    async def test_run_can_terminate_to_exit_response(self) -> None:
+        loop = asyncio.get_running_loop()
+        run_task = asyncio.create_task(self.client.run())
+        self.addCleanup(run_task.cancel)
+        await self.server_sendall(b'\x1bP1000p%begin 0\r\n%end 0\r\n')
         await self.server_sendall(b'%exit\r\n\x1b\\')
+        await wait(run_task)
+
+    async def test_run_can_terminate_to_a_disconnect(self) -> None:
+        loop = asyncio.get_running_loop()
+        run_task = asyncio.create_task(self.client.run())
+        self.addCleanup(run_task.cancel)
         self.server.close()
         await wait(run_task)
 
@@ -520,6 +532,14 @@ class TestStatusRight(HasClient, unittest.IsolatedAsyncioTestCase):
         tray_text = 'Status right set'
         self.status_right.set(tray_text)
         await self.check_status_right_set_to(tray_text)
+
+    async def test_set_to_same_value_does_not_send_command(self) -> None:
+        """Setting to the cached value does nothing."""
+        tray_text = 'Status right set'
+        self.status_right.set(tray_text)
+        await self.check_status_right_set_to(tray_text)
+        self.status_right.set(tray_text)
+        self.assertTrue(self.client._commands.empty())
 
     async def test_use_as_context_manager(self) -> None:
         with self.status_right as status_right:
