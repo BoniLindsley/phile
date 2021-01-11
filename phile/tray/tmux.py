@@ -39,6 +39,7 @@ import watchdog.observers  # type: ignore[import]
 from phile.configuration import Configuration
 import phile.data
 import phile.tray
+import phile.watchdog
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -497,7 +498,7 @@ async def run(
         stack.callback(tray_sorter.tracked_data.clear)
         # Start monitoring to not miss file events.
         stack.enter_context(
-            phile.watchdog_extras.Scheduler(
+            phile.watchdog.Scheduler(
                 path_filter=functools.partial(
                     phile.tray.File.check_path,
                     configuration=configuration

@@ -23,7 +23,6 @@ import phile.configuration
 import phile.tray
 import phile.tray.gui
 from phile.tray.gui import set_icon_paths
-import phile.watchdog_extras
 from test_phile.pyside2_test_tools import (
     QTestApplication, q_icon_from_theme, SystemTrayIcon
 )

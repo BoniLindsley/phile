@@ -14,8 +14,8 @@ import watchdog.observers  # type: ignore[import]
 import phile.configuration
 import phile.notify
 import phile.tray
+import phile.watchdog
 import phile.watchdog.observers
-import phile.watchdog_extras
 
 
 async def monitor(
@@ -42,7 +42,7 @@ async def monitor(
         )
         exit_stack.callback(notify_sorter.tracked_data.clear)
         exit_stack.enter_context(
-            phile.watchdog_extras.Scheduler(
+            phile.watchdog.Scheduler(
                 path_filter=functools.partial(
                     phile.notify.File.check_path,
                     configuration=configuration

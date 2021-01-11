@@ -27,7 +27,7 @@ import phile.configuration
 import phile.data
 import phile.notify
 import phile.trigger
-import phile.watchdog_extras
+import phile.watchdog
 import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
 
@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
         )
         # Forward watchdog events into Qt signal and handle it there.
         self._notify_scheduler = scheduler = (
-            phile.watchdog_extras.Scheduler(
+            phile.watchdog.Scheduler(
                 path_filter=functools.partial(
                     SubWindowContent.check_path,
                     configuration=configuration
@@ -321,7 +321,7 @@ class MainWindow(QMainWindow):
         self.destroyed.connect(entry_point.unbind)
         # Forward watchdog events into Qt signal and handle it there.
         self._trigger_scheduler = scheduler = (
-            phile.watchdog_extras.Scheduler(
+            phile.watchdog.Scheduler(
                 path_filter=entry_point.check_path,
                 path_handler=phile.PySide2_extras.event_loop.CallSoon(
                     parent=self,

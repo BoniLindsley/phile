@@ -19,7 +19,6 @@ import watchdog.events  # type: ignore[import]
 # Internal packages.
 import phile.configuration
 import phile.trigger
-import phile.watchdog_extras
 import test_phile.threaded_mock
 
 

@@ -23,7 +23,6 @@ import watchdog.events  # type: ignore[import]
 # Internal packages.
 import phile.configuration
 import phile.data
-import phile.watchdog_extras
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422

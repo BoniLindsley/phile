@@ -34,7 +34,7 @@ import phile.PySide2_extras.event_loop
 import phile.PySide2_extras.posix_signal
 import phile.tray
 import phile.trigger
-import phile.watchdog_extras
+import phile.watchdog
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -133,7 +133,7 @@ class GuiIconList(QObject):
         )
         # Forward watchdog events into Qt signal and handle it there.
         self._tray_scheduler = scheduler = (
-            phile.watchdog_extras.Scheduler(
+            phile.watchdog.Scheduler(
                 path_filter=(
                     lambda path:
                     (path.suffix == configuration.tray_suffix)
@@ -171,7 +171,7 @@ class GuiIconList(QObject):
         self.destroyed.connect(entry_point.unbind)
         # Forward watchdog events into Qt signal and handle it there.
         self._trigger_scheduler = scheduler = (
-            phile.watchdog_extras.Scheduler(
+            phile.watchdog.Scheduler(
                 path_filter=entry_point.check_path,
                 path_handler=phile.PySide2_extras.event_loop.CallSoon(
                     parent=self,

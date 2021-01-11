@@ -22,7 +22,7 @@ import phile.tray.publishers.network
 import phile.tray.publishers.notify_monitor
 import phile.tray.publishers.update
 import phile.trigger
-import phile.watchdog_extras
+import phile.watchdog
 
 
 class Context(phile.configuration.Configuration):
@@ -152,7 +152,7 @@ async def run(context: Context) -> None:
     loop = asyncio.get_running_loop()
     with TriggerEntryPoint(
         context=context, trigger_directory=pathlib.Path('phile')
-    ) as entry_point, phile.watchdog_extras.Scheduler(
+    ) as entry_point, phile.watchdog.Scheduler(
         watched_path=entry_point.trigger_directory,
         watching_observer=context.watching_observer,
         path_filter=entry_point.check_path,

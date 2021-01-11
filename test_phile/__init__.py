@@ -7,6 +7,6 @@
 .. automodule:: test_phile.test_PySide2_extras
 .. automodule:: test_phile.test_tray
 .. automodule:: test_phile.test_trigger
-.. automodule:: test_phile.test_watchdog_extras
+.. automodule:: test_phile.test_watchdog
 .. automodule:: test_phile.threaded_mock
 """

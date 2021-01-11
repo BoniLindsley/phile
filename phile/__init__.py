@@ -7,5 +7,4 @@
 .. automodule:: phile.tray
 .. automodule:: phile.trigger
 .. automodule:: phile.watchdog
-.. automodule:: phile.watchdog_extras
 """
