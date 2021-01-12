@@ -30,11 +30,11 @@ import watchdog.events  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration
+import phile.os
 import phile.tray
 from phile.tray.tmux import (
     CommandBuilder, kill_server, timedelta_to_seconds
 )
-from test_phile.pyside2_test_tools import EnvironBackup
 import test_phile.threaded_mock
 
 _logger = logging.getLogger(
@@ -466,12 +466,9 @@ class TestOpenControlMode(unittest.IsolatedAsyncioTestCase):
         tmux_config_path = tmux_tmpdir_path / 'tmux.conf'
         tmux_config_path.touch()
         _logger.debug('Setting environment variables.')
-        environ_backup = EnvironBackup()
+        environ_backup = phile.os.Environ()
         self.addCleanup(environ_backup.restore)
-        environ_backup.backup_and_set(
-            TMUX=None,
-            TMUX_TMPDIR=str(tmux_tmpdir_path),
-        )
+        environ_backup.set(TMUX=None, TMUX_TMPDIR=str(tmux_tmpdir_path))
         self.control_mode_arguments = (
             phile.tray.tmux.ControlModeArguments()
         )

@@ -18,37 +18,13 @@ import PySide2.QtCore
 from PySide2.QtGui import QIcon
 import PySide2.QtWidgets
 
+# Internal packages.
+import phile.os
+
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
 )
 """Logger whose name is the module name."""
-
-
-class EnvironBackup:
-
-    def __init__(self, *args, **kwargs) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._source_dict = os.environ
-        self._backup_dict: typing.Dict[str, typing.Optional[str]] = {}
-
-    def restore(self) -> None:
-        source_dict = self._source_dict
-        for key, value in self._backup_dict.items():
-            if value is None:
-                source_dict.pop(key, None)
-            else:
-                source_dict[key] = value
-
-    def backup_and_set(self, **kwargs) -> None:
-        backup_dict = self._backup_dict
-        source_dict = self._source_dict
-        for key, value in kwargs.items():
-            backup_dict[key] = source_dict.get(key)
-            if value is None:
-                source_dict.pop(key, None)
-            else:
-                source_dict[key] = value
 
 
 def q_icon_from_specified_theme(name: str, theme_name: str) -> QIcon:
@@ -152,17 +128,15 @@ class QTestApplication(PySide2.QtWidgets.QApplication):
         **kwargs
     ) -> None:
         self.__process_event_wait_time_ = process_event_wait_time
-        environ_backup = EnvironBackup()
+        environ_backup = phile.os.Environ()
         self.__xdg_runtime_dir_ = None
         if use_temporary_xdg_runtime_dir:
             self.__xdg_runtime_dir_ = tempfile.TemporaryDirectory()
-            environ_backup.backup_and_set(
+            environ_backup.set(
                 XDG_RUNTIME_DIR=self.__xdg_runtime_dir_.name
             )
         if qt_qpa_platform is not None:
-            environ_backup.backup_and_set(
-                QT_QPA_PLATFORM=qt_qpa_platform
-            )
+            environ_backup.set(QT_QPA_PLATFORM=qt_qpa_platform)
         self.__environ_backup_ = environ_backup
         super().__init__(*args, **kwargs)
 
