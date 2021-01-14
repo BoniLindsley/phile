@@ -102,7 +102,6 @@ class Protocol(asyncio.Protocol):
 
     async def remove_prefix(self, prefix: bytes) -> None:
         """New line ``\r\n`` is not allowed in ``prefix``."""
-        # TODO[Python 3.9]: Use `str.removeprefix`.
         assert prefix.find(b'\r\n') == -1
         found = False
         prefix_length = len(prefix)
@@ -117,10 +116,11 @@ class Protocol(asyncio.Protocol):
                     found = True
                 else:
                     if len(self.buffer) >= prefix_length:
-                        if self.buffer[0:prefix_length] != prefix:
+                        result = self.buffer.removeprefix(prefix)
+                        if result is self.buffer:
                             raise Protocol.PrefixNotFound()
-                        self.buffer = self.buffer[len(prefix):]
-                        if not self.buffer:
+                        self.buffer = result
+                        if not result:
                             self.new_data_received.clear()
                         found = True
                     elif self.buffer != prefix[0:len(self.buffer)]:

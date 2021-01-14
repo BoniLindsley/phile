@@ -50,7 +50,7 @@ setup(
     # Requires Python 3.6 because Python is dropping support
     # for version 3.5 after September 2020 (as for 2020-09-05).
     # Reference: https://www.python.org/dev/peps/pep-0478/
-    python_requires='>= 3.6',
+    python_requires='>= 3.9',
     package_data={
         'phile.tray': [
             'resources/icons/blank/64x64/status/phile-tray-empty.png',
