@@ -19,14 +19,15 @@ import watchdog.events  # type: ignore[import]
 from watchdog.observers import Observer  # type: ignore[import]
 
 # Internal packages.
+import phile.PySide2
+import phile.PySide2.QtGui
+import phile.PySide2.QtWidgets
 import phile.configuration
 import phile.tray
 import phile.tray.gui
 from phile.tray.gui import set_icon_paths
-from test_phile.pyside2_test_tools import (
-    QTestApplication, q_icon_from_theme, SystemTrayIcon
-)
 import test_phile.threaded_mock
+from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -34,21 +35,8 @@ _logger = logging.getLogger(
 """Logger whose name is the module name."""
 
 
-class TestSetIconPaths(unittest.TestCase):
+class TestSetIconPaths(UsesQApplication, unittest.TestCase):
     """Tests :class:`~phile.tray.set_icon_paths`."""
-
-    def setUp(self) -> None:
-        """
-        Create a PySide2 application before each method test.
-
-        It has to be created to do initialisation
-        for GUI widgets to work.
-        A new one is created for each test
-        to make sure no application state information
-        would interfere with each other.
-        """
-        app = QTestApplication()
-        self.addCleanup(app.tear_down)
 
     def test_call(self) -> None:
         """Just call it."""
@@ -66,7 +54,7 @@ class TestSetIconPaths(unittest.TestCase):
         self.assertEqual(QIcon.fallbackThemeName(), 'blank')
 
 
-class TestGuiIconList(unittest.TestCase):
+class TestGuiIconList(UsesQApplication, unittest.TestCase):
     """Tests :class:`~phile.tray.gui.GuiIconList`."""
 
     def set_up_configuration(self) -> None:
@@ -93,19 +81,6 @@ class TestGuiIconList(unittest.TestCase):
         observer.daemon = True
         observer.start()
         self.addCleanup(observer.stop)
-
-    def set_up_pyside2_app(self) -> None:
-        """
-        Create a PySide2 application before each method test.
-
-        It has to be created to do initialisation
-        for GUI widgets to work.
-        A new one is created for each test
-        to make sure no application state information
-        would interfere with each other.
-        """
-        self.app = test_phile.pyside2_test_tools.QTestApplication()
-        self.addCleanup(self.app.tear_down)
 
     def set_up_gui(self) -> None:
         """Create the gui being tested."""
@@ -139,7 +114,7 @@ class TestGuiIconList(unittest.TestCase):
     def setUp(self) -> None:
         self.set_up_configuration()
         self.set_up_observer()
-        self.set_up_pyside2_app()
+        super().setUp()
         self.set_up_gui()
         self.set_up_tray_dispatcher()
         self.set_up_trigger_dispatcher()
@@ -207,10 +182,12 @@ class TestGuiIconList(unittest.TestCase):
         self.assertTrue(not gui_icon_list.is_hidden())
 
     @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
+        'phile.tray.gui.QIcon.fromTheme',
+        phile.PySide2.QtGui.q_icon_from_theme
     )
     @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
+        'phile.tray.gui.QSystemTrayIcon',
+        phile.PySide2.QtWidgets.OffscreenSystemTrayIcon
     )
     def test_show_and_hide(self) -> None:
         """Showing and hiding should apply to its tray icons."""
@@ -248,21 +225,21 @@ class TestGuiIconList(unittest.TestCase):
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            self.app.process_events()
+            phile.PySide2.process_events()
             self.assertTrue(not gui_icon_list.is_hidden())
         # Respond to a hide trigger.
         trigger_path = trigger_directory / ('hide' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            self.app.process_events()
+            phile.PySide2.process_events()
             self.assertTrue(gui_icon_list.is_hidden())
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            self.app.process_events()
+            phile.PySide2.process_events()
             self.assertTrue(
                 not gui_icon_list._trigger_scheduler.is_scheduled
             )
@@ -270,7 +247,8 @@ class TestGuiIconList(unittest.TestCase):
         self.gui_icon_list = unittest.mock.Mock()
 
     @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
+        'phile.tray.gui.QIcon.fromTheme',
+        phile.PySide2.QtGui.q_icon_from_theme
     )
     def test_load_icon_from_name(self) -> None:
         """Retrive icon based on a icon name in tray file data."""
@@ -314,10 +292,12 @@ class TestGuiIconList(unittest.TestCase):
         _logger.debug('End of test.')
 
     @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
+        'phile.tray.gui.QIcon.fromTheme',
+        phile.PySide2.QtGui.q_icon_from_theme
     )
     @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
+        'phile.tray.gui.QSystemTrayIcon',
+        phile.PySide2.QtWidgets.OffscreenSystemTrayIcon
     )
     def test_show_tray_file_without_icon_name_or_path(self) -> None:
         """Showing a tray file without icon should use default icon."""
@@ -339,10 +319,12 @@ class TestGuiIconList(unittest.TestCase):
         )
 
     @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
+        'phile.tray.gui.QIcon.fromTheme',
+        phile.PySide2.QtGui.q_icon_from_theme
     )
     @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
+        'phile.tray.gui.QSystemTrayIcon',
+        phile.PySide2.QtWidgets.OffscreenSystemTrayIcon
     )
     def test_new_tray_file_creates_tray_icon(self) -> None:
         """Writing a new tray file creates a system tray icon."""
@@ -365,16 +347,18 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_with_soon(tray_file.path)
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        self.app.process_events()
+        phile.PySide2.process_events()
         children = gui_icon_list.tray_children()
         self.assertEqual(len(children), 1)
         self.assertEqual(children[0].icon().name(), tray_file.icon_name)
 
     @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
+        'phile.tray.gui.QIcon.fromTheme',
+        phile.PySide2.QtGui.q_icon_from_theme
     )
     @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
+        'phile.tray.gui.QSystemTrayIcon',
+        phile.PySide2.QtWidgets.OffscreenSystemTrayIcon
     )
     def test_prepend_new_tray_icon(self) -> None:
         """Handle icon shift if new tray icon has high priority."""
@@ -395,7 +379,7 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_with_soon(tray_file.path)
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        self.app.process_events()
+        phile.PySide2.process_events()
         self.assertListEqual(
             [
                 child.icon().name()
@@ -426,14 +410,16 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        self.app.process_events()
+        phile.PySide2.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
 
     @unittest.mock.patch(
-        'phile.tray.gui.QIcon.fromTheme', q_icon_from_theme
+        'phile.tray.gui.QIcon.fromTheme',
+        phile.PySide2.QtGui.q_icon_from_theme
     )
     @unittest.mock.patch(
-        'phile.tray.gui.QSystemTrayIcon', SystemTrayIcon
+        'phile.tray.gui.QSystemTrayIcon',
+        phile.PySide2.QtWidgets.OffscreenSystemTrayIcon
     )
     def test_modifying_tray_file_updates_tray_icon(self) -> None:
         """Modifying a tray file updates its tray icon."""
@@ -458,7 +444,7 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        self.app.process_events()
+        phile.PySide2.process_events()
         children = gui_icon_list.tray_children()
         self.assertEqual(len(children), 1)
         self.assertEqual(children[0].icon().name(), tray_file.icon_name)
@@ -489,7 +475,7 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        self.app.process_events()
+        phile.PySide2.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         self.assertListEqual(
             gui_icon_list._tray_sorter.tracked_data, [new_tray_file]
@@ -525,7 +511,7 @@ class TestGuiIconList(unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        self.app.process_events()
+        phile.PySide2.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
 
 

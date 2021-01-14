@@ -7,6 +7,7 @@ Tray GUI
 
 # Standard library.
 import bisect
+import functools
 import io
 import json
 import logging
@@ -28,10 +29,10 @@ import watchdog.events  # type: ignore[import]
 import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
+import phile.PySide2
+import phile.PySide2.QtNetwork
 import phile.configuration
 import phile.data
-import phile.PySide2_extras.event_loop
-import phile.PySide2_extras.posix_signal
 import phile.tray
 import phile.trigger
 import phile.watchdog
@@ -138,8 +139,9 @@ class GuiIconList(QObject):
                     lambda path:
                     (path.suffix == configuration.tray_suffix)
                 ),
-                path_handler=phile.PySide2_extras.event_loop.CallSoon(
-                    parent=self, call_target=tray_sorter.update
+                path_handler=functools.partial(
+                    phile.PySide2.call_soon_threadsafe,
+                    tray_sorter.update
                 ),
                 watched_path=configuration.tray_directory,
                 watching_observer=watching_observer,
@@ -173,9 +175,9 @@ class GuiIconList(QObject):
         self._trigger_scheduler = scheduler = (
             phile.watchdog.Scheduler(
                 path_filter=entry_point.check_path,
-                path_handler=phile.PySide2_extras.event_loop.CallSoon(
-                    parent=self,
-                    call_target=entry_point.activate_trigger
+                path_handler=functools.partial(
+                    phile.PySide2.call_soon_threadsafe,
+                    entry_point.activate_trigger
                 ),
                 watched_path=entry_point.trigger_directory,
                 watching_observer=watching_observer,
@@ -327,13 +329,9 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
         return 1
     gui_icon_list.show()
     gui_icon_list.destroyed.connect(app.quit)
-    posix_signal = phile.PySide2_extras.posix_signal.PosixSignal(
-        gui_icon_list
-    )
+    posix_signal = phile.PySide2.QtNetwork.PosixSignal(gui_icon_list)
     posix_signal.signal_received.connect(gui_icon_list.close)
-    phile.PySide2_extras.posix_signal.install_noop_signal_handler(
-        signal.SIGINT
-    )
+    phile.signal.install_noop_signal_handler(signal.SIGINT)
     return_value = app.exec_()
     watching_observer.stop()
     watching_observer.join()

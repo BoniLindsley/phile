@@ -15,66 +15,22 @@ import unittest
 import unittest.mock
 
 # External dependencies.
-from PySide2.QtCore import QObject
+import PySide2.QtCore
 
-# Internal libraries.
-from phile.PySide2_extras.posix_signal import (
-    install_noop_signal_handler, PosixSignal
-)
-from test_phile.pyside2_test_tools import QTestApplication
+# Internal packages.
+import phile.PySide2
+import phile.PySide2.QtNetwork
+import phile.signal
+from . import UsesQCoreApplication
 
 platform_can_handle_sigint = (sys.platform != "win32")
-
-
-def get_wakeup_fd() -> int:
-    """
-    Returns the file descriptor stored by :func:`~signal.set_wakeup_fd`.
-
-    Currently, the only way to determine the fd is
-    is to use :func:`~signal.set_wakeup_fd` using a dummy value,
-    because it returns the previous fd,
-    and then once more to restore it.
-    This wraps the two calls for convenience.
-    """
-    wakeup_fd = signal.set_wakeup_fd(-1)
-    signal.set_wakeup_fd(wakeup_fd)
-    return wakeup_fd
-
-
-class TestInstallNoopSignalHandler(unittest.TestCase):
-    """
-    Tests
-    :class:`~phile.PySide2_extras.posix_signal.install_noop_signal_handler`.
-    """
-
-    def setUp(self) -> None:
-        """Remember the current signal handler to be restored later."""
-        sigint_handler = signal.getsignal(signal.SIGINT)
-        self.addCleanup(
-            lambda: signal.signal(signal.SIGINT, sigint_handler)
-        )
-
-    def test_call(self) -> None:
-        """Replace SIGINT handler."""
-        # Install a handler that throws,
-        # if the tested function did not install a noop.
-        signal.signal(
-            signal.SIGINT, lambda signal_number, _: self.
-            fail('SIGINT handler not replaced.')
-        )
-        # Call the function.
-        # It should replace the lambda above.
-        install_noop_signal_handler(signal.SIGINT)
-        # Try running the function.
-        # The failing lambda should have been replaced and not run.
-        os.kill(os.getpid(), signal.SIGINT)
 
 
 @unittest.skipUnless(
     platform_can_handle_sigint, 'Cannot handle SIGINT on this platform.'
 )
-class TestPosixSignal(unittest.TestCase):
-    """Tests :class:`~phile.PySide2_extras.posix_signal.PosixSignal`."""
+class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
+    """Tests :class:`~phile.PySide2.QtNetwork.PosixSignal`."""
 
     def setUp(self) -> None:
         """
@@ -90,32 +46,31 @@ class TestPosixSignal(unittest.TestCase):
         self.addCleanup(
             lambda: signal.signal(signal.SIGINT, sigint_handler)
         )
-        wakeup_fd = get_wakeup_fd()
+        wakeup_fd = phile.signal.get_wakeup_fd()
         self.addCleanup(lambda: signal.set_wakeup_fd(wakeup_fd))
-        self.app = QTestApplication()
-        self.addCleanup(self.app.tear_down)
-        self.posix_signal = PosixSignal()
+        super().setUp()
+        self.posix_signal = phile.PySide2.QtNetwork.PosixSignal()
         # Allow posix_signal to be deleted in unit tests.
         # They can create an arbitrary QObject to fake a clean-up.
         self.addCleanup(lambda: self.posix_signal.deleteLater())
 
     def test_initialisation_and_clean_up(self) -> None:
         """Remove signal fd when deleted."""
-        self.assertNotEqual(get_wakeup_fd(), -1)
+        self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
 
         self.posix_signal.deleteLater()
-        self.app.process_deferred_delete_events()
-        self.assertEqual(get_wakeup_fd(), -1)
+        phile.PySide2.process_deferred_delete_events()
+        self.assertEqual(phile.signal.get_wakeup_fd(), -1)
 
         # Give the test `tearDown` something to delete.
-        self.posix_signal = QObject()
+        self.posix_signal = PySide2.QtCore.QObject()
 
     def test_double_initialisation(self) -> None:
         """Initialising twice should fail."""
-        self.assertNotEqual(get_wakeup_fd(), -1)
+        self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
         with self.assertRaises(RuntimeError):
-            new_posix_signal = PosixSignal()
-        self.assertNotEqual(get_wakeup_fd(), -1)
+            new_posix_signal = phile.PySide2.QtNetwork.PosixSignal()
+        self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
 
     def test_handle_sigint_using_pyside2_signal(self):
         """Handle POSIX signals using PySide2 signals."""
@@ -142,7 +97,7 @@ class TestPosixSignal(unittest.TestCase):
         # If the signal.signal handler has already been called,
         # then the CPython signal handler had already wrote
         # to the signal fd.
-        self.app.process_events()
+        phile.PySide2.process_events()
         self.assertTrue(slot_mock.called)
 
 

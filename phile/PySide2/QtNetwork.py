@@ -87,7 +87,6 @@ and that happens before event loop processing resumes.
 """
 
 # Standard libraries.
-import logging
 import signal
 import socket
 import sys
@@ -95,58 +94,11 @@ import typing
 import warnings
 
 # External dependencies.
-from PySide2.QtCore import QObject, Signal, SignalInstance
-from PySide2.QtNetwork import QAbstractSocket
-
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
-)
-"""Logger whose name is the module name."""
-
-_SignalHandler = typing.Callable[[signal.Signals, typing.Any], None]
-"""Type of handler that receive signals."""
+import PySide2.QtCore
+import PySide2.QtNetwork
 
 
-def install_noop_signal_handler(
-    signal_number: signal.Signals,
-    *,
-    _noop_handler: _SignalHandler = lambda _signal_number, _: None
-):
-    """
-    Install a no-op handler for the given ``signal_number``.
-
-    :param ~signal.Signals signal_number:
-        The signal to install a noop handler for.
-    :param SignalHandler _noop_handler:
-        Internal. Implementation detail.
-        Default is a noop lambda of the correct signature.
-        A default argument is only created once
-        regardless of the number of times the function is called.
-    :returns: The previous signal handler for ``signal_number``.
-
-    This overwrites any installed handler for the signal.
-    In particular, in the case of :data:`~signal.SIGINT`,
-    this removes the :func:`~signal.default_int_handler`
-    which raises :exc:`KeyboardInterrupt` when called.
-    This default handler is installed
-    during the initialisation of the :mod:`signal` module.
-
-    Note that this is different
-    from installing the :data:`~signal.SIG_IGN` handler.
-    It instructs operating system to ignore the signal entirely,
-    whereas a noop handler forces the Python interpreter
-    to process the signal received
-    when it becomes active and is available to do so.
-    """
-
-    # Do not replace with `signal.signal(signal_number, signal.SIG_IGN)`.
-    # See documentation for you.
-    # As for the use of a default argument,
-    # it forces the interpreter to only create one copy of the handler.
-    return signal.signal(signal_number, _noop_handler)
-
-
-class PosixSignal(QAbstractSocket):
+class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
     """
     Converter of :std:doc:`POSIX signals <library/signal>`
     to :std:doc:`PySide2 signals <PySide2/QtCore/Signal>`.
@@ -258,7 +210,9 @@ class PosixSignal(QAbstractSocket):
        In the worst case scenario, the fd might be a reused ID.
     """
 
-    signal_received = typing.cast(SignalInstance, Signal(int))
+    signal_received = typing.cast(
+        PySide2.QtCore.SignalInstance, PySide2.QtCore.Signal(int)
+    )
     """
     PySide2 signal emitted when a POSIX signal is received.
 
@@ -272,7 +226,7 @@ class PosixSignal(QAbstractSocket):
 
     def __init__(
         self,
-        parent: typing.Optional[QObject] = None,
+        parent: typing.Optional[PySide2.QtCore.QObject] = None,
     ):
 
         # Create sockets for writing when signals are raised.
@@ -286,12 +240,12 @@ class PosixSignal(QAbstractSocket):
         # So branching coverage is not checked here.
         socket_type = write_socket.type
         if socket_type == socket.SOCK_DGRAM:  # pragma: no cover
-            q_socket_type = QAbstractSocket.UdpSocket
+            q_socket_type = PySide2.QtNetwork.QAbstractSocket.UdpSocket
         elif socket_type == socket.SOCK_STREAM:  # pragma: no cover
-            q_socket_type = QAbstractSocket.TcpSocket
+            q_socket_type = PySide2.QtNetwork.QAbstractSocket.TcpSocket
         else:  # pragma: no cover
             warnings.warn('Unsupported socket type. Attempting TCP.')
-            q_socket_type = QAbstractSocket.TcpSocket
+            q_socket_type = PySide2.QtNetwork.QAbstractSocket.TcpSocket
         super().__init__(q_socket_type, parent)  # type: ignore
         # Give PySide2 ownership of the socket.
         self.setSocketDescriptor(read_socket.fileno())
@@ -338,5 +292,4 @@ class PosixSignal(QAbstractSocket):
         # requires converting it into a byte array first.
         data = self.readData(1)
         signal_number = int.from_bytes(data.encode(), sys.byteorder)
-        _logger.debug('Forwarding POSIX signal: %s', signal_number)
         self.signal_received.emit(signal_number)

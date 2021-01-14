@@ -23,13 +23,13 @@ import watchdog.events  # type: ignore[import]
 import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
+import phile.PySide2
+import phile.PySide2.QtNetwork
 import phile.configuration
 import phile.data
 import phile.notify
 import phile.trigger
 import phile.watchdog
-import phile.PySide2_extras.event_loop
-import phile.PySide2_extras.posix_signal
 
 _logger = logging.getLogger(
     __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
@@ -288,8 +288,8 @@ class MainWindow(QMainWindow):
                     SubWindowContent.check_path,
                     configuration=configuration
                 ),
-                path_handler=phile.PySide2_extras.event_loop.CallSoon(
-                    parent=self, call_target=sorter.update
+                path_handler=functools.partial(
+                    phile.PySide2.call_soon_threadsafe, sorter.update
                 ),
                 watched_path=configuration.notification_directory,
                 watching_observer=watching_observer,
@@ -323,9 +323,9 @@ class MainWindow(QMainWindow):
         self._trigger_scheduler = scheduler = (
             phile.watchdog.Scheduler(
                 path_filter=entry_point.check_path,
-                path_handler=phile.PySide2_extras.event_loop.CallSoon(
-                    parent=self,
-                    call_target=entry_point.activate_trigger
+                path_handler=functools.partial(
+                    phile.PySide2.call_soon_threadsafe,
+                    entry_point.activate_trigger
                 ),
                 watched_path=entry_point.trigger_directory,
                 watching_observer=watching_observer,
@@ -424,13 +424,9 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
         configuration=configuration, watching_observer=watching_observer
     )
     main_window.show()
-    posix_signal = phile.PySide2_extras.posix_signal.PosixSignal(
-        main_window
-    )
+    posix_signal = phile.PySide2.QtNetwork.PosixSignal(main_window)
     posix_signal.signal_received.connect(main_window.close)
-    phile.PySide2_extras.posix_signal.install_noop_signal_handler(
-        signal.SIGINT
-    )
+    phile.signal.install_noop_signal_handler(signal.SIGINT)
     return app.exec_()
 
 

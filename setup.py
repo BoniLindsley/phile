@@ -10,10 +10,13 @@ setup(
     author_email='boni.lindsley@gmail.com',
     packages=[
         'phile',
+        'phile.data',
         'phile.notify',
-        'phile.PySide2_extras',
+        'phile.PySide2',
+        'phile.tmux',
         'phile.tray',
         'phile.trigger',
+        'phile.watchdog',
     ],
     license='MIT',
     install_requires=[
