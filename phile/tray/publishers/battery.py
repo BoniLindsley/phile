@@ -4,10 +4,11 @@
 import asyncio
 import contextlib
 import datetime
-import psutil  # type: ignore[import]
 import sys
-import types
 import typing
+
+# External dependencies.
+import psutil  # type: ignore[import]
 
 # Internal packages.
 import phile.configuration

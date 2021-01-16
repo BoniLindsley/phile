@@ -22,6 +22,7 @@ setup(
     install_requires=[
         'pathvalidate',
         'portalocker',
+        'psutil',
         'PySide2',
         'watchdog',
     ],
@@ -40,7 +41,6 @@ setup(
         'dev': [
             'coverage',
             'mypy',
-            'psutil',
             'recommonmark',
             'sphinx',
             'tox',

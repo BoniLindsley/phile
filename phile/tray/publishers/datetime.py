@@ -5,7 +5,6 @@ import asyncio
 import contextlib
 import datetime
 import sys
-import types
 import typing
 
 # Internal packages.
