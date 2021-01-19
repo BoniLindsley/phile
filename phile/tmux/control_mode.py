@@ -198,13 +198,13 @@ class Client:
         while command:
             # The server sends one block at the beginniing.
             await self.protocol.read_block()
-            with contextlib.ExitStack() as stack:
-                exit_task = asyncio.create_task(
-                    self.protocol.drop_lines_not_starting_with('%exit')
-                )
-                stack.callback(exit_task.cancel)
-                command_task = asyncio.create_task(self._commands.get())
-                stack.callback(command_task.cancel)
+            # TODO[python/mypy#9922]: Remove type declaration.
+            command_task: asyncio.Task[str]
+            async with phile.asyncio.open_task(
+                self.protocol.drop_lines_not_starting_with('%exit')
+            ) as exit_task, phile.asyncio.open_task(
+                self._commands.get()
+            ) as command_task:
                 done, pending = await asyncio.wait(
                     (exit_task, command_task),
                     return_when=asyncio.FIRST_COMPLETED,
@@ -224,13 +224,13 @@ class Client:
             await self.protocol.remove_prefix(exit_response.encode())
 
     async def run(self) -> None:
-        with contextlib.ExitStack() as stack:
-            message_task = asyncio.create_task(self.run_message_loop())
-            stack.callback(message_task.cancel)
-            eof_task = asyncio.create_task(self.protocol.at_eof.wait())
-            stack.callback(eof_task.cancel)
-            terminate_task = asyncio.create_task(self.subprocess.wait())
-            stack.callback(terminate_task.cancel)
+        async with phile.asyncio.open_task(
+            self.run_message_loop()
+        ) as message_task, phile.asyncio.open_task(
+            self.protocol.at_eof.wait()
+        ) as eof_task, phile.asyncio.open_task(
+            self.subprocess.wait()
+        ) as terminate_task:
             await asyncio.wait(
                 (message_task, eof_task, terminate_task),
                 return_when=asyncio.FIRST_COMPLETED,

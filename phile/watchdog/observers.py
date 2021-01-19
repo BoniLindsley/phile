@@ -6,6 +6,7 @@ Convenience module for using :attr:`~watchdog.observers.Observer`
 """
 
 # Standard library.
+import collections.abc
 import contextlib
 import pathlib
 
@@ -67,7 +68,25 @@ def was_stop_called(
 
 
 @contextlib.contextmanager
-def open(*args, opener=watchdog.observers.Observer, **kwargs):
+def open(
+    *args,
+    opener=watchdog.observers.Observer,
+    **kwargs
+) -> collections.abc.Iterator[watchdog.observers.api.BaseObserver]:
+    observer = opener(*args, **kwargs)
+    try:
+        observer.start()
+        yield observer
+    finally:
+        observer.stop()
+
+
+@contextlib.asynccontextmanager
+async def async_open(
+    *args,
+    opener=watchdog.observers.Observer,
+    **kwargs
+) -> collections.abc.AsyncIterator[watchdog.observers.api.BaseObserver]:
     observer = opener(*args, **kwargs)
     try:
         observer.start()

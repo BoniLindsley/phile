@@ -55,6 +55,31 @@ class TestWaitFor(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(self.noop_coroutine())
 
 
+class TestOpenTask(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.asyncio.open_task`."""
+
+    async def test_cancels_given_task(self) -> None:
+        task: (asyncio.Task[typing.Any]) = asyncio.create_task(
+            asyncio.sleep(2048)
+        )
+        self.addCleanup(task.cancel)
+        async with phile.asyncio.open_task(task) as returned_task:
+            self.assertIs(returned_task, task)
+            self.assertFalse(task.cancelled())
+        with self.assertRaises(asyncio.CancelledError):
+            await phile.asyncio.wait_for(task)
+
+    async def test_creates_task_for_coroutine(self) -> None:
+
+        async def sleep() -> None:
+            await asyncio.sleep(2048)
+
+        async with phile.asyncio.open_task(sleep()) as task:
+            self.assertIsInstance(task, asyncio.Task)
+        with self.assertRaises(asyncio.CancelledError):
+            await phile.asyncio.wait_for(task)
+
+
 class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
     """Tests :func:`~phile.asyncio.close_subprocess`."""
 

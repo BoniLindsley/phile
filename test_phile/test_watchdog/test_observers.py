@@ -86,6 +86,26 @@ class TestOpen(unittest.TestCase):
             self.addCleanup(observer.stop)
 
 
+class TestAsyncOpen(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.watchdog.observers.async_open`."""
+
+    async def test_context_starts_and_stops(self) -> None:
+        async with phile.watchdog.observers.async_open() as observer:
+            self.addCleanup(observer.stop)
+            self.assertTrue(
+                phile.watchdog.observers.was_start_called(observer)
+            )
+        self.assertTrue(
+            phile.watchdog.observers.was_stop_called(observer)
+        )
+
+    async def test_context_using_custom_opener(self) -> None:
+        async with phile.watchdog.observers.async_open(
+            opener=watchdog.observers.polling.PollingObserver
+        ) as observer:
+            self.addCleanup(observer.stop)
+
+
 class TestHasHandlers(
     UsesMonitorDirectory, UsesObserver, unittest.TestCase
 ):

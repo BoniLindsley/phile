@@ -17,6 +17,7 @@ import typing
 import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
+import phile.asyncio
 import phile.configuration
 import phile.data
 import phile.tmux
@@ -125,29 +126,20 @@ async def read_byte(pipe) -> None:
 
 
 async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
-    async with contextlib.AsyncExitStack() as stack:
-        watching_observer = watchdog.observers.Observer()
-        watching_observer.start()
-        stack.callback(watching_observer.stop)
-        control_mode = await stack.enter_async_context(
-            phile.tmux.control_mode.open(
-                control_mode_arguments=(
-                    phile.tmux.control_mode.Arguments()
-                )
-            )
+    async with phile.watchdog.observers.async_open(
+    ) as watching_observer, phile.tmux.control_mode.open(
+        control_mode_arguments=(phile.tmux.control_mode.Arguments())
+    ) as control_mode, phile.asyncio.open_task(
+        control_mode.run()
+    ) as control_mode_task, phile.asyncio.open_task(
+        run(
+            configuration=phile.configuration.Configuration(),
+            control_mode=control_mode,
+            watching_observer=watching_observer,
         )
-        control_mode_task = asyncio.create_task(control_mode.run())
-        stack.callback(control_mode_task.cancel)
-        run_task = asyncio.create_task(
-            run(
-                configuration=phile.configuration.Configuration(),
-                control_mode=control_mode,
-                watching_observer=watching_observer,
-            )
-        )
-        stack.callback(run_task.cancel)
-        stdin_task = asyncio.create_task(read_byte(sys.stdin))
-        stack.callback(stdin_task.cancel)
+    ) as run_task, phile.asyncio.open_task(
+        read_byte(sys.stdin)
+    ) as stdin_task:
         done, pending = await asyncio.wait(
             (control_mode_task, run_task, stdin_task),
             return_when=asyncio.FIRST_COMPLETED,

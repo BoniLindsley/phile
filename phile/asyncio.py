@@ -2,6 +2,7 @@
 
 # Standard libraries.
 import asyncio
+import collections.abc
 import contextlib
 import contextvars
 import datetime
@@ -27,6 +28,25 @@ async def wait_for(
     return await asyncio.wait_for(
         awaitable, timeout=timeout.total_seconds()
     )
+
+
+# TODO[python/mypy#9922]: Use `asyncio.Task[_T_co]` in return value.
+@contextlib.asynccontextmanager
+async def open_task(
+    awaitable: collections.abc.Awaitable[_T_co],
+    *args,
+    **kwargs,
+) -> collections.abc.AsyncIterator[asyncio.Task]:
+    if isinstance(awaitable, asyncio.Task):
+        task = awaitable
+        assert not args
+        assert not kwargs
+    else:
+        task = asyncio.create_task(awaitable, *args, **kwargs)
+    try:
+        yield task
+    finally:
+        task.cancel()
 
 
 async def close_subprocess(
