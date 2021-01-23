@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+-----------------------------------
+Test :mod:`phile.PySide2.QtWidgets`
+-----------------------------------
+"""
 
 # Standard library.
 import unittest
@@ -10,7 +15,7 @@ import PySide2.QtWidgets
 # Internal packages.
 import phile.PySide2
 import phile.PySide2.QtWidgets
-from . import UsesPySide2
+from .test_init import UsesPySide2
 
 
 class UsesQApplication(UsesPySide2, unittest.TestCase):

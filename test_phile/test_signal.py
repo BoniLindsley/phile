@@ -1,7 +1,8 @@
+#!/usr/bin/env python3
 """
------------------
-Test POSIX Signal
------------------
+------------------------
+Test :mod:`phile.signal`
+------------------------
 """
 
 # Standard libraries.

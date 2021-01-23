@@ -20,7 +20,7 @@ import psutil  # type: ignore[import]
 import phile.configuration
 import phile.tray.publishers.memory
 
-Status = collections.namedtuple('mem', ['available'])
+mem = collections.namedtuple('mem', ['available'])
 
 
 class TestMemoryFile(unittest.TestCase):
@@ -31,7 +31,7 @@ class TestMemoryFile(unittest.TestCase):
         )
 
     def test_update(self) -> None:
-        status = Status(available=3_210_987_654)
+        status = mem(available=3_210_987_654)
         self.file.update(status)
         self.assertEqual(self.file.text_icon, ' M3')
 
@@ -52,7 +52,7 @@ class TestTrayFiles(unittest.TestCase):
     def set_up_psutil_virtual_memory_mock(self) -> None:
         patch = unittest.mock.patch(
             'psutil.virtual_memory',
-            return_value=Status(available=7_654_321_098)
+            return_value=mem(available=7_654_321_098)
         )
         patch.start()
         self.addCleanup(patch.stop)

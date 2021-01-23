@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
----------------------
-Test phile.notify GUI
----------------------
+----------------------------
+Test :mod:`phile.notify.gui`
+----------------------------
 """
 
 # Standard library.

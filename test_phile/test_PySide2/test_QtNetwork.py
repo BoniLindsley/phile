@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
------------------
-Test POSIX Signal
------------------
+-----------------------------------
+Test :mod:`phile.PySide2.QtNetwork`
+-----------------------------------
 """
 
 # Standard libraries.
@@ -21,7 +21,7 @@ import PySide2.QtCore
 import phile.PySide2
 import phile.PySide2.QtNetwork
 import phile.signal
-from . import UsesQCoreApplication
+from .test_init import UsesQCoreApplication
 
 platform_can_handle_sigint = (sys.platform != "win32")
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
--------------
-Threaded Mock
--------------
+-------------------------------
+Test :mod:`phile.threaded_mock`
+-------------------------------
 """
 
 import datetime

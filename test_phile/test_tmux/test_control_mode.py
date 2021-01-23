@@ -18,7 +18,7 @@ import unittest.mock
 import phile.asyncio
 import phile.tmux
 import phile.tmux.control_mode
-from . import UsesTmux
+from .test_init import UsesTmux
 
 
 class TestArguments(unittest.TestCase):

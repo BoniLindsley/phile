@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+-------------------------------
+Test :mod:`phile.PySide2.QtGui`
+-------------------------------
+"""
 
 # Standard library.
 import unittest
@@ -8,7 +13,7 @@ import PySide2.QtGui
 
 # Internal packages.
 import phile.PySide2.QtGui
-from . import UsesPySide2
+from .test_init import UsesPySide2
 
 
 class UsesQGuiApplication(UsesPySide2, unittest.TestCase):

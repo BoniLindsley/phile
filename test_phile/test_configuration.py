@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-------------------------
-Test phile.configuration
-------------------------
+-------------------------------
+Test :mod:`phile.configuration`
+-------------------------------
 """
 
 # Standard library.

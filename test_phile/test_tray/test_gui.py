@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
--------------------
-Test phile.tray GUI
--------------------
+--------------------------
+Test :mod:`phile.tray.gui`
+--------------------------
 """
 
 # Standard library.

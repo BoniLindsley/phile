@@ -14,6 +14,7 @@ import typing
 import watchdog.observers  # type: ignore[import]
 
 # Internal packages.
+import phile
 import phile.configuration
 import phile.tray.publishers.battery
 import phile.tray.publishers.datetime

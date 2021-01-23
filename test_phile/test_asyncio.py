@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
---------------------
-Test phile.tray.tmux
---------------------
+-------------------------
+Test :mod:`phile.asyncio`
+-------------------------
 """
 
 # Standard library.

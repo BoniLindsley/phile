@@ -8,7 +8,11 @@ import sphinx.cmd.build
 
 if __name__ == '__main__':
     # Figure out where the source file are, regardless of PWD.
-    script_file_path = pathlib.Path(inspect.getsourcefile(lambda: None))
+    script_path_string = inspect.getsourcefile(lambda: None)
+    if script_path_string is None:
+        raise RuntimeError('Unable to determine script path.')
+    assert script_path_string is not None
+    script_file_path = pathlib.Path(script_path_string)
     docs_directory_path = script_file_path.resolve().parent
     build_directory_path = docs_directory_path / '_build'
     # Process the command line arguments the same way `Makefile` does.

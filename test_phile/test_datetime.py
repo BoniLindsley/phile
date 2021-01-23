@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+--------------------------
+Test :mod:`phile.datetime`
+--------------------------
+"""
 
 # Standard libraries.
 import datetime
