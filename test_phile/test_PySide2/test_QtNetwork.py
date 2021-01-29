@@ -72,7 +72,7 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
             new_posix_signal = phile.PySide2.QtNetwork.PosixSignal()
         self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
 
-    def test_handle_sigint_using_pyside2_signal(self):
+    def test_handle_sigint_using_pyside2_signal(self) -> None:
         """Handle POSIX signals using PySide2 signals."""
 
         # Figure out whether the signal will be called.

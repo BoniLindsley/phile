@@ -16,9 +16,8 @@ import warnings
 
 # External dependencies.
 import pathlib
-import pathvalidate
 import portalocker  # type: ignore[import]
-import watchdog.events  # type: ignore[import]
+import watchdog.events
 
 # Internal packages.
 import phile.configuration
@@ -42,17 +41,17 @@ class PidLock:
     when locking fails, as of 2020-10-12.)
     """
 
-    def __init__(self, lock_path: pathlib.Path):
+    def __init__(self, lock_path: pathlib.Path) -> None:
         """
         :param ~pathlib.Path lock_path:
             Path to file representing ownership.
         """
-        self._file_handle: typing.Optional[typing.IO] = None
+        self._file_handle: typing.Optional[typing.IO[str]] = None
         """The lock file handle. Not :data:`None` if locked."""
         self._lock_path = lock_path
         """Path to file representing ownership."""
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Make sure the file was unlocked, and warn if not."""
         if self.locked():
             warnings.warn('File not unlocked before exiting.')
@@ -246,11 +245,7 @@ class EntryPoint:
         self.get_trigger_path(trigger_name).unlink(missing_ok=True)
 
     def check_path(self, path: pathlib.Path) -> bool:
-        try:
-            valid_trigger_path = self.get_trigger_path(path.stem)
-        except ValueError:
-            return False
-        return valid_trigger_path == path
+        return path == self.get_trigger_path(path.stem)
 
     def get_trigger_path(self, trigger_name: str) -> pathlib.Path:
         """
@@ -263,7 +258,6 @@ class EntryPoint:
         trigger_filename = pathlib.Path(
             trigger_name + self._trigger_suffix
         )
-        pathvalidate.validate_filename(filename=trigger_filename)
         return self.trigger_directory / trigger_filename
 
     def bind(self) -> None:

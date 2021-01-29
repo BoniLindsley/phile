@@ -13,8 +13,8 @@ import types
 import typing
 
 # External dependencies.
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.watchdog.observers
@@ -61,7 +61,7 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
     Represents whether a :data:`PathHandler`
     is :meth:`~watchdog.observers.api.BaseObserver.schedule`-d
     to receive paths of file system events
-    from an :attr:`~watchdog.observers.Observer`.
+    from an :attr:`~watchdog.observers.api.BaseObserver`.
 
     Each instane remembers infomation necessary
     to start watching a directory or file
@@ -85,13 +85,13 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         path_filter: PathFilter = lambda _: True,
         path_handler: PathHandler = lambda _: None,
         watch_recursive: bool = False,
         watched_path: pathlib.Path,
-        watching_observer: watchdog.observers.Observer,
-        **kwargs,
+        watching_observer: watchdog.observers.api.BaseObserver,
+        **kwargs: typing.Any,
     ) -> None:
         """
         :param PathFilter path_filter:
@@ -108,7 +108,7 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
             Path to watch for changes.
         :param watching_observer:
             The instance that dispatches events to ``path_handler``.
-        :type watching_observer: :attr:`~watchdog.observers.Observer`
+        :type watching_observer: :attr:`~watchdog.observers.api.BaseObserver`
         """
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -120,7 +120,7 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
         """Callable for forward event dispatch to."""
         self.watching_observer = watching_observer
         """
-        The :attr:`watchdog.observers.Observer` instance
+        The :attr:`watchdog.observers.api.BaseObserver` instance
         to which ``path_handler`` is to be scheduled in.
         """
         self.watchdog_watch: typing.Optional[
@@ -162,6 +162,7 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
         """Stop dispatching events to `path_handler``."""
         if not self.is_scheduled:
             return
+        assert self.watchdog_watch is not None
         phile.watchdog.observers.remove_handler(
             observer=self.watching_observer,
             event_handler=self,
@@ -193,6 +194,7 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
             self.path_handler(path)
         if event.event_type != watchdog.events.EVENT_TYPE_MOVED:
             return
+        assert isinstance(event, watchdog.events.FileMovedEvent)
         path = pathlib.Path(event.dest_path)
         if self.path_filter(path):
             self.path_handler(path)

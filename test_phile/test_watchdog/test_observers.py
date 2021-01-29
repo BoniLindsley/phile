@@ -9,12 +9,12 @@ Test :mod:`phile.watchdog.observer`
 import pathlib
 import tempfile
 import unittest
-#
+
 # External dependencies.
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
-import watchdog.observers.polling  # type: ignore[import]
-#
+import watchdog.events
+import watchdog.observers
+import watchdog.observers.polling
+
 # Internal packages.
 import phile.watchdog.observers
 

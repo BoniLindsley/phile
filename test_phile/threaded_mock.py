@@ -39,9 +39,9 @@ class ThreadedMock(unittest.mock.Mock):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         timeout: datetime.timedelta = datetime.timedelta(seconds=2),
-        **kwargs
+        **kwargs: typing.Any
     ) -> None:
         """
         :param ~datetime.timedelta timeout:
@@ -58,7 +58,9 @@ class ThreadedMock(unittest.mock.Mock):
         self.timeout = timeout
         """Timeout duration when `self` is waiting to be called."""
 
-    def __call__(self, *args, **kwargs) -> typing.Any:
+    def __call__(
+        self, *args: typing.Any, **kwargs: typing.Any
+    ) -> typing.Any:
         """
         Checks if the given arguments are as expected when called.
 
@@ -73,7 +75,9 @@ class ThreadedMock(unittest.mock.Mock):
                 self._call_found.set()
         return return_value
 
-    def assert_called_with_soon(self, *args, **kwargs) -> None:
+    def assert_called_with_soon(
+        self, *args: typing.Any, **kwargs: typing.Any
+    ) -> None:
         """
         Waits for this mock object to be called with specified arguments.
 
@@ -112,7 +116,9 @@ class ThreadedMock(unittest.mock.Mock):
             self._expected_call = None
             self._call_found.clear()
 
-    def assert_called_soon(self, *args, **kwargs) -> None:
+    def assert_called_soon(
+        self, *args: typing.Any, **kwargs: typing.Any
+    ) -> None:
         """Waits for this mock object to be called."""
         # Temporarily release
         # to allow `_side_effect` acquire the lock.

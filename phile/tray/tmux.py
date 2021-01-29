@@ -14,7 +14,7 @@ import types
 import typing
 
 # External dependencies.
-import watchdog.observers  # type: ignore[import]
+import watchdog.observers
 
 # Internal packages.
 import phile.asyncio
@@ -29,8 +29,9 @@ import phile.watchdog
 class StatusRight:
 
     def __init__(
-        self, *args, control_mode: phile.tmux.control_mode.Client,
-        **kwargs
+        self, *args: typing.Any,
+        control_mode: phile.tmux.control_mode.Client,
+        **kwargs: typing.Any
     ) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -112,7 +113,7 @@ async def run(
         await control_mode.protocol.at_eof.wait()
 
 
-async def read_byte(pipe) -> None:
+async def read_byte(pipe: typing.Any) -> None:
     reader = asyncio.StreamReader()
     transport, protocol = (
         await asyncio.get_running_loop().connect_read_pipe(

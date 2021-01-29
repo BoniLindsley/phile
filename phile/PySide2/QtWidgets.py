@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Standard Libraries
+import typing
+
 # External dependencies.
 import PySide2.QtGui
 import PySide2.QtWidgets
@@ -19,7 +22,7 @@ class OffscreenSystemTrayIcon(PySide2.QtWidgets.QSystemTrayIcon):
     # So enforcing coverage might not make much sense.
     # If this needs to be relied upon, coverage can be enabled again.
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
 
         self.__icon = super().icon()

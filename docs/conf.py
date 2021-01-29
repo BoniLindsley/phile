@@ -151,7 +151,7 @@ intersphinx_mapping = {
     'portalocker':
         ('https://portalocker.readthedocs.io/en/latest', None),
     'python': ('https://docs.python.org/3', None),
-    'pyside2': ('https://doc.qt.io/qtforpython/', None),
+    'pyside2': ('https://doc.qt.io/qtforpython-5/', None),
     'watchdog': ('https://watchdog.readthedocs.io/en/latest/', None),
 }
 """

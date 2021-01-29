@@ -11,7 +11,7 @@ import types
 import typing
 
 # External dependencies.
-import watchdog.observers  # type: ignore[import]
+import watchdog.observers
 
 # Internal packages.
 import phile
@@ -29,11 +29,11 @@ import phile.watchdog
 class Context(phile.configuration.Configuration):
 
     def __init__(
-        self, *args,
-        watching_observer: watchdog.observers.api.BaseObserver, **kwargs
+        self, *args: typing.Any,
+        watching_observer: watchdog.observers.api.BaseObserver,
+        **kwargs: typing.Any
     ):
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        super().__init__(*args, **kwargs)
         self.watching_observer = watching_observer
 
     def __enter__(self) -> 'Context':
@@ -89,9 +89,9 @@ class TaskRegistry:
         str, Launcher] = types.MappingProxyType(default_launchers)
 
     def __post_init__(self) -> None:
-        self.running_tasks: typing.Dict[str, asyncio.Task] = {}
+        self.running_tasks: dict[str, asyncio.Task[typing.Any]] = {}
 
-    def create_task(self, name: str) -> asyncio.Task:
+    def create_task(self, name: str) -> asyncio.Task[typing.Any]:
         assert name not in self.running_tasks
         self.running_tasks[name] = task = asyncio.create_task(
             self.launchers[name](self.context), name=name
@@ -103,18 +103,17 @@ class TaskRegistry:
         assert name in self.running_tasks
         self.running_tasks[name].cancel()
 
-    def on_task_done(self, task: asyncio.Task) -> None:
+    def on_task_done(self, task: asyncio.Task[typing.Any]) -> None:
         self.running_tasks.pop(task.get_name())
 
 
 class TriggerEntryPoint(phile.trigger.EntryPoint):
     """Provides triggers to start and stop tasks."""
 
-    def __init__(self, *args, context: Context, **kwargs) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(
-            *args, configuration=context, **kwargs
-        )  # type: ignore[call-arg]
+    def __init__(
+        self, *args: typing.Any, context: Context, **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, configuration=context, **kwargs)
         self.task_registry = TaskRegistry(context=context)
         self.start_prefix = 'start-task_'
         self.stop_prefix = 'stop-task_'
@@ -135,14 +134,14 @@ class TriggerEntryPoint(phile.trigger.EntryPoint):
             )
             self.add_trigger(self.start_prefix + task_name)
 
-    def create_task(self, task_name: str) -> asyncio.Task:
+    def create_task(self, task_name: str) -> asyncio.Task[typing.Any]:
         self.remove_trigger(self.start_prefix + task_name)
         self.add_trigger(self.stop_prefix + task_name)
         task = self.task_registry.create_task(name=task_name)
         task.add_done_callback(self.on_task_done)
         return task
 
-    def on_task_done(self, task: asyncio.Task) -> None:
+    def on_task_done(self, task: asyncio.Task[typing.Any]) -> None:
         task_name = task.get_name()
         with contextlib.suppress(ResourceWarning):
             self.remove_trigger(self.stop_prefix + task_name)

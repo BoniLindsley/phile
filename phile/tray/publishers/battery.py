@@ -48,17 +48,18 @@ class TimeFile(File):
         self.text_icon = f'{remaining_text}'
 
 
+default_refresh_interval = datetime.timedelta(seconds=5)
+
+
 class TrayFilesUpdater(update.SelfTarget):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         configuration: phile.configuration.Configuration,
         prefix: str = '70-phile-tray-battery-',
-        refresh_interval: datetime.timedelta = datetime.timedelta(
-            seconds=5
-        ),
-        **kwargs
+        refresh_interval: datetime.timedelta = default_refresh_interval,
+        **kwargs: typing.Any
     ):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]

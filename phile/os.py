@@ -8,7 +8,7 @@ import typing
 class Environ:
     """For using environment variables and restoring later."""
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._source_dict = os.environ
@@ -22,7 +22,7 @@ class Environ:
             else:
                 source_dict[key] = value
 
-    def set(self, **kwargs) -> None:
+    def set(self, **kwargs: typing.Any) -> None:
         backup_dict = self._backup_dict
         source_dict = self._source_dict
         for key, value in kwargs.items():

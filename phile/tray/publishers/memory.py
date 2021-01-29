@@ -18,7 +18,7 @@ from . import update
 
 class MemoryFile(phile.tray.File):
 
-    def update(self, memory) -> None:
+    def update(self, memory: psutil.virtual_memory) -> None:
         self.text_icon = f' M{memory.available//1000**3:.0f}'
 
 
@@ -26,13 +26,13 @@ class TrayFilesUpdater(update.SelfTarget):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         configuration: phile.configuration.Configuration,
         prefix: str = '70-phile-tray-memory-',
         refresh_interval: datetime.timedelta = datetime.timedelta(
             seconds=5
         ),
-        **kwargs
+        **kwargs: typing.Any
     ):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]

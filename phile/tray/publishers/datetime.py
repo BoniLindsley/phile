@@ -17,10 +17,10 @@ class TrayFilesUpdater(update.SelfTarget):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         configuration: phile.configuration.Configuration,
         prefix: str = '90-phile-tray-datetime-',
-        **kwargs
+        **kwargs: typing.Any
     ):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]

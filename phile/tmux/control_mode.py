@@ -53,9 +53,9 @@ class Protocol(asyncio.Protocol):
     class PrefixNotFound(RuntimeError):
         pass
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.received_data = asyncio.Queue()
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.lines: typing.List[bytes] = []
         self.buffer = b''
         self.new_line_received = asyncio.Event()
@@ -240,7 +240,7 @@ class Client:
 @contextlib.asynccontextmanager
 async def open(
     control_mode_arguments: Arguments
-) -> typing.AsyncIterator:
+) -> typing.AsyncIterator[Client]:
     async with contextlib.AsyncExitStack() as stack:
         tty_fd, subprocess_tty_fd = pty.openpty()
         stack.callback(os.close, tty_fd)

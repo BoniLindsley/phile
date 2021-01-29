@@ -25,8 +25,8 @@ from PySide2.QtCore import QObject
 from PySide2.QtCore import Signal, SignalInstance
 from PySide2.QtGui import QIcon
 from PySide2.QtWidgets import QApplication, QSystemTrayIcon, QWidget
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.PySide2
@@ -85,8 +85,10 @@ class GuiIconList(QObject):
     """
 
     def __init__(
-        self, *args, configuration: phile.configuration.Configuration,
-        watching_observer: watchdog.observers.Observer, **kwargs
+        self, *args: typing.Any,
+        configuration: phile.configuration.Configuration,
+        watching_observer: watchdog.observers.Observer,
+        **kwargs: typing.Any
     ) -> None:
         """
         :param watching_observer:
@@ -119,7 +121,7 @@ class GuiIconList(QObject):
 
     def _set_up_tray_event_handler(
         self, *, watching_observer: watchdog.observers.Observer
-    ):
+    ) -> None:
         configuration = self._configuration
         self._tray_sorter = tray_sorter = (
             phile.data.SortedLoadCache[phile.tray.File](

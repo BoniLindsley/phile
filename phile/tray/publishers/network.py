@@ -15,14 +15,16 @@ import phile.configuration
 import phile.tray
 from . import update
 
+NetworkStatus: type[psutil._common.snetio] = psutil._common.snetio
+
 
 class NetworkFile(phile.tray.File):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         updated_at: datetime.datetime,
-        network_status=psutil._common.snetio(
+        network_status: psutil._common.snetio = NetworkStatus(
             bytes_sent=0,
             bytes_recv=0,
             packets_sent=0,
@@ -32,10 +34,9 @@ class NetworkFile(phile.tray.File):
             dropin=0,
             dropout=0,
         ),
-        **kwargs
+        **kwargs: typing.Any
     ) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        super().__init__(*args, **kwargs)
         self.network_status = network_status
         self.updated_at = updated_at
 
@@ -64,13 +65,13 @@ class TrayFilesUpdater(update.SelfTarget):
 
     def __init__(
         self,
-        *args,
+        *args: typing.Any,
         configuration: phile.configuration.Configuration,
         prefix: str = '70-phile-tray-network-',
         refresh_interval: datetime.timedelta = datetime.timedelta(
             seconds=5
         ),
-        **kwargs
+        **kwargs: typing.Any,
     ):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]

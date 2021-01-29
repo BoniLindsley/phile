@@ -279,7 +279,7 @@ class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
             close()
         )
 
-    def _emit_signal_from_socket(self):
+    def _emit_signal_from_socket(self) -> None:
         """
         Emit PySide2 event based on data from socket.
 
@@ -290,6 +290,11 @@ class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
         # Data is received as a string.
         # Reading the raw data as an integer value
         # requires converting it into a byte array first.
-        data = self.readData(1)
-        signal_number = int.from_bytes(data.encode(), sys.byteorder)
+        #
+        # Broken typing stub.
+        data = self.readData(1)  # type: ignore[arg-type, call-arg]
+        signal_number = int.from_bytes(
+            data.encode(),  # type: ignore[attr-defined]
+            sys.byteorder
+        )
         self.signal_received.emit(signal_number)

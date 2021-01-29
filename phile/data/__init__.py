@@ -18,10 +18,10 @@ class SortableLoadData(typing.Protocol):
     path: pathlib.Path
     """Path from which the data was loaded."""
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         ...
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         ...
 
     def load(self) -> bool:
@@ -38,7 +38,7 @@ class File(SortableLoadData):
     path: pathlib.Path
     """Path from which the data was loaded."""
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         pair = (self.path.name, self.path.parent)
         if isinstance(other, File):
             return pair == (other.path.name, other.path.parent)
@@ -47,7 +47,7 @@ class File(SortableLoadData):
         else:
             return NotImplemented
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         pair = (self.path.name, self.path.parent)
         if isinstance(other, File):
             return pair < (other.path.name, other.path.parent)
@@ -60,9 +60,9 @@ class File(SortableLoadData):
     def from_path_stem(
         cls: typing.Type[_F],
         path_stem: str,
-        *args,
+        *args: typing.Any,
         configuration: phile.configuration.Configuration,
-        **kwargs,
+        **kwargs: typing.Any,
     ) -> _F:
         """Dataclasses do not allow keyword-only arguments."""
         assert 'path' not in kwargs
@@ -72,13 +72,17 @@ class File(SortableLoadData):
         return cls(*args, **kwargs)
 
     @classmethod
-    def check_path(cls, path: pathlib.Path, *args, **kwargs) -> bool:
+    def check_path(
+        cls, path: pathlib.Path, *args: typing.Any, **kwargs: typing.Any
+    ) -> bool:
         return cls.make_path(path.stem, *args, **kwargs) == path
 
     @staticmethod
     def make_path(
-        path_stem: str, *args,
-        configuration: phile.configuration.Configuration, **kwargs
+        path_stem: str,
+        *args: typing.Any,
+        configuration: phile.configuration.Configuration,
+        **kwargs: typing.Any,
     ) -> pathlib.Path:
         return configuration.user_state_directory / (
             path_stem + '.phile'

@@ -11,7 +11,7 @@ import sys
 import typing
 
 # External dependencies.
-from PySide2.QtCore import QEvent, QEventLoop, Qt
+from PySide2.QtCore import QEvent, QEventLoop, QSize, Qt
 from PySide2.QtCore import Signal, SignalInstance
 from PySide2.QtGui import (
     QCloseEvent, QHideEvent, QResizeEvent, QShowEvent, QPalette
@@ -19,8 +19,8 @@ from PySide2.QtGui import (
 from PySide2.QtWidgets import (
     QApplication, QMainWindow, QMdiArea, QMdiSubWindow, QTextEdit
 )
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.PySide2
@@ -90,7 +90,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
 
     @property
     def content(self) -> str:
-        return self.widget().toPlainText()
+        return typing.cast(str, self.widget().toPlainText())
 
     @content.setter
     def content(self, new_content: str) -> None:
@@ -101,11 +101,13 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         return self._modified_at
 
     @modified_at.setter
-    def modified_at(self, new_create_datetime) -> None:
+    def modified_at(
+        self, new_create_datetime: datetime.datetime
+    ) -> None:
         self._modified_at = new_create_datetime
         self.refresh_window_title()
 
-    def hideEvent(self, hide_event: QHideEvent):
+    def hideEvent(self, hide_event: QHideEvent) -> None:
         # When a sub-window is hidden, a re-tile is necessary
         # to fill any gaps left by the hidden widget.
         # It is possible to hide without closing a widget.
@@ -140,7 +142,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
 
     @property
     def title(self) -> str:
-        return self.widget().documentTitle()
+        return typing.cast(str, self.widget().documentTitle())
 
     @title.setter
     def title(self, new_title: str) -> None:
@@ -157,7 +159,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
         if mdi_area is not None:
             mdi_area._tile_sub_windows_vertically()
 
-    def showEvent(self, show_event: QShowEvent):
+    def showEvent(self, show_event: QShowEvent) -> None:
         _logger.debug('Sub-window shown: default handling.')
         super().showEvent(show_event)
         # Showing a widget typically also activates it by default.
@@ -173,14 +175,16 @@ class NotificationMdiSubWindow(QMdiSubWindow):
 
 class NotificationMdi(QMdiArea):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
         _logger.debug('Creating notification MDI.')
         super().__init__(*args, **kwargs)
         self.setActivationOrder(QMdiArea.CreationOrder)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-    def add_notification(self, *args, **kwargs) -> QMdiSubWindow:
+    def add_notification(
+        self, *args: typing.Any, **kwargs: typing.Any
+    ) -> QMdiSubWindow:
         _logger.debug(
             'Adding notification sub-window. Total will be %s.',
             len(self.subWindowList()) + 1
@@ -189,19 +193,21 @@ class NotificationMdi(QMdiArea):
             NotificationMdiSubWindow(*args, **kwargs)
         )
 
-    def resizeEvent(self, resize_event: QResizeEvent):
+    def resizeEvent(self, resize_event: QResizeEvent) -> None:
         _logger.debug('Resized: default handling.')
         super().resizeEvent(resize_event)
         _logger.debug('Resized: re-tiling.')
         self._tile_sub_windows_vertically(area_size=resize_event.size())
 
-    def showEvent(self, show_event: QShowEvent):
+    def showEvent(self, show_event: QShowEvent) -> None:
         _logger.debug('Shown: default handling.')
         super().showEvent(show_event)
         _logger.debug('Shown: re-tiling.')
         self._tile_sub_windows_vertically()
 
-    def _tile_sub_windows_vertically(self, *, area_size=None):
+    def _tile_sub_windows_vertically(
+        self, *, area_size: typing.Optional[QSize] = None
+    ) -> None:
         _logger.debug('Tiling sub-window vertically.')
         # This method gets called many times when shutting down,
         # once for each widget because hiding this widget
@@ -248,8 +254,10 @@ class MainWindow(QMainWindow):
     """Internal. Emitted when the window is closed to handle cleanup."""
 
     def __init__(
-        self, *args, configuration: phile.configuration.Configuration,
-        watching_observer: watchdog.observers.Observer, **kwargs
+        self, *args: typing.Any,
+        configuration: phile.configuration.Configuration,
+        watching_observer: watchdog.observers.Observer,
+        **kwargs: typing.Any
     ):
         # Create the window.
         super().__init__(*args, **kwargs)
@@ -398,7 +406,10 @@ class MainWindow(QMainWindow):
         sub_window.show()
         sub_window.closed.connect(self.on_notification_sub_window_closed)
 
-    def get_data(self, content=SubWindowContent) -> dict:
+    def get_data(
+        self,
+        content: SubWindowContent,
+    ) -> dict[str, typing.Any]:
         return {
             "content": content.text,
             "modified_at": content.modified_at,

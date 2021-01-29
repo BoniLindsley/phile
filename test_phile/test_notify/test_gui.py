@@ -16,8 +16,8 @@ import unittest.mock
 # External dependencies.
 from PySide2.QtCore import QEventLoop, QObject, Qt
 from PySide2.QtWidgets import QMdiArea
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.PySide2

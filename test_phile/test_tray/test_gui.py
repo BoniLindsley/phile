@@ -15,8 +15,8 @@ import unittest.mock
 
 # External dependencies.
 from PySide2.QtGui import QIcon
-import watchdog.events  # type: ignore[import]
-from watchdog.observers import Observer  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.PySide2

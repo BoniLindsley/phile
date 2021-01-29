@@ -16,8 +16,8 @@ import unittest
 import unittest.mock
 
 # External dependencies.
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.configuration

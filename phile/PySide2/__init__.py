@@ -73,8 +73,8 @@ class Caller(PySide2.QtCore.QObject):
 
 
 def call_soon_threadsafe(
-    callback: typing.Callable,
-    *args,
+    callback: typing.Callable[..., typing.Any],
+    *args: typing.Any,
     thread: typing.Optional[PySide2.QtCore.QThread] = None,
 ) -> None:
     """Schedule ``callback`` to be called in the Qt event loop."""

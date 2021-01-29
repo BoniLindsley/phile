@@ -40,8 +40,11 @@ class SubFile(phile.data.File):
 
     @classmethod
     def make_path(
-        cls, path_stem: str, *args,
-        configuration: phile.configuration.Configuration, **kwargs
+        cls,
+        path_stem: str,
+        *args: typing.Any,
+        configuration: phile.configuration.Configuration,
+        **kwargs: typing.Any,
     ) -> pathlib.Path:
         del configuration
         return pathlib.Path(path_stem + cls.suffix)

@@ -14,13 +14,12 @@ import unittest
 import unittest.mock
 
 # External dependencies.
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.watchdog
 import phile.watchdog.observers
-from phile.watchdog.observers import has_handlers
 import test_phile.threaded_mock
 
 IntCallback = (phile.watchdog.SingleParameterCallback[int, None])
@@ -182,23 +181,10 @@ class TestScheduler(unittest.TestCase):
 
     def test_is_scheduled(self) -> None:
         """Dispatching calls the given handler."""
-        self.assertTrue(
-            not has_handlers(
-                self.observer, self.scheduler.watchdog_watch
-            )
-        )
         self.assertTrue(not self.scheduler.is_scheduled)
         self.scheduler.schedule()
-        self.assertTrue(
-            has_handlers(self.observer, self.scheduler.watchdog_watch)
-        )
         self.assertTrue(self.scheduler.is_scheduled)
         self.scheduler.unschedule()
-        self.assertTrue(
-            not has_handlers(
-                self.observer, self.scheduler.watchdog_watch
-            )
-        )
         self.assertTrue(not self.scheduler.is_scheduled)
 
     def test_sheduled_when_already_scheduled(self) -> None:
@@ -221,8 +207,12 @@ class TestScheduler(unittest.TestCase):
         self.assertTrue(self.scheduler.is_scheduled)
         self.scheduler.unschedule()
         self.assertTrue(not self.scheduler.is_scheduled)
+        self.assertIsNotNone(other_scheduler.watchdog_watch)
+        assert other_scheduler.watchdog_watch is not None
         self.assertTrue(
-            has_handlers(self.observer, other_scheduler.watchdog_watch)
+            phile.watchdog.observers.has_handlers(
+                self.observer, other_scheduler.watchdog_watch
+            )
         )
 
     def test_unschedule_manually_unscheduled_handler(self) -> None:
@@ -234,6 +224,8 @@ class TestScheduler(unittest.TestCase):
         """
         self.scheduler.schedule()
         self.assertTrue(self.scheduler.is_scheduled)
+        self.assertIsNotNone(self.scheduler.watchdog_watch)
+        assert self.scheduler.watchdog_watch is not None
         self.observer.unschedule(self.scheduler.watchdog_watch)
         self.scheduler.unschedule()
         self.assertTrue(not self.scheduler.is_scheduled)

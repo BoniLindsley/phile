@@ -9,6 +9,7 @@ Test :mod:`phile.PySide2`
 import functools
 import tempfile
 import threading
+import typing
 import unittest
 import unittest.mock
 
@@ -68,7 +69,9 @@ class TestProcessEvents(UsesPySide2, unittest.TestCase):
 
         class TimedObject(PySide2.QtCore.QObject):
 
-            def __init__(self, *args, **kwargs) -> None:
+            def __init__(
+                self, *args: typing.Any, **kwargs: typing.Any
+            ) -> None:
                 super().__init__(*args, **kwargs)
                 self.timer_triggered = False
                 self.timer_id = self.startTimer(0)

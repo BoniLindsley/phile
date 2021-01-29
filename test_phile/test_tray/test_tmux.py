@@ -13,7 +13,7 @@ import tempfile
 import unittest
 
 # External dependencies.
-import watchdog.observers  # type: ignore[import]
+import watchdog.observers
 
 # Internal packages.
 import phile.asyncio

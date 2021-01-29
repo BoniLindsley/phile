@@ -82,7 +82,7 @@ class TestProtocol(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(line, b'line-1\n\r\n')
 
     async def test_read_line(self) -> None:
-        """Can read a line which tmux defines as ending with ``\r\n``."""
+        """Can read a line defined as ending with ``"\\r\\n"``."""
         self.sender.send(b'line-1\n\r\n\r')
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, 'line-1\n\r\n')

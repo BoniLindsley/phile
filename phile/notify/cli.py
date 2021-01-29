@@ -30,7 +30,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
 
 def process_arguments(
     argument_namespace: argparse.Namespace,
-    configuration: phile.configuration.Configuration = None,
+    configuration: typing.Optional[phile.configuration.Configuration
+                                   ] = None,
     output_stream: typing.TextIO = sys.stdout
 ) -> int:
     if configuration is None:

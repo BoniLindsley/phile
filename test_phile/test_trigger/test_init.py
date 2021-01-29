@@ -14,7 +14,7 @@ import unittest.mock
 
 # External dependencies.
 import portalocker  # type: ignore[import]
-import watchdog.events  # type: ignore[import]
+import watchdog.events
 
 # Internal packages.
 import phile.configuration
@@ -215,25 +215,6 @@ class TestEntryPoint(unittest.TestCase):
         )
         self.assertTrue(self.entry_point.check_path(self.trigger_path))
         self.assertTrue(not self.entry_point.check_path(invalid_path))
-
-    def test_check_path_with_invalid_characters(self) -> None:
-        """A path with invalid character is never a trigger path."""
-        valid_path = self.trigger_directory / (
-            'a' + self.configuration.trigger_suffix
-        )
-        invalid_path = self.trigger_directory / (
-            'a\0' + self.configuration.trigger_suffix
-        )
-        self.assertTrue(self.entry_point.check_path(valid_path))
-        self.assertTrue(not self.entry_point.check_path(invalid_path))
-
-    def test_get_trigger_path_with_invalid_characters(self) -> None:
-        """Using invalid trigger name raises :exc:`ValueError`."""
-        trigger_name = '/\\open'
-        with self.assertRaises(ValueError):
-            trigger_path = self.entry_point.get_trigger_path(
-                trigger_name
-            )
 
     def test_add_trigger_checks_for_callback(self) -> None:
         """Adding trigger makes sure the trigger has a callback."""

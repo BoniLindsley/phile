@@ -34,9 +34,9 @@ async def wait_for(
 @contextlib.asynccontextmanager
 async def open_task(
     awaitable: collections.abc.Awaitable[_T_co],
-    *args,
-    **kwargs,
-) -> collections.abc.AsyncIterator[asyncio.Task]:
+    *args: typing.Any,
+    **kwargs: typing.Any,
+) -> collections.abc.AsyncIterator[asyncio.Task[typing.Any]]:
     if isinstance(awaitable, asyncio.Task):
         task = awaitable
         assert not args

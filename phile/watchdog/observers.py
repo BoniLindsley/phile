@@ -9,10 +9,12 @@ Convenience module for using :attr:`~watchdog.observers.Observer`
 import collections.abc
 import contextlib
 import pathlib
+import threading
+import typing
 
 # External dependencies.
-import watchdog.events  # type: ignore[import]
-import watchdog.observers  # type: ignore[import]
+import watchdog.events
+import watchdog.observers
 
 
 def was_start_called(
@@ -64,14 +66,15 @@ def was_stop_called(
        to have :func:`was_start_called` being :data:`False`
        while :func:`was_stop_called` being :data:`True`.
     """
-    return observer._stopped_event.is_set()
+    return observer.stopped_event.is_set()
 
 
 @contextlib.contextmanager
 def open(
-    *args,
-    opener=watchdog.observers.Observer,
-    **kwargs
+    *args: typing.Any,
+    opener: type[watchdog.observers.api.BaseObserver
+                 ] = watchdog.observers.Observer,
+    **kwargs: typing.Any,
 ) -> collections.abc.Iterator[watchdog.observers.api.BaseObserver]:
     observer = opener(*args, **kwargs)
     try:
@@ -83,9 +86,10 @@ def open(
 
 @contextlib.asynccontextmanager
 async def async_open(
-    *args,
-    opener=watchdog.observers.Observer,
-    **kwargs
+    *args: typing.Any,
+    opener: type[watchdog.observers.api.BaseObserver
+                 ] = watchdog.observers.Observer,
+    **kwargs: typing.Any,
 ) -> collections.abc.AsyncIterator[watchdog.observers.api.BaseObserver]:
     observer = opener(*args, **kwargs)
     try:
@@ -131,7 +135,7 @@ def add_handler(
 
     .. admonition:: Raison d'être
 
-       The :cls:`~watchdog.observers.api.BaseObserver` class
+       The :class:`~watchdog.observers.api.BaseObserver` class
        provides :meth:`~watchdog.observers.api.BaseObserver.schedule`
        and
        :meth:`~watchdog.observers.api.BaseObserver.add_handler_for_watch`
@@ -176,7 +180,7 @@ def remove_handler(
 
     .. admonition:: Raison d'être
 
-       The :cls:`~watchdog.observers.api.BaseObserver` class
+       The :class:`~watchdog.observers.api.BaseObserver` class
        provides :meth:`~watchdog.observers.api.BaseObserver.unschedule`
        and
        :meth:`~watchdog.observers.api.BaseObserver.remove_handler_for_watch`

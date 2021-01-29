@@ -8,7 +8,7 @@ import sys
 import typing
 
 # External dependencies.
-import watchdog.observers  # type: ignore[import]
+import watchdog.observers
 
 # Internal packages.
 import phile.configuration
@@ -70,7 +70,6 @@ async def monitor(
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     configuration = phile.configuration.Configuration()
-    watching_observer = watchdog.observers.Observer()
     with phile.watchdog.observers.open(
     ) as watching_observer, contextlib.suppress(KeyboardInterrupt):
         target = monitor(
