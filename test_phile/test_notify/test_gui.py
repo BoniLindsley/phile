@@ -20,8 +20,8 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
+import phile
 import phile.PySide2
-import phile.configuration
 import phile.notify
 import phile.notify.gui
 import test_phile.threaded_mock
@@ -481,7 +481,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
         """
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
         self.trigger_directory = (

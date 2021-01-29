@@ -17,8 +17,8 @@ import typing
 import watchdog.observers
 
 # Internal packages.
+import phile
 import phile.asyncio
-import phile.configuration
 import phile.data
 import phile.tmux
 import phile.tmux.control_mode
@@ -70,7 +70,7 @@ def tray_files_to_tray_text(files: typing.List[phile.tray.File]) -> str:
 
 async def run(
     *,
-    configuration: phile.configuration.Configuration,
+    configuration: phile.Configuration,
     control_mode: phile.tmux.control_mode.Client,
     watching_observer: watchdog.observers.api.BaseObserver,
 ) -> None:
@@ -134,7 +134,7 @@ async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
         control_mode.run()
     ) as control_mode_task, phile.asyncio.open_task(
         run(
-            configuration=phile.configuration.Configuration(),
+            configuration=phile.Configuration(),
             control_mode=control_mode,
             watching_observer=watching_observer,
         )

@@ -12,7 +12,7 @@ import tempfile
 import unittest
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.tray
 
 
@@ -23,7 +23,7 @@ class TestFileCheckPath(unittest.TestCase):
         tray_directory = tempfile.TemporaryDirectory()
         self.addCleanup(tray_directory.cleanup)
         self.configuration = configuration = (
-            phile.configuration.Configuration(
+            phile.Configuration(
                 tray_directory=pathlib.Path(tray_directory.name),
                 tray_suffix='.tt'
             )
@@ -92,7 +92,7 @@ class TestFile(unittest.TestCase):
         tray_directory = tempfile.TemporaryDirectory()
         self.addCleanup(tray_directory.cleanup)
         self.tray_directory_path = pathlib.Path(tray_directory.name)
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             tray_directory=self.tray_directory_path
         )
         self.name = 'clock'

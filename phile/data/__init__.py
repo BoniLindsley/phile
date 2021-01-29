@@ -9,7 +9,7 @@ import pathlib
 import typing
 
 # Internal packages.
-import phile.configuration
+import phile
 
 
 class SortableLoadData(typing.Protocol):
@@ -61,7 +61,7 @@ class File(SortableLoadData):
         cls: typing.Type[_F],
         path_stem: str,
         *args: typing.Any,
-        configuration: phile.configuration.Configuration,
+        configuration: phile.Configuration,
         **kwargs: typing.Any,
     ) -> _F:
         """Dataclasses do not allow keyword-only arguments."""
@@ -81,7 +81,7 @@ class File(SortableLoadData):
     def make_path(
         path_stem: str,
         *args: typing.Any,
-        configuration: phile.configuration.Configuration,
+        configuration: phile.Configuration,
         **kwargs: typing.Any,
     ) -> pathlib.Path:
         return configuration.user_state_directory / (

@@ -14,7 +14,7 @@ import unittest
 import unittest.mock
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.data
 
 
@@ -43,7 +43,7 @@ class SubFile(phile.data.File):
         cls,
         path_stem: str,
         *args: typing.Any,
-        configuration: phile.configuration.Configuration,
+        configuration: phile.Configuration,
         **kwargs: typing.Any,
     ) -> pathlib.Path:
         del configuration
@@ -57,7 +57,7 @@ class TestFileMakePath(unittest.TestCase):
         data_directory = tempfile.TemporaryDirectory()
         self.addCleanup(data_directory.cleanup)
         self.configuration = configuration = (
-            phile.configuration.Configuration(
+            phile.Configuration(
                 user_state_directory=pathlib.Path(data_directory.name)
             )
         )

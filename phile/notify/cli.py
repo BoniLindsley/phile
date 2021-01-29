@@ -7,8 +7,8 @@ import sys
 import typing
 
 # Internal packages.
+import phile
 import phile.notify
-import phile.configuration
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -30,12 +30,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
 
 def process_arguments(
     argument_namespace: argparse.Namespace,
-    configuration: typing.Optional[phile.configuration.Configuration
-                                   ] = None,
+    configuration: typing.Optional[phile.Configuration] = None,
     output_stream: typing.TextIO = sys.stdout
 ) -> int:
     if configuration is None:
-        configuration = phile.configuration.Configuration()
+        configuration = phile.Configuration()
     command = argument_namespace.command
     configuration.notification_directory.mkdir(
         parents=True, exist_ok=True

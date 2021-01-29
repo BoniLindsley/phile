@@ -20,7 +20,7 @@ import portalocker  # type: ignore[import]
 import watchdog.events
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.data
 
 _logger = logging.getLogger(
@@ -138,7 +138,7 @@ class EntryPoint:
         available_triggers: typing.Set[str] = set(),
         bind: bool = False,
         callback_map: typing.Dict[str, NullaryCallable] = {},
-        configuration: phile.configuration.Configuration,
+        configuration: phile.Configuration,
         trigger_directory: pathlib.Path,
     ) -> None:
         """
@@ -146,13 +146,13 @@ class EntryPoint:
             Triggers to add.
             This must be empty if `bind` is `False`.
         :parm bind: Whether to bind immediately.
-        :param ~phile.configuration.Configuration configuration:
+        :param ~phile.Configuration configuration:
             Information on where data are saved.
         :param ~pathlib.Path trigger_directory:
             Directory containing trigger files
             if it :meth:`~pathlib.PurePath.is_absolute`.
             Otherwise, it is relative to
-            :attr:`~phile.configuration.Configuration.trigger_root`.
+            :attr:`~phile.Configuration.trigger_root`.
         """
         self.trigger_directory = (
             configuration.trigger_root / trigger_directory

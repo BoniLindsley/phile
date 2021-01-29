@@ -17,7 +17,7 @@ import portalocker  # type: ignore[import]
 import watchdog.events
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.trigger
 import test_phile.threaded_mock
 
@@ -112,7 +112,7 @@ class TestEntryPoint(unittest.TestCase):
         self.user_state_directory = pathlib.Path(
             user_state_directory.name
         )
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             user_state_directory=self.user_state_directory,
         )
         self.trigger_directory_name = 'tr'

@@ -11,7 +11,7 @@ import typing
 import watchdog.observers
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.notify
 import phile.tray
 import phile.watchdog
@@ -20,7 +20,7 @@ import phile.watchdog.observers
 
 async def monitor(
     *,
-    configuration: phile.configuration.Configuration,
+    configuration: phile.Configuration,
     watching_observer: watchdog.observers.api.BaseObserver,
 ) -> None:
     with contextlib.ExitStack() as exit_stack:
@@ -69,7 +69,7 @@ async def monitor(
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    configuration = phile.configuration.Configuration()
+    configuration = phile.Configuration()
     with phile.watchdog.observers.open(
     ) as watching_observer, contextlib.suppress(KeyboardInterrupt):
         target = monitor(

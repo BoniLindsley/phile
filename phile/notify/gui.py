@@ -23,9 +23,9 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
+import phile
 import phile.PySide2
 import phile.PySide2.QtNetwork
-import phile.configuration
 import phile.data
 import phile.notify
 import phile.trigger
@@ -254,8 +254,7 @@ class MainWindow(QMainWindow):
     """Internal. Emitted when the window is closed to handle cleanup."""
 
     def __init__(
-        self, *args: typing.Any,
-        configuration: phile.configuration.Configuration,
+        self, *args: typing.Any, configuration: phile.Configuration,
         watching_observer: watchdog.observers.Observer,
         **kwargs: typing.Any
     ):
@@ -427,7 +426,7 @@ class MainWindow(QMainWindow):
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     app = QApplication(argv)
-    configuration = phile.configuration.Configuration()
+    configuration = phile.Configuration()
     watching_observer = watchdog.observers.Observer()
     watching_observer.daemon = True
     watching_observer.start()

@@ -19,10 +19,10 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
+import phile
 import phile.PySide2
 import phile.PySide2.QtGui
 import phile.PySide2.QtWidgets
-import phile.configuration
 import phile.tray
 import phile.tray.gui
 from phile.tray.gui import set_icon_paths
@@ -63,7 +63,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
         """
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
         self.trigger_directory = (

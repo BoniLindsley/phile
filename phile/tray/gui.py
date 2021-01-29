@@ -29,9 +29,9 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
+import phile
 import phile.PySide2
 import phile.PySide2.QtNetwork
-import phile.configuration
 import phile.data
 import phile.tray
 import phile.trigger
@@ -85,8 +85,7 @@ class GuiIconList(QObject):
     """
 
     def __init__(
-        self, *args: typing.Any,
-        configuration: phile.configuration.Configuration,
+        self, *args: typing.Any, configuration: phile.Configuration,
         watching_observer: watchdog.observers.Observer,
         **kwargs: typing.Any
     ) -> None:
@@ -317,7 +316,7 @@ def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
     app = QApplication(argv)
     # Let Qt know where to find icons.
     set_icon_paths()
-    configuration = phile.configuration.Configuration()
+    configuration = phile.Configuration()
     watching_observer = watchdog.observers.Observer()
     watching_observer.daemon = True
     watching_observer.start()

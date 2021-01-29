@@ -14,7 +14,7 @@ import tempfile
 import unittest
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.notify
 from phile.notify.cli import create_argument_parser, process_arguments
 
@@ -110,7 +110,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_append(self) -> None:
         """Process append request."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
@@ -139,7 +139,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_list(self) -> None:
         """Process list request."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
@@ -169,7 +169,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_list_empty(self) -> None:
         """Process list request even if directory is empty."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path
         )
         argument_namespace = argparse.Namespace(command='list')
@@ -184,7 +184,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_read(self) -> None:
         """Process read request."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
@@ -209,7 +209,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_read_bad_file(self) -> None:
         """Fail read request if loading fails."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
@@ -232,7 +232,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_remove(self) -> None:
         """Process remove request."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
@@ -258,7 +258,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_write(self) -> None:
         """Process write request."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
@@ -282,7 +282,7 @@ class TestProcessArguments(unittest.TestCase):
 
     def test_make_notification_directory(self) -> None:
         """Create notification directory if missing."""
-        configuration = phile.configuration.Configuration(
+        configuration = phile.Configuration(
             notification_directory=self.notification_directory_path /
             'subdirectory'
         )

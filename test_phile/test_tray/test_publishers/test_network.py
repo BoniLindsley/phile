@@ -16,7 +16,7 @@ import unittest.mock
 import psutil  # type: ignore[import]
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.tray.publishers.network
 
 
@@ -64,7 +64,7 @@ class TestTrayFilesUpdater(unittest.TestCase):
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
         tray_directory = self.configuration.tray_directory

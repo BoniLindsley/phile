@@ -14,7 +14,7 @@ import tempfile
 import unittest
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.data
 import phile.notify
 
@@ -44,7 +44,7 @@ class TestFileCheckPath(unittest.TestCase):
         notification_directory = tempfile.TemporaryDirectory()
         self.addCleanup(notification_directory.cleanup)
         self.configuration = configuration = (
-            phile.configuration.Configuration(
+            phile.Configuration(
                 notification_directory=pathlib.Path(
                     notification_directory.name
                 ),
@@ -113,7 +113,7 @@ class TestFile(unittest.TestCase):
         self.notification_directory_path = pathlib.Path(
             notification_directory.name
         )
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             notification_directory=self.notification_directory_path
         )
 

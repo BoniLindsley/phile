@@ -20,7 +20,7 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.notify
 import phile.tray.publishers.notify_monitor
 import phile.watchdog.observers
@@ -35,7 +35,7 @@ class TestMonitorStart(unittest.TestCase):
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
 

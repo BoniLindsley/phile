@@ -15,7 +15,7 @@ import watchdog.observers
 
 # Internal packages.
 import phile
-import phile.configuration
+import phile
 import phile.tray.publishers.battery
 import phile.tray.publishers.datetime
 import phile.tray.publishers.memory
@@ -26,7 +26,7 @@ import phile.trigger
 import phile.watchdog
 
 
-class Context(phile.configuration.Configuration):
+class Context(phile.Configuration):
 
     def __init__(
         self, *args: typing.Any,

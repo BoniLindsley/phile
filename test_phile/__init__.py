@@ -2,7 +2,6 @@
 """
 .. automodule:: test_phile.test_PySide2
 .. automodule:: test_phile.test_asyncio
-.. automodule:: test_phile.test_configuration
 .. automodule:: test_phile.test_data
 .. automodule:: test_phile.test_datetime
 .. automodule:: test_phile.test_notify

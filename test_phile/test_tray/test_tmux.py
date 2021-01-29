@@ -16,8 +16,8 @@ import unittest
 import watchdog.observers
 
 # Internal packages.
+import phile
 import phile.asyncio
-import phile.configuration
 import phile.tmux
 import phile.tmux.control_mode
 import phile.tray
@@ -90,7 +90,7 @@ class TestRun(
         """Use unique data directories for each test."""
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.configuration.Configuration(
+        self.configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
 

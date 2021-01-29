@@ -8,7 +8,7 @@ import sys
 import typing
 
 # Internal packages.
-import phile.configuration
+import phile
 import phile.tray
 from . import update
 
@@ -18,7 +18,7 @@ class TrayFilesUpdater(update.SelfTarget):
     def __init__(
         self,
         *args: typing.Any,
-        configuration: phile.configuration.Configuration,
+        configuration: phile.Configuration,
         prefix: str = '90-phile-tray-datetime-',
         **kwargs: typing.Any
     ):
@@ -55,7 +55,7 @@ class TrayFilesUpdater(update.SelfTarget):
 
 
 def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    configuration = phile.configuration.Configuration()
+    configuration = phile.Configuration()
     with contextlib.suppress(KeyboardInterrupt):
         target = TrayFilesUpdater(configuration=configuration)
         asyncio.run(update.sleep_loop(target))
