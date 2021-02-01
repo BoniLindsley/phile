@@ -18,7 +18,7 @@ class TrayFilesUpdater(update.SelfTarget):
     def __init__(
         self,
         *args: typing.Any,
-        configuration: phile.Configuration,
+        capabilities: phile.Capabilities,
         prefix: str = '90-phile-tray-datetime-',
         **kwargs: typing.Any
     ):
@@ -27,7 +27,8 @@ class TrayFilesUpdater(update.SelfTarget):
         File = phile.tray.File
         self.files = tuple(
             File.from_path_stem(
-                configuration=configuration, path_stem=prefix + suffix
+                configuration=capabilities[phile.Configuration],
+                path_stem=prefix + suffix
             ) for suffix in (
                 '1-year', '2-month', '3-day', '4-weekday', '5-hour',
                 '6-minute'
@@ -54,12 +55,24 @@ class TrayFilesUpdater(update.SelfTarget):
         )
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    configuration = phile.Configuration()
-    with contextlib.suppress(KeyboardInterrupt):
-        target = TrayFilesUpdater(configuration=configuration)
-        asyncio.run(update.sleep_loop(target))
+async def run(
+    capabilities: phile.Capabilities
+) -> int:  # pragma: no cover
+    target = TrayFilesUpdater(capabilities=capabilities)
+    await update.sleep_loop(target)
     return 0
+
+
+async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
+    capabilities = phile.Capabilities()
+    capabilities.set(phile.Configuration())
+    return await run(capabilities=capabilities)
+
+
+def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+    with contextlib.suppress(KeyboardInterrupt):
+        return asyncio.run(async_main(argv))
+    return 1
 
 
 if __name__ == '__main__':  # pragma: no cover

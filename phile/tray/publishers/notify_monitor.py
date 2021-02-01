@@ -18,11 +18,9 @@ import phile.watchdog
 import phile.watchdog.observers
 
 
-async def monitor(
-    *,
-    configuration: phile.Configuration,
-    watching_observer: watchdog.observers.api.BaseObserver,
-) -> None:
+async def run(capabilities: phile.Capabilities) -> None:
+    configuration = capabilities[phile.Configuration]
+    watching_observer = capabilities[watchdog.observers.api.BaseObserver]
     with contextlib.ExitStack() as exit_stack:
         notify_tray_file = phile.tray.File.from_path_stem(
             configuration=configuration,
@@ -68,16 +66,19 @@ async def monitor(
                 notify_tray_file.path.unlink(missing_ok=True)
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    configuration = phile.Configuration()
-    with phile.watchdog.observers.open(
-    ) as watching_observer, contextlib.suppress(KeyboardInterrupt):
-        target = monitor(
-            configuration=configuration,
-            watching_observer=watching_observer
-        )
-        asyncio.run(target)
+async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
+    capabilities = phile.Capabilities()
+    capabilities.set(phile.Configuration())
+    async with phile.watchdog.observers.async_open() as observer:
+        capabilities[watchdog.observers.api.BaseObserver] = observer
+        await run(capabilities=capabilities)
     return 0
+
+
+def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+    with contextlib.suppress(KeyboardInterrupt):
+        return asyncio.run(async_main(argv))
+    return 1
 
 
 if __name__ == '__main__':  # pragma: no cover

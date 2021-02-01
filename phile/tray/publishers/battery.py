@@ -56,7 +56,7 @@ class TrayFilesUpdater(update.SelfTarget):
     def __init__(
         self,
         *args: typing.Any,
-        configuration: phile.Configuration,
+        capabilities: phile.Capabilities,
         prefix: str = '70-phile-tray-battery-',
         refresh_interval: datetime.timedelta = default_refresh_interval,
         **kwargs: typing.Any
@@ -64,6 +64,7 @@ class TrayFilesUpdater(update.SelfTarget):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.refresh_interval = refresh_interval
+        configuration = capabilities[phile.Configuration]
         self.files: typing.Tuple[File, ...] = (
             PercentageFile.from_path_stem(
                 configuration=configuration,
@@ -87,12 +88,24 @@ class TrayFilesUpdater(update.SelfTarget):
         return self.refresh_interval
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    configuration = phile.Configuration()
-    with contextlib.suppress(KeyboardInterrupt):
-        target = TrayFilesUpdater(configuration=configuration)
-        asyncio.run(update.sleep_loop(target))
+async def run(
+    capabilities: phile.Capabilities
+) -> int:  # pragma: no cover
+    target = TrayFilesUpdater(capabilities=capabilities)
+    await update.sleep_loop(target)
     return 0
+
+
+async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
+    capabilities = phile.Capabilities()
+    capabilities.set(phile.Configuration())
+    return await run(capabilities=capabilities)
+
+
+def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+    with contextlib.suppress(KeyboardInterrupt):
+        return asyncio.run(async_main(argv))
+    return 1
 
 
 if __name__ == '__main__':  # pragma: no cover

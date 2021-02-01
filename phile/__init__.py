@@ -24,8 +24,20 @@ import typing as _typing
 # External dependencies.
 import appdirs as _appdirs  # type: ignore[import]
 
-# TODO[python/mypy#9761]: Replace with `Capabilities = dict[str,Any]`
-Capabilities: _typing.Type[_typing.Dict[str, _typing.Any]] = dict
+_T_co = _typing.TypeVar('_T_co')
+
+
+class Capabilities(dict[type, _typing.Any]):
+
+    def __getitem__(self, capability: type[_T_co]) -> _T_co:
+        return _typing.cast(_T_co, super().__getitem__(capability))
+
+    def __setitem__(self, key: type[_T_co], value: _T_co) -> None:
+        super().__setitem__(key, value)
+
+    def set(self, value: _T_co) -> None:
+        self.__setitem__(type(value), value)
+
 
 _app_meta_data = {'appname': 'phile', 'appauthor': 'BoniLindsley'}
 """Descriptions of app. Used for forming directory paths."""

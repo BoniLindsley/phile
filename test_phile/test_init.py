@@ -17,18 +17,18 @@ import phile
 class TestCapabilities(unittest.TestCase):
     """Tests :class:`~phile.Capabilities`."""
 
+    def test_getitem_non_existent(self) -> None:
+        self.assertIsNone(phile.Capabilities().get(int))
+
+    def test_getitem_setitem(self) -> None:
+        capabilities = phile.Capabilities()
+        capabilities[int] = 1
+        self.assertEqual(capabilities[int], 1)
+
     def test_set(self) -> None:
         capabilities = phile.Capabilities()
-        capabilities['number'] = 1
-
-    def test_get(self) -> None:
-        capabilities = phile.Capabilities()
-        capabilities['number'] = 1
-        self.assertEqual(capabilities.get('number'), 1)
-
-    def test_get_non_existent(self) -> None:
-        capabilities = phile.Capabilities()
-        self.assertIsNone(capabilities.get('number'))
+        capabilities.set(2)
+        self.assertEqual(capabilities[int], 2)
 
 
 class TestConfiguration(unittest.TestCase):

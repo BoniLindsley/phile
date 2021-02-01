@@ -22,10 +22,10 @@ class TestTrayFiles(unittest.TestCase):
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.Configuration(
+        self.configuration = configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
-        tray_directory = self.configuration.tray_directory
+        tray_directory = configuration.tray_directory
         self.expected_tray_files = (
             tray_directory / '90-phile-tray-datetime-1-year.tray',
             tray_directory / '90-phile-tray-datetime-2-month.tray',
@@ -34,6 +34,8 @@ class TestTrayFiles(unittest.TestCase):
             tray_directory / '90-phile-tray-datetime-5-hour.tray',
             tray_directory / '90-phile-tray-datetime-6-minute.tray',
         )
+        self.capabilities = capabilities = phile.Capabilities()
+        capabilities.set(configuration)
 
     def set_up_datetime_now(self) -> None:
         # Cannot patch method of a built-in type.
@@ -60,7 +62,7 @@ class TestTrayFiles(unittest.TestCase):
         self.set_up_datetime_now()
         self.updater = (
             phile.tray.publishers.datetime.TrayFilesUpdater(
-                configuration=self.configuration
+                capabilities=self.capabilities
             )
         )
 

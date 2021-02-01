@@ -17,6 +17,17 @@ from . import update
 
 NetworkStatus: type[psutil._common.snetio] = psutil._common.snetio
 
+default_network_status = NetworkStatus(
+    bytes_sent=0,
+    bytes_recv=0,
+    packets_sent=0,
+    packets_recv=0,
+    errin=0,
+    errout=0,
+    dropin=0,
+    dropout=0,
+)
+
 
 class NetworkFile(phile.tray.File):
 
@@ -24,16 +35,7 @@ class NetworkFile(phile.tray.File):
         self,
         *args: typing.Any,
         updated_at: datetime.datetime,
-        network_status: psutil._common.snetio = NetworkStatus(
-            bytes_sent=0,
-            bytes_recv=0,
-            packets_sent=0,
-            packets_recv=0,
-            errin=0,
-            errout=0,
-            dropin=0,
-            dropout=0,
-        ),
+        network_status: psutil._common.snetio = default_network_status,
         **kwargs: typing.Any
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -61,20 +63,22 @@ class NetworkFile(phile.tray.File):
         self.updated_at = at
 
 
+default_refresh_interval = datetime.timedelta(seconds=5)
+
+
 class TrayFilesUpdater(update.SelfTarget):
 
     def __init__(
         self,
         *args: typing.Any,
-        configuration: phile.Configuration,
+        capabilities: phile.Capabilities,
         prefix: str = '70-phile-tray-network-',
-        refresh_interval: datetime.timedelta = datetime.timedelta(
-            seconds=5
-        ),
+        refresh_interval: datetime.timedelta = default_refresh_interval,
         **kwargs: typing.Any,
     ):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        configuration = capabilities[phile.Configuration]
         self.refresh_interval = refresh_interval
         now = datetime.datetime.now()
         network_status = psutil.net_io_counters()
@@ -97,12 +101,24 @@ class TrayFilesUpdater(update.SelfTarget):
         return self.refresh_interval
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    configuration = phile.Configuration()
-    with contextlib.suppress(KeyboardInterrupt):
-        target = TrayFilesUpdater(configuration=configuration)
-        asyncio.run(update.sleep_loop(target))
+async def run(
+    capabilities: phile.Capabilities
+) -> int:  # pragma: no cover
+    target = TrayFilesUpdater(capabilities=capabilities)
+    await update.sleep_loop(target)
     return 0
+
+
+async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
+    capabilities = phile.Capabilities()
+    capabilities.set(phile.Configuration())
+    return await run(capabilities=capabilities)
+
+
+def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+    with contextlib.suppress(KeyboardInterrupt):
+        return asyncio.run(async_main(argv))
+    return 1
 
 
 if __name__ == '__main__':  # pragma: no cover

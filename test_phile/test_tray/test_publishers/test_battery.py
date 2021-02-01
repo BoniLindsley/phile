@@ -79,14 +79,16 @@ class TestTrayFiles(unittest.TestCase):
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.Configuration(
+        self.configuration = configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
-        tray_directory = self.configuration.tray_directory
+        tray_directory = configuration.tray_directory
         self.expected_tray_files = (
             tray_directory / '70-phile-tray-battery-1-percentage.tray',
             tray_directory / '70-phile-tray-battery-2-time.tray',
         )
+        self.capabilities = capabilities = phile.Capabilities()
+        capabilities.set(configuration)
 
     def set_up_psutil_battery_sensor_mock(self) -> None:
         patch = unittest.mock.patch(
@@ -104,7 +106,7 @@ class TestTrayFiles(unittest.TestCase):
         self.set_up_psutil_battery_sensor_mock()
         self.updater = (
             phile.tray.publishers.battery.TrayFilesUpdater(
-                configuration=self.configuration
+                capabilities=self.capabilities
             )
         )
 

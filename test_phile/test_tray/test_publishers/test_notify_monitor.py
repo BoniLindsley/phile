@@ -35,14 +35,18 @@ class TestMonitorStart(unittest.TestCase):
     def set_up_configuration(self) -> None:
         user_state_directory = tempfile.TemporaryDirectory()
         self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.Configuration(
+        self.configuration = configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
+        self.capabilities = capabilities = phile.Capabilities()
+        capabilities.set(configuration)
 
     def set_up_observer(self) -> None:
-        self.observer = watchdog.observers.Observer()
-        self.addCleanup(self.observer.stop)
-        self.observer.start()
+        self.observer = observer = watchdog.observers.Observer()
+        self.addCleanup(observer.stop)
+        observer.start()
+        BaseObserver = watchdog.observers.api.BaseObserver
+        self.capabilities[BaseObserver] = observer
 
     def set_up_tray_event_dispatcher(self) -> None:
         dispatcher = watchdog.events.FileSystemEventHandler()
@@ -107,8 +111,8 @@ class TestMonitorStart(unittest.TestCase):
             path_stem='30-phile-notify-tray',
             text_icon=' N'
         )
-        self.monitor = phile.tray.publishers.notify_monitor.monitor(
-            configuration=configuration, watching_observer=self.observer
+        self.monitor = phile.tray.publishers.notify_monitor.run(
+            capabilities=self.capabilities
         )
 
     def test_can_be_cancelled(self) -> None:
