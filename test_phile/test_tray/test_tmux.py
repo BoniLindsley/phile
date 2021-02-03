@@ -93,6 +93,7 @@ class TestRun(
         self.configuration = phile.Configuration(
             user_state_directory=pathlib.Path(user_state_directory.name)
         )
+        self.capabilities.set(self.configuration)
 
     def set_up_observer(self) -> None:
         """
@@ -106,6 +107,7 @@ class TestRun(
         observer.daemon = True
         observer.start()
         self.addCleanup(observer.stop)
+        self.capabilities[watchdog.observers.api.BaseObserver] = observer
 
     async def async_set_up_reply(self) -> None:
         self.control_mode = self.client
@@ -114,20 +116,18 @@ class TestRun(
         )
         self.addCleanup(client_task.cancel)
         await self.server_sendall(b'\x1bP1000p%begin 0\r\n%end 0\r\n')
+        self.capabilities.set(self.control_mode)
 
     async def async_set_up_run(self) -> None:
         self.run_task = run_task = asyncio.create_task(
-            phile.tray.tmux.run(
-                configuration=self.configuration,
-                control_mode=self.client,
-                watching_observer=self.observer,
-            )
+            phile.tray.tmux.run(capabilities=self.capabilities)
         )
         self.addCleanup(run_task.cancel)
         await self.check_status_right_set_to('')
 
     def setUp(self) -> None:
         super().setUp()
+        self.capabilities = phile.Capabilities()
         self.set_up_configuration()
         self.set_up_observer()
 

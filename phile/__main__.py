@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import dataclasses
 import functools
+import os
 import pathlib
 import sys
 import types
@@ -21,17 +22,45 @@ import phile.tray.publishers.memory
 import phile.tray.publishers.network
 import phile.tray.publishers.notify_monitor
 import phile.tray.publishers.update
+import phile.tray.tmux
 import phile.trigger
 import phile.watchdog
 
 Launcher = typing.Callable[[phile.Capabilities], typing.Coroutine]
+LauncherEntry = tuple[Launcher, set[type]]
 
-default_launchers: typing.Dict[str, Launcher] = {
-    'tray-battery': phile.tray.publishers.battery.run,
-    'tray-datetime': phile.tray.publishers.datetime.run,
-    'tray-memory': phile.tray.publishers.memory.run,
-    'tray-network': phile.tray.publishers.network.run,
-    'tray-notify': phile.tray.publishers.notify_monitor.run,
+default_launchers: typing.Dict[str, LauncherEntry] = {
+    'tray-battery':
+        (phile.tray.publishers.battery.run, {
+            phile.Configuration,
+        }),
+    'tray-datetime':
+        (phile.tray.publishers.datetime.run, {
+            phile.Configuration,
+        }),
+    'tray-memory':
+        (phile.tray.publishers.memory.run, {
+            phile.Configuration,
+        }),
+    'tray-network':
+        (phile.tray.publishers.network.run, {
+            phile.Configuration,
+        }),
+    'tray-notify': (
+        phile.tray.publishers.notify_monitor.run,
+        {
+            phile.Configuration,
+            watchdog.observers.api.BaseObserver,
+        },
+    ),
+    'tray-tmux': (
+        phile.tray.tmux.run,
+        {
+            phile.Configuration,
+            phile.tmux.control_mode.Client,
+            watchdog.observers.api.BaseObserver,
+        },
+    ),
 }
 
 
@@ -39,17 +68,36 @@ default_launchers: typing.Dict[str, Launcher] = {
 class TaskRegistry:
     """Keeps track of existing tasks and how to start new tasks."""
 
+    class MissingCapability(RuntimeError):
+        pass
+
     capabilities: phile.Capabilities
     launchers: types.MappingProxyType[
-        str, Launcher] = types.MappingProxyType(default_launchers)
+        str, LauncherEntry] = types.MappingProxyType(default_launchers)
 
     def __post_init__(self) -> None:
         self.running_tasks: dict[str, asyncio.Task[typing.Any]] = {}
+        capability_set = set(self.capabilities.keys())
+        self.usable_launcher_names = {
+            name
+            for name, launcher_entry in self.launchers.items()
+            if not launcher_entry[1].difference(capability_set)
+        }
 
     def create_task(self, name: str) -> asyncio.Task[typing.Any]:
         assert name not in self.running_tasks
+        launcher_entry = self.launchers[name]
+        if name not in self.usable_launcher_names:
+            required_launcher_capabilities = launcher_entry[1]
+            missing_capabilities = required_launcher_capabilities.difference(
+                self.capabilities
+            )
+            raise TaskRegistry.MissingCapability(
+                f"Launcher {name} requires {missing_capabilities}."
+            )
+        launcher = launcher_entry[0]
         self.running_tasks[name] = task = asyncio.create_task(
-            self.launchers[name](self.capabilities), name=name
+            launcher(self.capabilities), name=name
         )
         task.add_done_callback(self.on_task_done)
         return task
@@ -83,7 +131,12 @@ class TriggerEntryPoint(phile.trigger.EntryPoint):
         return self
 
     def add_all_triggers(self) -> None:
-        for task_name in self.task_registry.launchers:
+        usable_launchers = {
+            name: launcher
+            for (name, launcher) in self.task_registry.launchers.items()
+            if name in self.task_registry.usable_launcher_names
+        }
+        for task_name in usable_launchers:
             self.callback_map[self.start_prefix + task_name] = (
                 functools.partial(self.create_task, task_name)
             )
@@ -123,6 +176,8 @@ async def run(capabilities: phile.Capabilities) -> None:
         )
     ):
         entry_point.add_all_triggers()
+        for task_name in entry_point.task_registry.usable_launcher_names:
+            entry_point.create_task(task_name)
         while True:
             await asyncio.sleep(3600)
 
@@ -130,9 +185,42 @@ async def run(capabilities: phile.Capabilities) -> None:
 async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
     capabilities = phile.Capabilities()
     capabilities.set(phile.Configuration())
-    async with phile.watchdog.observers.async_open() as observer:
-        capabilities[watchdog.observers.api.BaseObserver] = observer
-        await run(capabilities=capabilities)
+    async with contextlib.AsyncExitStack() as stack:
+        capabilities[watchdog.observers.api.BaseObserver] = (
+            await stack.enter_async_context(
+                phile.watchdog.observers.async_open()
+            )
+        )
+        busy_tasks = list[asyncio.Task[typing.Any]]()
+        if 'TMUX' in os.environ:
+            capabilities[
+                phile.tmux.control_mode.Client] = control_mode = (
+                    await stack.enter_async_context(
+                        phile.tmux.control_mode.open(
+                            control_mode_arguments=(
+                                phile.tmux.control_mode.Arguments()
+                            )
+                        )
+                    )
+                )
+            control_mode_task = await stack.enter_async_context(
+                phile.asyncio.open_task(control_mode.run())
+            )
+            busy_tasks.append(control_mode_task)
+        run_task = await stack.enter_async_context(
+            phile.asyncio.open_task(run(capabilities=capabilities))
+        )
+        busy_tasks.append(run_task)
+        stdin_task = await stack.enter_async_context(
+            phile.asyncio.open_task(
+                phile.tray.tmux.read_byte(sys.stdin)
+            )
+        )
+        busy_tasks.append(stdin_task)
+        done, pending = await asyncio.wait(
+            busy_tasks,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
     return 0
 
 

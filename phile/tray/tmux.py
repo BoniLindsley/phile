@@ -68,13 +68,11 @@ def tray_files_to_tray_text(files: typing.List[phile.tray.File]) -> str:
     )
 
 
-async def run(
-    *,
-    configuration: phile.Configuration,
-    control_mode: phile.tmux.control_mode.Client,
-    watching_observer: watchdog.observers.api.BaseObserver,
-) -> None:
+async def run(capabilities: phile.Capabilities) -> None:
     """Start updating ``status-right`` with tray file changes."""
+    configuration = capabilities[phile.Configuration]
+    control_mode = capabilities[phile.tmux.control_mode.Client]
+    watching_observer = capabilities[watchdog.observers.api.BaseObserver]
     with contextlib.ExitStack() as stack:
         status_right = stack.enter_context(
             StatusRight(control_mode=control_mode)
@@ -127,20 +125,32 @@ async def read_byte(pipe: typing.Any) -> None:
 
 
 async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
-    async with phile.watchdog.observers.async_open(
-    ) as watching_observer, phile.tmux.control_mode.open(
-        control_mode_arguments=(phile.tmux.control_mode.Arguments())
-    ) as control_mode, phile.asyncio.open_task(
-        control_mode.run()
-    ) as control_mode_task, phile.asyncio.open_task(
-        run(
-            configuration=phile.Configuration(),
-            control_mode=control_mode,
-            watching_observer=watching_observer,
+    capabilities = phile.Capabilities()
+    capabilities.set(phile.Configuration())
+    async with contextlib.AsyncExitStack() as stack:
+        capabilities[watchdog.observers.api.BaseObserver] = (
+            await stack.enter_async_context(
+                phile.watchdog.observers.async_open()
+            )
         )
-    ) as run_task, phile.asyncio.open_task(
-        read_byte(sys.stdin)
-    ) as stdin_task:
+        capabilities[phile.tmux.control_mode.Client] = control_mode = (
+            await stack.enter_async_context(
+                phile.tmux.control_mode.open(
+                    control_mode_arguments=(
+                        phile.tmux.control_mode.Arguments()
+                    )
+                )
+            )
+        )
+        control_mode_task = await stack.enter_async_context(
+            phile.asyncio.open_task(control_mode.run())
+        )
+        run_task = await stack.enter_async_context(
+            phile.asyncio.open_task(run(capabilities=capabilities))
+        )
+        stdin_task = await stack.enter_async_context(
+            phile.asyncio.open_task(read_byte(sys.stdin))
+        )
         done, pending = await asyncio.wait(
             (control_mode_task, run_task, stdin_task),
             return_when=asyncio.FIRST_COMPLETED,
