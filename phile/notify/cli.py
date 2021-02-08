@@ -2,7 +2,6 @@
 
 # Standard library.
 import argparse
-import io
 import sys
 import typing
 
