@@ -8,7 +8,6 @@ Test :mod:`phile.notify.cli`
 # Standard library.
 import argparse
 import io
-import logging
 import pathlib
 import tempfile
 import unittest
@@ -17,11 +16,6 @@ import unittest
 import phile
 import phile.notify
 from phile.notify.cli import create_argument_parser, process_arguments
-
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
-)
-"""Logger whose name is the module name."""
 
 
 class TestCreateArgumentParser(unittest.TestCase):
@@ -96,17 +90,13 @@ class TestProcessArguments(unittest.TestCase):
         """Fail if no arguments are given."""
         argument_namespace = argparse.Namespace(command=None)
         with self.assertRaises(ValueError):
-            return_value = process_arguments(
-                argument_namespace=argument_namespace
-            )
+            process_arguments(argument_namespace=argument_namespace)
 
     def test_unknown_command(self) -> None:
         """Fail if an unknown command is given."""
         argument_namespace = argparse.Namespace(command='gobbledygook')
         with self.assertRaises(ValueError):
-            return_value = process_arguments(
-                argument_namespace=argument_namespace
-            )
+            process_arguments(argument_namespace=argument_namespace)
 
     def test_append(self) -> None:
         """Process append request."""
@@ -213,14 +203,8 @@ class TestProcessArguments(unittest.TestCase):
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
-        original_text = 'Once up a time.'
         argument_namespace = argparse.Namespace(
             command='read', name='VeCat'
-        )
-        notification = phile.notify.File.from_path_stem(
-            argument_namespace.name,
-            configuration=configuration,
-            text=original_text
         )
         output_stream = io.StringIO()
         return_value = process_arguments(
@@ -236,7 +220,6 @@ class TestProcessArguments(unittest.TestCase):
             notification_directory=self.notification_directory_path,
             notification_suffix='.notification'
         )
-        original_text = 'Once up a time.\n'
         argument_namespace = argparse.Namespace(
             command='remove',
             name='VeCat',
