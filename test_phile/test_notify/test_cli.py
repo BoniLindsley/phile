@@ -139,10 +139,6 @@ class TestProcessArguments(unittest.TestCase):
             'another' + configuration.notification_suffix,
             'not_really_a.notification.just_a_fake_one',
         ]
-        expected_names = [
-            'another',
-            'this_is_a',
-        ]
         for name in names:
             (self.notification_directory_path / name).touch()
         argument_namespace = argparse.Namespace(command='list')
@@ -153,8 +149,11 @@ class TestProcessArguments(unittest.TestCase):
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
-        self.assertEqual(
-            output_stream.getvalue(), '\n'.join(expected_names) + '\n'
+        self.assertIn(
+            output_stream.getvalue(), [
+                'another\nthis_is_a\n',
+                'this_is_a\nanother\n',
+            ]
         )
 
     def test_list_empty(self) -> None:
