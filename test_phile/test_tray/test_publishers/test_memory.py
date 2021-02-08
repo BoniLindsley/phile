@@ -13,9 +13,6 @@ import tempfile
 import unittest
 import unittest.mock
 
-# External dependencies.
-import psutil  # type: ignore[import]
-
 # Internal packages.
 import phile
 import phile.tray.publishers.memory

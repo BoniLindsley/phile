@@ -7,8 +7,8 @@ Test :mod:`phile.asyncio`
 
 # Standard library.
 import asyncio
-import contextlib
 import datetime
+import socket
 import sys
 import typing
 import unittest
@@ -124,3 +124,58 @@ class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(subprocess.stdin.is_closing())
         self.assertTrue(subprocess.stdout.at_eof())
         self.assertTrue(subprocess.stderr.at_eof())
+
+
+class TestOpenReader(unittest.IsolatedAsyncioTestCase):
+    """Tests :class:`~phile.asyncio.open_reader`."""
+
+    def setUp(self) -> None:
+        self.read_socket, self.write_socket = socket.socketpair()
+        self.addCleanup(self.read_socket.close)
+        self.addCleanup(self.write_socket.close)
+
+    async def asyncSetUp(self) -> None:
+        running_loop = asyncio.get_running_loop()
+        self.addCleanup(running_loop.remove_reader, self.read_socket)
+
+    async def test_init_accepts_socket_and_monitors_it(self) -> None:
+        running_loop = asyncio.get_running_loop()
+        with phile.asyncio.open_reader(self.read_socket, lambda: None):
+            self.assertTrue(running_loop.remove_reader(self.read_socket))
+
+    async def test_stops_monitoring_on_exit(self) -> None:
+        running_loop = asyncio.get_running_loop()
+        with phile.asyncio.open_reader(self.read_socket, lambda: None):
+            pass
+        self.assertFalse(running_loop.remove_reader(self.read_socket))
+
+    async def test_calls_callback_on_readable(self) -> None:
+        running_loop = asyncio.get_running_loop()
+        callback_checker = asyncio.Event()
+        with phile.asyncio.open_reader(
+            self.read_socket, callback_checker.set
+        ):
+            running_loop.call_soon(self.write_socket.sendall, b'a')
+            await phile.asyncio.wait_for(callback_checker.wait())
+
+
+class TestReadable(unittest.IsolatedAsyncioTestCase):
+    """Tests :class:`~phile.asyncio.readable`."""
+
+    def setUp(self) -> None:
+        self.read_socket, self.write_socket = socket.socketpair()
+        self.addCleanup(self.read_socket.close)
+        self.addCleanup(self.write_socket.close)
+
+    async def asyncSetUp(self) -> None:
+        running_loop = asyncio.get_running_loop()
+        self.addCleanup(running_loop.remove_reader, self.read_socket)
+
+    async def test_returns_when_readable(self) -> None:
+        running_loop = asyncio.get_running_loop()
+        running_loop.call_soon(self.write_socket.sendall, b'a')
+        self.assertTrue(
+            await phile.asyncio.wait_for(
+                phile.asyncio.readable(self.read_socket)
+            )
+        )

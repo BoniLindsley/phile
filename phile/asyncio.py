@@ -6,6 +6,7 @@ import collections.abc
 import contextlib
 import contextvars
 import datetime
+import socket
 import typing
 
 _T_co = typing.TypeVar('_T_co', covariant=True)
@@ -65,3 +66,25 @@ async def close_subprocess(
     # such as any given in stdin, stdout, stderr,
     # are closed after termination.
     await subprocess.communicate()
+
+
+@contextlib.contextmanager
+def open_reader(
+    file_descriptor: typing.Union[int, socket.socket],
+    callback: collections.abc.Callable[[], typing.Any],
+) -> collections.abc.Iterator[None]:
+    running_loop = asyncio.get_running_loop()
+    try:
+        running_loop.add_reader(file_descriptor, callback)
+        yield
+    finally:
+        running_loop.remove_reader(file_descriptor)
+
+
+async def readable(
+    file_descriptor: typing.Union[int, socket.socket]
+) -> typing.Literal[True]:
+    readable = asyncio.Event()
+    with open_reader(file_descriptor, readable.set):
+        await readable.wait()
+    return True

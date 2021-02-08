@@ -12,12 +12,14 @@ import types
 import typing
 
 # External dependencies.
+import keyring
 import watchdog.observers
 
 # Internal packages.
 import phile
 import phile.tray.publishers.battery
 import phile.tray.publishers.datetime
+import phile.tray.publishers.imap_idle
 import phile.tray.publishers.memory
 import phile.tray.publishers.network
 import phile.tray.publishers.notify_monitor
@@ -30,6 +32,13 @@ Launcher = typing.Callable[[phile.Capabilities], typing.Coroutine]
 LauncherEntry = tuple[Launcher, set[type]]
 
 default_launchers: typing.Dict[str, LauncherEntry] = {
+    'imap-idle': (
+        phile.tray.publishers.imap_idle.run,
+        {
+            phile.Configuration,
+            keyring.backend.KeyringBackend,
+        },
+    ),
     'tray-battery':
         (phile.tray.publishers.battery.run, {
             phile.Configuration,
@@ -89,8 +98,10 @@ class TaskRegistry:
         launcher_entry = self.launchers[name]
         if name not in self.usable_launcher_names:
             required_launcher_capabilities = launcher_entry[1]
-            missing_capabilities = required_launcher_capabilities.difference(
-                self.capabilities
+            missing_capabilities = (
+                required_launcher_capabilities.difference(
+                    self.capabilities
+                )
             )
             raise TaskRegistry.MissingCapability(
                 f"Launcher {name} requires {missing_capabilities}."
@@ -185,6 +196,9 @@ async def run(capabilities: phile.Capabilities) -> None:
 async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
     capabilities = phile.Capabilities()
     capabilities.set(phile.Configuration())
+    capabilities[keyring.backend.KeyringBackend] = (
+        keyring.get_keyring()  # type: ignore[no-untyped-call]
+    )
     async with contextlib.AsyncExitStack() as stack:
         capabilities[watchdog.observers.api.BaseObserver] = (
             await stack.enter_async_context(

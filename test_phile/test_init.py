@@ -6,6 +6,7 @@ Test :mod:`phile`
 """
 
 # Standard library.
+import json
 import pathlib
 import tempfile
 import unittest
@@ -56,10 +57,16 @@ class TestConfiguration(unittest.TestCase):
         self.trigger_root_path = (
             self.user_state_directory_path / 'ttrriiggeerr'
         )
+        self.configuration_path = (
+            self.user_state_directory_path / 'conf.json'
+        )
 
     def test_default(self) -> None:
         """Default constructor should fill in expected members."""
         configuration = phile.Configuration()
+        self.assertIsInstance(
+            configuration.configuration_path, pathlib.Path
+        )
         self.assertIsInstance(
             configuration.notification_directory, pathlib.Path
         )
@@ -103,6 +110,7 @@ class TestConfiguration(unittest.TestCase):
         tray_icon_name = 'default_icon'
         trigger_suffix = '.trigger_file'
         configuration = phile.Configuration(
+            configuration_path=self.configuration_path,
             notification_directory=self.notification_directory_path,
             notification_suffix=notification_suffix,
             pid_path=pid_path,
@@ -111,6 +119,9 @@ class TestConfiguration(unittest.TestCase):
             tray_suffix=tray_suffix,
             trigger_root=self.trigger_root_path,
             trigger_suffix=trigger_suffix,
+        )
+        self.assertEqual(
+            configuration.configuration_path, self.configuration_path
         )
         self.assertEqual(
             configuration.notification_directory,
@@ -129,3 +140,26 @@ class TestConfiguration(unittest.TestCase):
             configuration.trigger_root, self.trigger_root_path
         )
         self.assertEqual(configuration.trigger_suffix, trigger_suffix)
+
+    def test_load_configuration_file_if_exists(self) -> None:
+        configuration_data = {'one': 1}
+        with self.configuration_path.open('w+') as file_stream:
+            json.dump(configuration_data, file_stream)
+        self.configuration = phile.Configuration(
+            configuration_path=self.configuration_path,
+            user_state_directory=self.user_state_directory_path
+        )
+        self.assertEqual(self.configuration.data, configuration_data)
+
+    def test_load_reset_data_if_file_missing(self) -> None:
+        self.test_load_configuration_file_if_exists()
+        self.configuration_path.unlink()
+        self.configuration.load()
+        self.assertFalse(self.configuration.data)
+
+    def test_load_reset_data_if_file_corrupted(self) -> None:
+        self.test_load_configuration_file_if_exists()
+        with self.configuration_path.open('w+') as file_stream:
+            file_stream.write('1 2 3')
+        self.configuration.load()
+        self.assertFalse(self.configuration.data)

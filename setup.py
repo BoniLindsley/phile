@@ -20,6 +20,8 @@ setup(
     ],
     license='MIT',
     install_requires=[
+        'IMAPClient',
+        'keyring',
         'pathvalidate',
         'portalocker',
         'psutil',
