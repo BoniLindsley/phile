@@ -27,12 +27,6 @@ ResponseLine = typing.Union[
     tuple[int, bytes],
     tuple[int, bytes, typing.Any],
 ]
-ResponseHandler = typing.Union[
-    # This needs to be expanded as necessary.
-    collections.abc.Callable[[ExistsResponse], typing.Any],
-    collections.abc.Callable[[ExpungeResponse], typing.Any],
-    collections.abc.Callable[[FetchResponse], typing.Any],
-]
 SelectResponse = dict[bytes, typing.Any]
 
 
@@ -192,7 +186,9 @@ class FlagTracker:
         select_response: typing.Optional[SelectResponse] = None
     ) -> None:
 
-        self._response_handlers: dict[bytes, ResponseHandler] = {
+        self._response_handlers: (
+            dict[bytes, collections.abc.Callable[..., typing.Any]]
+        ) = {
             b"EXISTS": self._add_exists,
             b"EXPUNGE": self._add_expunge,
             b"FETCH": self._add_fetch,
@@ -238,7 +234,7 @@ class FlagTracker:
             handler = handlers.get(
                 response_line[1], self._add_unhandled_response
             )
-            handler(response_line)  # type: ignore[arg-type]
+            handler(response_line)
 
     @property
     def message_counts(self) -> dict[str, int]:
