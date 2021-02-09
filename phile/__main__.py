@@ -18,6 +18,7 @@ import watchdog.observers
 # Internal packages.
 import phile
 import phile.tray.publishers.battery
+import phile.tray.publishers.cpu
 import phile.tray.publishers.datetime
 import phile.tray.publishers.imap_idle
 import phile.tray.publishers.memory
@@ -43,6 +44,9 @@ default_launchers: typing.Dict[str, LauncherEntry] = {
         (phile.tray.publishers.battery.run, {
             phile.Configuration,
         }),
+    'tray-cpu': (phile.tray.publishers.cpu.run, {
+        phile.Configuration,
+    }),
     'tray-datetime':
         (phile.tray.publishers.datetime.run, {
             phile.Configuration,
