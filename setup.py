@@ -15,6 +15,7 @@ setup(
         'phile.PySide2',
         'phile.tmux',
         'phile.tray',
+        'phile.tray.publishers',
         'phile.trigger',
         'phile.watchdog',
     ],
