@@ -63,24 +63,6 @@ class TestStatusRight(
         await self.server_sendall(b'%begin 1\r\n%end 1\r\n')
 
 
-class TestTrayFilesToTrayText(unittest.TestCase):
-    """Tests :func:`~phile.tray.tmux.tray_files_to_tray_text`."""
-
-    def test_merge(self) -> None:
-        File = phile.tray.File
-        self.assertEqual(
-            phile.tray.tmux.tray_files_to_tray_text(
-                files=[
-                    File(path=pathlib.Path(), text_icon='Tray'),
-                    File(path=pathlib.Path(), text_icon='Files'),
-                    File(path=pathlib.Path(), text_icon='To'),
-                    File(path=pathlib.Path(), text_icon='Tray'),
-                    File(path=pathlib.Path(), text_icon='Text'),
-                ]
-            ), 'TrayFilesToTrayText'
-        )
-
-
 class TestRun(
     UsesClientWithFakeSubprocess, unittest.IsolatedAsyncioTestCase
 ):

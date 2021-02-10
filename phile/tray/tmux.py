@@ -61,13 +61,6 @@ class StatusRight:
             )
 
 
-def tray_files_to_tray_text(files: typing.List[phile.tray.File]) -> str:
-    return ''.join(
-        tray_file.text_icon for tray_file in files
-        if tray_file.text_icon is not None
-    )
-
-
 async def run(capabilities: phile.Capabilities) -> None:
     """Start updating ``status-right`` with tray file changes."""
     configuration = capabilities[phile.Configuration]
@@ -79,7 +72,7 @@ async def run(capabilities: phile.Capabilities) -> None:
         )
         sorter_handler: phile.data.UpdateCallback[phile.tray.File] = (
             lambda _index, _tray_file, tracked_data:
-            (status_right.set(tray_files_to_tray_text(tracked_data)))
+            (status_right.set(phile.tray.files_to_text(tracked_data)))
         )
         tray_sorter = phile.data.SortedLoadCache[phile.tray.File](
             create_file=phile.tray.File,
