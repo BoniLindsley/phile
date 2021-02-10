@@ -152,5 +152,23 @@ class TestFile(unittest.TestCase):
         self.assertTrue(not content)
 
 
+class TestFilesToText(unittest.TestCase):
+    """Tests :func:`~phile.tray.files_to_text`."""
+
+    def test_merge(self) -> None:
+        File = phile.tray.File
+        self.assertEqual(
+            phile.tray.files_to_text(
+                files=[
+                    File(path=pathlib.Path(), text_icon='Tray'),
+                    File(path=pathlib.Path(), text_icon='Files'),
+                    File(path=pathlib.Path(), text_icon='To'),
+                    File(path=pathlib.Path(), text_icon='Tray'),
+                    File(path=pathlib.Path(), text_icon='Text'),
+                ]
+            ), 'TrayFilesToTrayText'
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

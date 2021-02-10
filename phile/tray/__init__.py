@@ -106,3 +106,10 @@ class File(phile.data.File):
         with self.path.open('w+') as file_stream:
             content_stream.seek(0)
             shutil.copyfileobj(content_stream, file_stream)
+
+
+def files_to_text(files: typing.List[File]) -> str:
+    return ''.join(
+        tray_file.text_icon for tray_file in files
+        if tray_file.text_icon is not None
+    )
