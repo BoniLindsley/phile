@@ -7,7 +7,6 @@ Test :mod:`phile.notify.gui`
 
 # Standard library.
 import datetime
-import logging
 import pathlib
 import tempfile
 import unittest
@@ -26,11 +25,6 @@ import phile.notify
 import phile.notify.gui
 import test_phile.threaded_mock
 from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
-
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
-)
-"""Logger whose name is the module name."""
 
 
 class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
@@ -157,8 +151,6 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
     def test_show_and_hide(self) -> None:
         """Make sure both showing re-tiles but hiding does not."""
         notification_mdi = self.notification_mdi
-
-        _logger.debug('Creating sub-window 1.')
         notification_sub_window = notification_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
@@ -179,27 +171,22 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # We want to test that adding and showing a sub-window re-tiles.
         # This is to make sure the retile we get later
         # is from adding a sub-window.
-        _logger.debug('Showing the MDI.')
         notification_mdi.show()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
         # Move the sub-window.
         # It will be checked later that it is moved.
-        _logger.debug('Moving sub-window 1.')
         notification_sub_window.resize(0, 0)
         notification_sub_window.move(1, 1)
         self.assertEqual(notification_sub_window.pos().x(), 1)
         # Test hiding first since setting up has already shown the MDI.
         # There is no point in repositioning when hiding.
-        _logger.debug('Hiding MDI.')
         notification_mdi.hide()
         self.assertEqual(notification_sub_window.pos().x(), 1)
 
         # Try showing it again.
-        _logger.debug('Moving sub-window 1.')
         self.assertEqual(notification_sub_window.pos().x(), 1)
         # This time there shouls be a re-tiling.
-        _logger.debug('Showing MDI.')
         notification_mdi.show()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
@@ -207,7 +194,6 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         """Make sure both showing and hiding a sub-window retiles."""
         notification_mdi = self.notification_mdi
 
-        _logger.debug('Creating sub-window 1.')
         notification_sub_window = notification_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
@@ -228,12 +214,10 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # We want to test that adding and showing a sub-window re-tiles.
         # This is to make sure the retile we get later
         # is from adding a sub-window.
-        _logger.debug('Showing the MDI.')
         notification_mdi.show()
 
         # Move the sub-window.
         # It will be checked later that it is moved.
-        _logger.debug('Moving sub-window 1.')
         notification_sub_window.resize(0, 0)
         notification_sub_window.move(1, 1)
         self.assertEqual(notification_sub_window.pos().x(), 1)
@@ -243,7 +227,6 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # since the first sub-window typically goes to the top left.
         # Adding another sub-window should trigger a re-tile
         # and move the first sub-window back to the top left.
-        _logger.debug('Creating sub-window 2.')
         notification_sub_window_2 = notification_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
@@ -255,28 +238,23 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             'You have 5678 messages.'
         )
         self.assertEqual(len(notification_mdi.subWindowList()), 2)
-        _logger.debug('Showing sub-window 2.')
         notification_sub_window_2.show()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
         # Move the sub-window.
         # It will be checked later that it is moved.
-        _logger.debug('Moving sub-window 1.')
         notification_sub_window.resize(0, 0)
         notification_sub_window.move(1, 1)
         self.assertEqual(notification_sub_window.pos().x(), 1)
 
-        _logger.debug('Hiding sub-window 2.')
         notification_sub_window_2.hide()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
     def test_close_sub_window(self) -> None:
         """Closing sub-window retiles."""
 
-        _logger.debug('Creating MDI.')
         notification_mdi = self.notification_mdi
 
-        _logger.debug('Creating sub-window 1.')
         notification_sub_window = notification_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
@@ -291,7 +269,6 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        _logger.debug('Creating sub-window 2.')
         notification_sub_window_2 = notification_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
@@ -311,21 +288,17 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # These appear as window state change events.
         # Every change also queues events into the event queue.
         # They are all processed when showing the MDI.
-        _logger.debug('Showing the MDI.')
         notification_mdi.show()
 
         # Move the sub-window.
         # It will be checked later that it will be moved again.
-        _logger.debug('Moving sub-window 1.')
         notification_sub_window.resize(0, 0)
         notification_sub_window.move(1, 1)
         self.assertEqual(notification_sub_window.pos().x(), 1)
         # Check that closing the window re-tiles.
         # Closing the window `deleteLater` the window.
         # Handle the event to trigger retiling.
-        _logger.debug('Closing sub-window 2.')
         notification_sub_window_2.close()
-        _logger.debug('Draining event queue.')
         phile.PySide2.process_deferred_delete_events()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
@@ -441,9 +414,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
     def test_resizeEvent_in_tabbed_view_mode(self) -> None:
         """No retiling should happen in tabbed view mode."""
         notification_mdi = self.notification_mdi
-        _logger.debug('Changing the MDI to tabbed view.')
         notification_mdi.setViewMode(QMdiArea.TabbedView)
-        _logger.debug('Creating sub-window.')
         notification_sub_window = notification_mdi.add_notification(
             title='VeeCat',
             modified_at=datetime.datetime(
@@ -457,7 +428,6 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
 
         # Move the sub-window.
         # It will be checked later that it will not be moved by `show()`.
-        _logger.debug('Moving sub-window.')
         notification_sub_window.resize(0, 0)
         notification_sub_window.move(1, 1)
         self.assertEqual(notification_sub_window.pos().x(), 1)
@@ -467,7 +437,6 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # and that is tested in another test method.
         # Re-tiling should not happen here though
         # because the MDI is in tabbed view mode.
-        _logger.debug('Showing the MDI.')
         notification_mdi.show()
         self.assertEqual(notification_sub_window.pos().x(), 1)
 

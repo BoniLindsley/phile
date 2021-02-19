@@ -6,7 +6,6 @@ Test :mod:`phile.tray.gui`
 """
 
 # Standard library.
-import logging
 import pathlib
 import pkg_resources
 import tempfile
@@ -28,11 +27,6 @@ import phile.tray.gui
 from phile.tray.gui import set_icon_paths
 import test_phile.threaded_mock
 from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
-
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
-)
-"""Logger whose name is the module name."""
 
 
 class TestSetIconPaths(UsesQApplication, unittest.TestCase):
@@ -253,7 +247,6 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
     def test_load_icon_from_name(self) -> None:
         """Retrive icon based on a icon name in tray file data."""
         # Create a tray.
-        _logger.debug('Creating tray file.')
         tray = phile.tray.File.from_path_stem(
             path_stem='VeCat', configuration=self.configuration
         )
@@ -261,19 +254,15 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             pkg_resources.resource_filename('phile.tray', "resources")
         )
         tray.icon_name = 'phile-tray-empty'
-        _logger.debug('Setting icon paths.')
         set_icon_paths()
-        _logger.debug('Loading tray icon.')
         gui_icon_list = self.gui_icon_list
         new_icon = gui_icon_list.load_icon(tray)
         self.assertTrue(not new_icon.isNull())
         self.assertEqual(new_icon.name(), tray.icon_name)
-        _logger.debug('End of test.')
 
     def test_load_icon_from_path(self) -> None:
         """Retrive icon based on a icon path in tray file data."""
         # Create a tray.
-        _logger.debug('Creating tray file.')
         tray = phile.tray.File.from_path_stem(
             path_stem='VeCat', configuration=self.configuration
         )
@@ -286,10 +275,8 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
         )
         # Try to get an icon.
         gui_icon_list = self.gui_icon_list
-        _logger.debug('Loading tray icon.')
         new_icon = gui_icon_list.load_icon(tray)
         self.assertTrue(not new_icon.isNull())
-        _logger.debug('End of test.')
 
     @unittest.mock.patch(
         'phile.tray.gui.QIcon.fromTheme',
