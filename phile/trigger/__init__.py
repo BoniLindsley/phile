@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+.. automodule:: phile.trigger.cli
+.. automodule:: phile.trigger.tkinter
+
 --------------
 Phile triggers
 --------------
