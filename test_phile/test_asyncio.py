@@ -10,6 +10,7 @@ import asyncio
 import datetime
 import socket
 import sys
+import threading
 import typing
 import unittest
 import unittest.mock
@@ -179,3 +180,27 @@ class TestReadable(unittest.IsolatedAsyncioTestCase):
                 phile.asyncio.readable(self.read_socket)
             )
         )
+
+
+class TestThread(unittest.IsolatedAsyncioTestCase):
+    """Tests :class:`~phile.asyncio.Thread`."""
+
+    async def test_async_join_returns_after_run(self) -> None:
+        event = threading.Event()
+        thread = phile.asyncio.Thread(target=event.set, daemon=True)
+        thread.start()
+        self.assertTrue(event.wait(timeout=2))
+        await phile.asyncio.wait_for(thread.async_join())
+
+    async def test_run_override_should_call_super_at_end(self) -> None:
+        event = threading.Event()
+
+        class Thread(phile.asyncio.Thread):
+
+            def run(self) -> None:
+                event.set()
+                super().run()
+
+        thread = Thread()
+        thread.start()
+        await phile.asyncio.wait_for(thread.async_join())

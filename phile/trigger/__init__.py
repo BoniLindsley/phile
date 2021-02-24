@@ -9,7 +9,10 @@ Phile triggers
 """
 
 # Standard libraries.
+import collections.abc
+import contextlib
 import dataclasses
+import functools
 import logging
 import os
 import pathlib
@@ -18,7 +21,6 @@ import typing
 import warnings
 
 # External dependencies.
-import pathlib
 import portalocker  # type: ignore[import]
 import watchdog.events
 
@@ -26,9 +28,9 @@ import watchdog.events
 import phile
 import phile.data
 
-_logger = logging.getLogger(
-    __loader__.name  # type: ignore[name-defined]  # mypy issue #1422
-)
+# TODO[mypy issue #1422]: __loader__ not defined
+_loader_name: str = __loader__.name  # type: ignore[name-defined]
+_logger = logging.getLogger(_loader_name)
 """Logger whose name is the module name."""
 
 NullaryCallable = typing.Callable[[], typing.Any]
@@ -299,3 +301,186 @@ class EntryPoint:
         ):
             trigger_path.unlink(missing_ok=True)
         self._pid_lock.release()
+
+
+_Decorated = typing.TypeVar(
+    '_Decorated', bound=collections.abc.Callable[..., None]
+)
+
+
+def _dispatch_registry_event(method: _Decorated) -> _Decorated:
+
+    @functools.wraps(method)
+    def dispatch_and_call(
+        registry: 'Registry', name: str, *args: typing.Any,
+        **kwargs: typing.Any
+    ) -> None:
+        for callback in registry.event_callback_map:
+            callback(dispatch_and_call, registry, name)
+        method(registry, name, *args, **kwargs)
+
+    return typing.cast(_Decorated, dispatch_and_call)
+
+
+class Registry:
+
+    # TODO[Python 3.10]: Change string to identifier.
+    # Annotations are stored as strings and evalated later in 3.10.
+    __Self = typing.TypeVar('__Self', bound='Registry')
+
+    class AlreadyBound(ValueError):
+        """A trigger was expected to not be bound."""
+
+    class NotBound(ValueError):
+        """A trigger was expected to be bound."""
+
+    class NotShown(ValueError):
+        """A trigger was expected to be shown."""
+
+    # TODO[Python 3.10]: Change string to identifier.
+    # Annotations are stored as strings and evalated later in 3.10.
+    EventHandler = collections.abc.Callable[
+        [collections.abc.Callable[..., typing.Any], 'Registry', str],
+        typing.Any,
+    ]
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.event_callback_map: list[Registry.EventHandler] = []
+        self._callback_map: dict[str, NullaryCallable] = {}
+        self._visible_triggers = set[str]()
+        """Associates callbacks to each triggers."""
+
+    @_dispatch_registry_event
+    def bind(self, name: str, callback: NullaryCallable) -> None:
+        actual_callback = self._callback_map.setdefault(name, callback)
+        if actual_callback is not callback:
+            raise self.AlreadyBound('Unable to bind trigger: ' + name)
+
+    @_dispatch_registry_event
+    def unbind(self, name: str) -> None:
+        with contextlib.suppress(KeyError):
+            self._visible_triggers.remove(name)
+        with contextlib.suppress(KeyError):
+            self._callback_map.pop(name)
+
+    def is_bound(self, name: str) -> bool:
+        return name in self._callback_map
+
+    @_dispatch_registry_event
+    def show(self, name: str) -> None:
+        if name not in self._callback_map:
+            raise self.NotBound(
+                'Unable to show unbound trigger: ' + name
+            )
+        self._visible_triggers.add(name)
+
+    @_dispatch_registry_event
+    def hide(self, name: str) -> None:
+        with contextlib.suppress(KeyError):
+            self._visible_triggers.remove(name)
+
+    def is_shown(self, name: str) -> bool:
+        return name in self._visible_triggers
+
+    def activate_if_shown(self, name: str) -> None:
+        with contextlib.suppress(self.NotShown):
+            self.activate(name)
+
+    @_dispatch_registry_event
+    def activate(self, name: str) -> None:
+        try:
+            callback = self._callback_map[name]
+        except KeyError as error:
+            raise self.NotBound(
+                'Unable to activate unbound trigger: ' + name
+            ) from error
+        try:
+            self._visible_triggers.remove(name)
+        except KeyError as error:
+            raise self.NotShown(
+                'Unable to activate hidden trigger: ' + name
+            ) from error
+        callback()
+
+
+class Provider:
+
+    class NotBound(ValueError):
+        """A trigger was expected to be bound by a specific provider."""
+
+    # TODO[Python 3.10]: Change string to identifier.
+    # Annotations are stored as strings and evalated later in 3.10.
+    __Self = typing.TypeVar('__Self', bound='Provider')
+
+    def __init__(
+        self,
+        *args: typing.Any,
+        callback_map: dict[str, NullaryCallable],
+        registry: Registry,
+        **kwargs: typing.Any,
+    ) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self._bound_names = set[str]()
+        self._callback_map = callback_map
+        self._registry = registry
+
+    def __enter__(self: __Self) -> __Self:
+        self.bind()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_value: typing.Optional[BaseException],
+        traceback: typing.Optional[types.TracebackType],
+    ) -> typing.Optional[bool]:
+        del exc_type
+        del exc_value
+        del traceback
+        self.unbind()
+        return None
+
+    def bind(self) -> None:
+        try:
+            for name, callback in self._callback_map.items():
+                self._registry.bind(name=name, callback=callback)
+                self._bound_names.add(name)
+        except:
+            self.unbind()
+            raise
+
+    def unbind(self) -> None:
+        try:
+            unbound_names = set[str]()
+            for name in self._bound_names:
+                self._registry.unbind(name)
+                unbound_names.add(name)
+        finally:
+            self._bound_names.difference_update(unbound_names)
+
+    def is_bound(self) -> bool:
+        assert not self._bound_names or (
+            len(self._bound_names) == len(self._callback_map)
+        ), 'Provider callbacks are partially bound.'
+        return len(self._bound_names) == len(self._callback_map)
+
+    def show_all(self) -> None:
+        for name in self._bound_names:
+            self._registry.show(name)
+
+    def show(self, name: str) -> None:
+        if name not in self._bound_names:
+            raise self.NotBound(
+                'Unable to show trigger not bound by provider: ' + name
+            )
+        self._registry.show(name)
+
+    def hide(self, name: str) -> None:
+        if name not in self._bound_names:
+            raise self.NotBound(
+                'Unable to hide trigger not bound by provider: ' + name
+            )
+        self._registry.hide(name)

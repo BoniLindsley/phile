@@ -6,20 +6,20 @@ Test :mod:`phile.triggers`
 """
 
 # Standard library.
+import collections.abc
 import os
 import pathlib
 import tempfile
+import typing
 import unittest
 import unittest.mock
 
 # External dependencies.
 import portalocker  # type: ignore[import]
-import watchdog.events
 
 # Internal packages.
 import phile
 import phile.trigger
-import test_phile.threaded_mock
 
 
 def noop_nullary() -> None:
@@ -318,6 +318,321 @@ class TestEntryPoint(unittest.TestCase):
         self.assertTrue(self.trigger_path.is_file())
         self.entry_point.unbind()
         self.assertTrue(not self.trigger_path.exists())
+
+
+class TestRegistry(unittest.TestCase):
+    """Tests :func:`~phile.trigger.Registry`."""
+
+    def setUp(self) -> None:
+        self.registry = phile.trigger.Registry()
+
+    def test_available_exceptions(self) -> None:
+        with self.assertRaises(ValueError):
+            raise phile.trigger.Registry.AlreadyBound()
+        with self.assertRaises(ValueError):
+            raise phile.trigger.Registry.NotBound()
+        with self.assertRaises(ValueError):
+            raise phile.trigger.Registry.NotShown()
+
+    def test_event_handler_type(self) -> None:
+
+        def handler(
+            method: collections.abc.Callable[..., typing.Any],
+            registry: phile.trigger.Registry, name: str
+        ) -> None:
+            del method
+            del registry
+            del name
+
+        callback: phile.trigger.Registry.EventHandler = handler
+        callback(phile.trigger.Registry.bind, self.registry, 'quit')
+
+    def test_default_initialisable(self) -> None:
+        isinstance(self.registry.event_callback_map, list)
+
+    def test_bind_binds(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.assertTrue(not self.registry.is_bound(name))
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+
+    def test_binding_same_callback_twice_is_okay(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+
+    def test_double_bind_raises(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+        fail_callback = unittest.mock.Mock()
+        with self.assertRaises(phile.trigger.Registry.AlreadyBound):
+            self.registry.bind(name, fail_callback)
+
+    def test_unbind_after_bind(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+        self.registry.unbind(name)
+        self.assertTrue(not self.registry.is_bound(name))
+
+    def test_unbind_unbound_is_okay(self) -> None:
+        name = 'increase'
+        self.assertTrue(not self.registry.is_bound(name))
+        self.registry.unbind(name)
+
+    def test_show_shows(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(not self.registry.is_shown(name))
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_shown(name))
+
+    def test_double_show_is_fine(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_shown(name))
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_shown(name))
+
+    def test_show_unbound_raises(self) -> None:
+        name = 'increase'
+        self.assertTrue(not self.registry.is_bound(name))
+        with self.assertRaises(phile.trigger.Registry.NotBound):
+            self.registry.show(name)
+
+    def test_hide_after_show(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_shown(name))
+        self.registry.hide(name)
+        self.assertTrue(not self.registry.is_shown(name))
+
+    def test_hide_hidden_is_fine(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(not self.registry.is_shown(name))
+        self.registry.hide(name)
+        self.assertTrue(not self.registry.is_shown(name))
+
+    def test_hide_unbound_is_fine(self) -> None:
+        name = 'increase'
+        self.assertTrue(not self.registry.is_bound(name))
+        self.registry.hide(name)
+        self.assertTrue(not self.registry.is_shown(name))
+
+    def test_unbind_hides(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_bound(name))
+        self.assertTrue(self.registry.is_shown(name))
+        self.registry.unbind(name)
+        self.assertTrue(not self.registry.is_bound(name))
+        self.assertTrue(not self.registry.is_shown(name))
+
+    def test_activate_calls_bound_callback(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_bound(name))
+        self.assertTrue(self.registry.is_shown(name))
+        self.registry.activate(name)
+        callback.assert_called_once_with()
+
+    def test_activate_implicitly_hides(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.registry.show(name)
+        self.assertTrue(self.registry.is_bound(name))
+        self.assertTrue(self.registry.is_shown(name))
+        self.registry.activate(name)
+        self.assertTrue(not self.registry.is_shown(name))
+
+    def test_activate_raises_if_unbound(self) -> None:
+        name = 'increase'
+        self.assertTrue(not self.registry.is_bound(name))
+        with self.assertRaises(phile.trigger.Registry.NotBound):
+            self.registry.activate(name)
+
+    def test_activate_raises_if_hidden(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+        self.assertTrue(not self.registry.is_shown(name))
+        with self.assertRaises(phile.trigger.Registry.NotShown):
+            self.registry.activate(name)
+
+    def test_activate_if_shown_ignores_hidden(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertTrue(self.registry.is_bound(name))
+        self.assertTrue(not self.registry.is_shown(name))
+        self.registry.activate_if_shown(name)
+
+    def test_activate_if_shown_raises_if_unbound(self) -> None:
+        name = 'increase'
+        self.assertTrue(not self.registry.is_bound(name))
+        with self.assertRaises(phile.trigger.Registry.NotBound):
+            self.registry.activate_if_shown(name)
+
+    def test_event_callback_map_is_given_events(self) -> None:
+        event_callback = unittest.mock.Mock()
+        self.registry.event_callback_map.append(event_callback)
+        callback = unittest.mock.Mock()
+        name = 'increase'
+
+        self.registry.bind(name, callback)
+        event_callback.assert_called_once_with(
+            phile.trigger.Registry.bind, self.registry, name
+        )
+        event_callback.reset_mock()
+
+        self.registry.show(name)
+        event_callback.assert_called_once_with(
+            phile.trigger.Registry.show, self.registry, name
+        )
+        event_callback.reset_mock()
+
+        self.registry.activate(name)
+        event_callback.assert_called_once_with(
+            phile.trigger.Registry.activate, self.registry, name
+        )
+        event_callback.reset_mock()
+
+        self.registry.hide(name)
+        event_callback.assert_called_once_with(
+            phile.trigger.Registry.hide, self.registry, name
+        )
+        event_callback.reset_mock()
+
+        self.registry.unbind(name)
+        event_callback.assert_called_once_with(
+            phile.trigger.Registry.unbind, self.registry, name
+        )
+        event_callback.reset_mock()
+
+
+class TestProvider(unittest.TestCase):
+    """Tests :func:`~phile.trigger.Provider`."""
+
+    def setUp(self) -> None:
+        self.callback_map: dict[str, phile.trigger.NullaryCallable] = {
+            'open': unittest.mock.Mock(),
+            'close': unittest.mock.Mock(),
+        }
+        self.registry = phile.trigger.Registry()
+        self.provider = phile.trigger.Provider(
+            callback_map=self.callback_map, registry=self.registry
+        )
+
+    def test_available_exceptions(self) -> None:
+        with self.assertRaises(ValueError):
+            raise phile.trigger.Provider.NotBound()
+
+    def test_initialise_with_no_callbacks(self) -> None:
+        self.callback_map = {}
+        self.provider = phile.trigger.Provider(
+            callback_map=self.callback_map, registry=self.registry
+        )
+
+    def test_bind_binds(self) -> None:
+        self.assertTrue(not self.provider.is_bound())
+        self.provider.bind()
+        self.assertTrue(self.provider.is_bound())
+
+    def test_double_bind_to_same_callback_is_okay(self) -> None:
+        self.provider.bind()
+        self.assertTrue(self.provider.is_bound())
+        self.provider.bind()
+        self.assertTrue(self.provider.is_bound())
+
+    def test_bind_that_fails_unbinds_for_invariance(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'close'
+        self.registry.bind(name, callback)
+        with self.assertRaises(phile.trigger.Registry.AlreadyBound):
+            self.provider.bind()
+        self.assertTrue(not self.provider.is_bound())
+
+    def test_unbind_after_bind(self) -> None:
+        self.provider.bind()
+        self.assertTrue(self.provider.is_bound())
+        self.provider.unbind()
+        self.assertTrue(not self.provider.is_bound())
+
+    def test_unbind_unbound_is_okay(self) -> None:
+        self.assertTrue(not self.provider.is_bound())
+        self.provider.unbind()
+        self.assertTrue(not self.provider.is_bound())
+
+    def test_no_callback_means_always_bound(self) -> None:
+        self.test_initialise_with_no_callbacks()
+        self.assertTrue(self.provider.is_bound())
+
+    def test_no_callback_bind_is_okay(self) -> None:
+        self.test_initialise_with_no_callbacks()
+        self.assertTrue(self.provider.is_bound())
+        self.provider.bind()
+        self.assertTrue(self.provider.is_bound())
+
+    def test_context_manager_binds_and_unbinds(self) -> None:
+        with self.provider:
+            self.assertTrue(self.provider.is_bound())
+        self.assertTrue(not self.provider.is_bound())
+
+    def test_show_shows(self) -> None:
+        name = 'open'
+        self.provider.bind()
+        self.assertTrue(not self.registry.is_shown(name))
+        self.provider.show(name)
+        self.assertTrue(self.registry.is_shown(name))
+
+    def test_show_not_bound_by_provider_raises(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'clopen'
+        self.registry.bind(name, callback)
+        with self.assertRaises(phile.trigger.Provider.NotBound):
+            self.provider.show(name)
+
+    def test_hide_after_show(self) -> None:
+        name = 'open'
+        self.provider.bind()
+        self.provider.show(name)
+        self.assertTrue(self.registry.is_shown(name))
+        self.provider.hide(name)
+        self.assertTrue(not self.registry.is_shown(name))
+
+    def test_hide_not_bound_by_provider_raises(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'clopen'
+        self.registry.bind(name, callback)
+        self.registry.show(name)
+        with self.assertRaises(phile.trigger.Provider.NotBound):
+            self.provider.hide(name)
+
+    def test_show_all_shows(self) -> None:
+        self.provider.bind()
+        self.provider.show_all()
+        for name in self.callback_map:
+            self.assertTrue(self.registry.is_shown(name))
 
 
 if __name__ == '__main__':
