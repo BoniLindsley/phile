@@ -32,6 +32,13 @@ class TestCapabilities(unittest.TestCase):
         self.assertEqual(capabilities[int], 2)
 
 
+class UsesCapabilities(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.capabilities = phile.Capabilities()
+
+
 class TestConfiguration(unittest.TestCase):
     """Tests :class:`~phile.Configuration`."""
 
@@ -163,3 +170,15 @@ class TestConfiguration(unittest.TestCase):
             file_stream.write('1 2 3')
         self.configuration.load()
         self.assertFalse(self.configuration.data)
+
+
+class UsesConfiguration(UsesCapabilities, unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        user_state_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(user_state_directory.cleanup)
+        self.configuration = phile.Configuration(
+            user_state_directory=pathlib.Path(user_state_directory.name)
+        )
+        self.capabilities.set(self.configuration)

@@ -4,6 +4,7 @@
 .. automodule:: phile.asyncio
 .. automodule:: phile.data
 .. automodule:: phile.datetime
+.. automodule:: phile.hotkey
 .. automodule:: phile.imapclient
 .. automodule:: phile.notify
 .. automodule:: phile.os
