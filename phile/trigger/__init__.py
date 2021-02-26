@@ -2,6 +2,7 @@
 """
 .. automodule:: phile.trigger.cli
 .. automodule:: phile.trigger.tkinter
+.. automodule:: phile.trigger.watchdog
 
 --------------
 Phile triggers
@@ -22,7 +23,6 @@ import warnings
 
 # External dependencies.
 import portalocker  # type: ignore[import]
-import watchdog.events
 
 # Internal packages.
 import phile
@@ -349,7 +349,7 @@ class Registry:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.event_callback_map: list[Registry.EventHandler] = []
         self._callback_map: dict[str, NullaryCallable] = {}
-        self._visible_triggers = set[str]()
+        self.visible_triggers = set[str]()
         """Associates callbacks to each triggers."""
 
     @_dispatch_registry_event
@@ -361,7 +361,7 @@ class Registry:
     @_dispatch_registry_event
     def unbind(self, name: str) -> None:
         with contextlib.suppress(KeyError):
-            self._visible_triggers.remove(name)
+            self.visible_triggers.remove(name)
         with contextlib.suppress(KeyError):
             self._callback_map.pop(name)
 
@@ -374,15 +374,15 @@ class Registry:
             raise self.NotBound(
                 'Unable to show unbound trigger: ' + name
             )
-        self._visible_triggers.add(name)
+        self.visible_triggers.add(name)
 
     @_dispatch_registry_event
     def hide(self, name: str) -> None:
         with contextlib.suppress(KeyError):
-            self._visible_triggers.remove(name)
+            self.visible_triggers.remove(name)
 
     def is_shown(self, name: str) -> bool:
-        return name in self._visible_triggers
+        return name in self.visible_triggers
 
     def activate_if_shown(self, name: str) -> None:
         with contextlib.suppress(self.NotShown):
@@ -397,7 +397,7 @@ class Registry:
                 'Unable to activate unbound trigger: ' + name
             ) from error
         try:
-            self._visible_triggers.remove(name)
+            self.visible_triggers.remove(name)
         except KeyError as error:
             raise self.NotShown(
                 'Unable to activate hidden trigger: ' + name
