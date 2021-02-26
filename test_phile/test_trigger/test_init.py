@@ -20,6 +20,7 @@ import portalocker  # type: ignore[import]
 # Internal packages.
 import phile
 import phile.trigger
+from test_phile.test_init import UsesCapabilities
 
 
 def noop_nullary() -> None:
@@ -528,6 +529,32 @@ class TestRegistry(unittest.TestCase):
             phile.trigger.Registry.unbind, self.registry, name
         )
         event_callback.reset_mock()
+
+    def test_visible_trigger_is_updated_by_events(self) -> None:
+        callback = unittest.mock.Mock()
+        name = 'increase'
+        self.registry.bind(name, callback)
+        self.assertNotIn(name, self.registry.visible_triggers)
+        self.registry.show(name)
+        self.assertIn(name, self.registry.visible_triggers)
+        self.registry.hide(name)
+        self.assertNotIn(name, self.registry.visible_triggers)
+        self.registry.show(name)
+        self.assertIn(name, self.registry.visible_triggers)
+        self.registry.activate(name)
+        self.assertNotIn(name, self.registry.visible_triggers)
+        self.registry.show(name)
+        self.assertIn(name, self.registry.visible_triggers)
+        self.registry.unbind(name)
+        self.assertNotIn(name, self.registry.visible_triggers)
+
+
+class UsesRegistry(UsesCapabilities, unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.trigger_registry = registry = phile.trigger.Registry()
+        self.capabilities.set(registry)
 
 
 class TestProvider(unittest.TestCase):
