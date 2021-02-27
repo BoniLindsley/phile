@@ -30,6 +30,80 @@ import phile.watchdog
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
 
 
+class Producer:
+    """Update registry according to trigger file existence."""
+
+    # TODO[Python version 3.10]: Change string to identifier.
+    # Annotations are stored as strings and evalated later in 3.10.
+    __Self = typing.TypeVar('__Self', bound='Producer')
+
+    def __init__(
+        self, *args: typing.Any, capabilities: phile.Capabilities,
+        **kwargs: typing.Any
+    ) -> None:
+        # See: https://github.com/python/mypy/issues/4001
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        configuration = capabilities[phile.Configuration]
+        observer = capabilities[watchdog.observers.api.BaseObserver]
+        self._registry = capabilities[phile.trigger.Registry]
+        self._trigger_root = configuration.trigger_root
+        self._trigger_suffix = configuration.trigger_suffix
+        self._bound_names = set[str]()
+        self._scheduler = phile.watchdog.Scheduler(
+            path_filter=self._is_trigger_path,
+            path_handler=self._on_path_change,
+            watched_path=self._trigger_root,
+            watching_observer=observer,
+        )
+
+    def __enter__(self: __Self) -> __Self:
+        """Not reentrant."""
+        try:
+            self._scheduler.__enter__()
+            for trigger in sorted(
+                self._trigger_root.rglob('*' + self._trigger_suffix)
+            ):
+                self._on_path_change(trigger)
+        except:  # pragma: no cover  # Defensive.
+            self._scheduler.__exit__(None, None, None)
+            raise
+        return self
+
+    def __exit__(
+        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_value: typing.Optional[BaseException],
+        traceback: typing.Optional[types.TracebackType]
+    ) -> None:
+        for name in self._bound_names.copy():
+            self._unbind(name)
+        self._scheduler.__exit__(exc_type, exc_value, traceback)
+
+    def _on_path_change(self, path: pathlib.Path) -> None:
+        trigger_name = path.stem
+        bound_names = self._bound_names
+        if path.is_file():
+            if trigger_name not in bound_names:
+                self._registry.bind(
+                    trigger_name,
+                    functools.partial(path.unlink, missing_ok=True),
+                )
+                self._registry.show(trigger_name)
+                bound_names.add(trigger_name)
+        else:
+            self._unbind(trigger_name)
+
+    def _unbind(self, name: str) -> None:
+        try:
+            self._bound_names.remove(name)
+        except KeyError:
+            pass
+        else:
+            self._registry.unbind(name)
+
+    def _is_trigger_path(self, path: pathlib.Path) -> bool:
+        return path.suffix == self._trigger_suffix
+
+
 class View:
     """Show available triggers as files in a directory."""
 
