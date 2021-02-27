@@ -29,6 +29,130 @@ from test_phile.test_trigger.test_init import UsesRegistry
 from test_phile.test_watchdog.test_init import UsesObserver
 
 
+class TestProducer(
+    UsesRegistry, UsesObserver, UsesConfiguration, UsesCapabilities,
+    unittest.TestCase
+):
+    """Tests :func:`~phile.trigger.watchdog.Producer`."""
+
+    def setUp(self) -> None:
+        """Also tests constructor of View."""
+        super().setUp()
+        self.producer = phile.trigger.watchdog.Producer(
+            capabilities=self.capabilities
+        )
+        self.set_up_callback_in_registry()
+        self.set_up_trigger_file_monitoring()
+        self.trigger_name = 'nothing'
+        self.trigger_file_path = self.configuration.trigger_root / (
+            self.trigger_name + self.configuration.trigger_suffix
+        )
+
+    def set_up_callback_in_registry(self) -> None:
+        self.event_callback = test_phile.threaded_mock.ThreadedMock()
+        self.trigger_registry.event_callback_map.append(
+            self.event_callback
+        )
+        self.addCleanup(
+            self.trigger_registry.event_callback_map.remove,
+            self.event_callback,
+        )
+
+    def set_up_trigger_file_monitoring(self) -> None:
+        self.dispatch_mock = test_phile.threaded_mock.ThreadedMock()
+        self.configuration.trigger_root.mkdir(
+            parents=True, exist_ok=True
+        )
+        watchdog_watch = phile.watchdog.observers.add_handler(
+            observer=self.watchdog_observer,
+            event_handler=self.dispatch_mock,
+            path=self.configuration.trigger_root,
+        )
+        self.addCleanup(
+            phile.watchdog.observers.remove_handler,
+            observer=self.watchdog_observer,
+            event_handler=self.dispatch_mock,
+            watch=watchdog_watch,
+        )
+
+    def test_creating_file_binds_and_shows_trigger(self) -> None:
+        with self.producer:
+            self.assertTrue(not self.trigger_file_path.is_file())
+            self.trigger_file_path.touch()
+            self.event_callback.assert_called_with_soon(
+                phile.trigger.Registry.bind,
+                self.trigger_registry,
+                self.trigger_name,
+            )
+            self.event_callback.assert_called_with_soon(
+                phile.trigger.Registry.show,
+                self.trigger_registry,
+                self.trigger_name,
+            )
+
+    def test_deleting_file_unbinds_trigger(self) -> None:
+        self.trigger_file_path.touch()
+        with self.producer:
+            self.trigger_registry.is_bound(self.trigger_name)
+            self.trigger_file_path.unlink()
+            self.event_callback.assert_called_with_soon(
+                phile.trigger.Registry.unbind,
+                self.trigger_registry,
+                self.trigger_name,
+            )
+
+    def test_double_delete_should_be_ignored(self) -> None:
+        # This can happen if a file is created and deleted
+        # before the trigger list is updated.
+        # In this case, the producer is sent two file update requests.
+        # Both detects as deletion, and unbind occurs twice.
+        # There are no reliable way to force this to happen,
+        # so implementation detail is used to mimic it.
+        with self.producer:
+            # Not bound. Unbind to mimic a double unbind.
+            self.producer._on_path_change(self.trigger_file_path)
+
+    def test_activate_trigger_deletes_file(self) -> None:
+        self.trigger_file_path.touch()
+        with self.producer:
+            self.trigger_registry.is_shown(self.trigger_name)
+            self.trigger_registry.activate(self.trigger_name)
+            self.dispatch_mock.dispatch.assert_called_with_soon(
+                watchdog.events.FileDeletedEvent(
+                    str(self.trigger_file_path)
+                )
+            )
+
+    def test_context_binds_and_unbinds_existing_file(self) -> None:
+        trigger_one = 'one'
+        trigger_two = 'two'
+        trigger_path_one = self.configuration.trigger_root / (
+            trigger_one + self.configuration.trigger_suffix
+        )
+        trigger_path_two = self.configuration.trigger_root / (
+            trigger_two + self.configuration.trigger_suffix
+        )
+        self.assertTrue(not trigger_path_one.is_file())
+        self.assertTrue(not trigger_path_two.is_file())
+        trigger_path_one.touch()
+        trigger_path_two.touch()
+        self.dispatch_mock.dispatch.assert_called_with_soon(
+            watchdog.events.FileCreatedEvent(str(trigger_path_one))
+        )
+        self.dispatch_mock.dispatch.assert_called_with_soon(
+            watchdog.events.FileCreatedEvent(str(trigger_path_two))
+        )
+        self.assertTrue(trigger_path_one.is_file())
+        self.assertTrue(trigger_path_two.is_file())
+        self.assertTrue(not self.trigger_registry.is_bound(trigger_one))
+        self.assertTrue(not self.trigger_registry.is_bound(trigger_two))
+        with self.producer:
+            self.assertTrue(self.trigger_registry.is_bound(trigger_one))
+            self.assertTrue(self.trigger_registry.is_bound(trigger_two))
+        self.assertTrue(not self.trigger_registry.is_bound(trigger_one))
+        self.assertTrue(not self.trigger_registry.is_bound(trigger_two))
+
+
 class TestView(
     UsesRegistry, UsesObserver, UsesConfiguration, UsesCapabilities,
     unittest.TestCase
