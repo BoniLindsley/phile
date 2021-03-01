@@ -133,10 +133,10 @@ async def async_main(argv: list[str]) -> int:  # pragma: no cover
     capabilities = phile.Capabilities()
     capabilities.set(phile.Configuration())
     capabilities.set(phile.trigger.Registry())
-    async with phile.watchdog.observers.async_open() as observer:
-        capabilities[watchdog.observers.api.BaseObserver] = observer
-        with phile.trigger.watchdog.Producer(capabilities=capabilities):
-            await run(capabilities=capabilities)
+    with phile.watchdog.observers.open() as (
+        capabilities[watchdog.observers.api.BaseObserver]
+    ), phile.trigger.watchdog.Producer(capabilities=capabilities):
+        await run(capabilities=capabilities)
     return 0
 
 

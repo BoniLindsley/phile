@@ -61,7 +61,7 @@ class Producer:
         try:
             self._scheduler.__enter__()
             for trigger in sorted(
-                self._trigger_root.rglob('*' + self._trigger_suffix)
+                self._trigger_root.glob('*' + self._trigger_suffix)
             ):
                 self._on_path_change(trigger)
         except:  # pragma: no cover  # Defensive.
