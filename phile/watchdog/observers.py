@@ -6,6 +6,7 @@ Convenience module for using :attr:`~watchdog.observers.Observer`
 """
 
 # Standard library.
+import asyncio
 import collections.abc
 import contextlib
 import pathlib
@@ -70,13 +71,11 @@ def was_stop_called(
 
 
 @contextlib.contextmanager
-def open(
-    *args: typing.Any,
-    opener: type[watchdog.observers.api.BaseObserver
-                 ] = watchdog.observers.Observer,
-    **kwargs: typing.Any,
+def open(  # pylint: disable=redefined-builtin
+    opener: typing.Callable[[], watchdog.observers.api.
+                            BaseObserver] = watchdog.observers.Observer,
 ) -> collections.abc.Iterator[watchdog.observers.api.BaseObserver]:
-    observer = opener(*args, **kwargs)
+    observer = opener()
     try:
         observer.start()
         yield observer
@@ -86,17 +85,16 @@ def open(
 
 @contextlib.asynccontextmanager
 async def async_open(
-    *args: typing.Any,
-    opener: type[watchdog.observers.api.BaseObserver
-                 ] = watchdog.observers.Observer,
-    **kwargs: typing.Any,
+    opener: typing.Callable[[], watchdog.observers.api.
+                            BaseObserver] = watchdog.observers.Observer,
 ) -> collections.abc.AsyncIterator[watchdog.observers.api.BaseObserver]:
-    observer = opener(*args, **kwargs)
+    loop = asyncio.get_running_loop()
+    observer = opener()
     try:
-        observer.start()
+        await loop.run_in_executor(None, observer.start)
         yield observer
     finally:
-        observer.stop()
+        await loop.run_in_executor(None, observer.stop)
 
 
 def has_handlers(
