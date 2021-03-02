@@ -10,7 +10,6 @@ import asyncio
 import collections.abc
 import contextlib
 import pathlib
-import threading
 import typing
 
 # External dependencies.
@@ -110,7 +109,9 @@ def has_handlers(
        as it uses underscore variables.
     """
     try:
-        return bool(observer._handlers[watch])
+        return bool(
+            observer._handlers[watch]  # pylint: disable=protected-access
+        )
     except KeyError:
         return False
 
@@ -162,7 +163,7 @@ def remove_handler(
     event_handler: watchdog.events.FileSystemEventHandler,
     watch: watchdog.observers.api.ObservedWatch,
 ) -> None:
-    """
+    """  # pylint: disable=line-too-long
     Stop notifying ``event_handler`` of changes in ``watch``.
 
     It merges
@@ -197,6 +198,7 @@ def remove_handler(
        it stops the monitoring if there are no more handlers registered
        for the given ``watch```, bridging functionality gaps.
     """
+    # pylint: disable=protected-access
 
     with observer._lock:
         handlers = observer._handlers.get(watch)
