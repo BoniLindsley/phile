@@ -37,6 +37,7 @@ async def wait_for(
 async def open_task(
     awaitable: collections.abc.Awaitable[_T_co],
     *args: typing.Any,
+    suppress_cancelled_error_if_not_done: bool = False,
     **kwargs: typing.Any,
 ) -> collections.abc.AsyncIterator[asyncio.Task[typing.Any]]:
     if isinstance(awaitable, asyncio.Task):
@@ -49,6 +50,11 @@ async def open_task(
         yield task
     finally:
         task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            if not suppress_cancelled_error_if_not_done:
+                raise
 
 
 async def close_subprocess(

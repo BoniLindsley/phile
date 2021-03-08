@@ -22,6 +22,7 @@ import watchdog.observers
 
 # Internal packages.
 import phile
+import phile.asyncio
 import phile.tray.publishers.battery
 import phile.tray.publishers.cpu
 import phile.tray.publishers.datetime
@@ -241,26 +242,6 @@ class CleanUps(phile.trigger.Provider):
 _T_co = typing.TypeVar('_T_co', covariant=True)
 
 
-# TODO[python/mypy#9922]: Use `asyncio.Task[_T_co]` in return value.
-@contextlib.asynccontextmanager
-async def open_task(
-    awaitable: collections.abc.Awaitable[_T_co],
-    *args: typing.Any,
-    **kwargs: typing.Any,
-) -> collections.abc.AsyncIterator[asyncio.Task[typing.Any]]:
-    if isinstance(awaitable, asyncio.Task):
-        task = awaitable
-        assert not args
-        assert not kwargs
-    else:
-        task = asyncio.create_task(awaitable, *args, **kwargs)
-    try:
-        yield task
-    finally:
-        task.cancel()
-        await task
-
-
 async def open_prompt(capabilities: phile.Capabilities) -> None:
     # TODO[mypy issue #4717]: Remove `ignore[misc]`.
     # Cannot use abstract class.
@@ -316,10 +297,10 @@ async def async_main(capabilities: phile.Capabilities) -> int:
             )
             capabilities[phile.tmux.control_mode.Client] = control_mode
             await stack.enter_async_context(
-                open_task(control_mode.run())
+                phile.asyncio.open_task(control_mode.run())
             )
         await stack.enter_async_context(
-            open_task(run(capabilities=capabilities))
+            phile.asyncio.open_task(run(capabilities=capabilities))
         )
         quit_event = asyncio.Event()
         stack.enter_context(
