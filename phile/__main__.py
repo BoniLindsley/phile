@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 
 # Standard library.
+import argparse
 import asyncio
+import collections.abc
 import contextlib
 import dataclasses
 import functools
+import importlib.util
 import os
-import pathlib
+import platform
+import subprocess
 import sys
+import threading
 import types
 import typing
 
@@ -27,8 +32,10 @@ import phile.tray.publishers.notify_monitor
 import phile.tray.publishers.update
 import phile.tray.tmux
 import phile.trigger
+import phile.trigger.cli
 import phile.watchdog
 
+NullaryCallable = typing.Callable[[], typing.Any]
 Launcher = typing.Callable[[phile.Capabilities], typing.Coroutine]
 LauncherEntry = tuple[Launcher, set[type]]
 
@@ -125,127 +132,318 @@ class TaskRegistry:
         self.running_tasks.pop(task.get_name())
 
 
-class TriggerEntryPoint(phile.trigger.EntryPoint):
+class TriggerProvider(phile.trigger.Provider):
     """Provides triggers to start and stop tasks."""
 
+    __Self = typing.TypeVar('__Self', bound='TriggerProvider')
+
     def __init__(
-        self, *args: typing.Any, capabilities: phile.Capabilities,
-        **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        capabilities: phile.Capabilities,
+        **kwargs: typing.Any,
     ) -> None:
-        super().__init__(
-            *args,
-            configuration=capabilities[phile.Configuration],
-            **kwargs
-        )
-        self.task_registry = TaskRegistry(capabilities=capabilities)
+        self._capabilities = capabilities
         self.start_prefix = 'start-task_'
         self.stop_prefix = 'stop-task_'
+        self.task_registry = TaskRegistry(capabilities=capabilities)
+        callbacks = self.get_triggers()
+        trigger_registry = capabilities[phile.trigger.Registry]
+        super().__init__(
+            *args,
+            callback_map=callbacks,
+            registry=trigger_registry,
+            **kwargs,
+        )
 
-    def __enter__(self) -> 'TriggerEntryPoint':
+    def __enter__(self: __Self) -> __Self:
         super().__enter__()
+        for task_name in self.task_registry.usable_launcher_names:
+            self.create_task(task_name)
         return self
 
-    def add_all_triggers(self) -> None:
+    def get_triggers(self) -> dict[str, NullaryCallable]:
+        callbacks: dict[str, NullaryCallable] = {}
         usable_launchers = {
             name: launcher
             for (name, launcher) in self.task_registry.launchers.items()
             if name in self.task_registry.usable_launcher_names
         }
+        # TODO[mypy issue #4717]: Remove `ignore[misc]`.
+        # Cannot use abstract class.
+        loop = self._capabilities[
+            asyncio.events.AbstractEventLoop  # type: ignore[misc]
+        ]
         for task_name in usable_launchers:
-            self.callback_map[self.start_prefix + task_name] = (
-                functools.partial(self.create_task, task_name)
+            callbacks[self.start_prefix + task_name] = functools.partial(
+                loop.call_soon_threadsafe,
+                self.create_task,
+                task_name,
             )
-            self.callback_map[self.stop_prefix + task_name] = (
-                functools.partial(
-                    self.task_registry.cancel_task, task_name
-                )
+            callbacks[self.stop_prefix + task_name] = functools.partial(
+                self.task_registry.cancel_task, task_name
             )
-            self.add_trigger(self.start_prefix + task_name)
+        return callbacks
 
     def create_task(self, task_name: str) -> asyncio.Task[typing.Any]:
-        self.remove_trigger(self.start_prefix + task_name)
-        self.add_trigger(self.stop_prefix + task_name)
+        self.hide(self.start_prefix + task_name)
+        self.show(self.stop_prefix + task_name)
         task = self.task_registry.create_task(name=task_name)
         task.add_done_callback(self.on_task_done)
         return task
 
     def on_task_done(self, task: asyncio.Task[typing.Any]) -> None:
         task_name = task.get_name()
-        with contextlib.suppress(ResourceWarning):
-            self.remove_trigger(self.stop_prefix + task_name)
-            self.add_trigger(self.start_prefix + task_name)
+        with contextlib.suppress(
+            ResourceWarning, phile.trigger.Provider.NotBound
+        ):
+            self.hide(self.stop_prefix + task_name)
+            self.show(self.start_prefix + task_name)
 
 
-async def run(capabilities: phile.Capabilities) -> None:
-    loop = asyncio.get_running_loop()
-    with TriggerEntryPoint(
-        capabilities=capabilities,
-        trigger_directory=pathlib.Path('phile')
-    ) as entry_point, phile.watchdog.Scheduler(
-        watched_path=entry_point.trigger_directory,
-        watching_observer=capabilities[
-            watchdog.observers.api.BaseObserver],
-        path_filter=entry_point.check_path,
-        path_handler=functools.partial(
-            loop.call_soon_threadsafe, entry_point.activate_trigger
+class CleanUps(phile.trigger.Provider):
+
+    __Self = typing.TypeVar('__Self', bound='CleanUps')
+
+    def __init__(
+        self, *args: typing.Any, capabilities: phile.Capabilities,
+        **kwargs: typing.Any
+    ) -> None:
+        self.callbacks = set[NullaryCallable]()
+        registry = capabilities[phile.trigger.Registry]
+        super().__init__(
+            *args,
+            callback_map={'quit': self.run},
+            registry=registry,
+            **kwargs
         )
-    ):
-        entry_point.add_all_triggers()
-        for task_name in entry_point.task_registry.usable_launcher_names:
-            entry_point.create_task(task_name)
-        while True:
-            await asyncio.sleep(3600)
+
+    def __enter__(self: __Self) -> __Self:
+        super().__enter__()
+        self.show_all()
+        return self
+
+    def run(self) -> None:
+        for callback in self.callbacks.copy():
+            callback()
+
+    @contextlib.contextmanager
+    def open(
+        self, callback: NullaryCallable
+    ) -> collections.abc.Iterator[None]:
+        try:
+            self.callbacks.add(callback)
+            yield
+        finally:
+            self.callbacks.discard(callback)
 
 
-async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
-    capabilities = phile.Capabilities()
-    capabilities.set(phile.Configuration())
-    capabilities[keyring.backend.KeyringBackend] = (
-        keyring.get_keyring()  # type: ignore[no-untyped-call]
+_T_co = typing.TypeVar('_T_co', covariant=True)
+
+
+# TODO[python/mypy#9922]: Use `asyncio.Task[_T_co]` in return value.
+@contextlib.asynccontextmanager
+async def open_task(
+    awaitable: collections.abc.Awaitable[_T_co],
+    *args: typing.Any,
+    **kwargs: typing.Any,
+) -> collections.abc.AsyncIterator[asyncio.Task[typing.Any]]:
+    if isinstance(awaitable, asyncio.Task):
+        task = awaitable
+        assert not args
+        assert not kwargs
+    else:
+        task = asyncio.create_task(awaitable, *args, **kwargs)
+    try:
+        yield task
+    finally:
+        task.cancel()
+        await task
+
+
+async def open_prompt(capabilities: phile.Capabilities) -> None:
+    # TODO[mypy issue #4717]: Remove `ignore[misc]`.
+    # Cannot use abstract class.
+    loop = capabilities[asyncio.AbstractEventLoop]  # type: ignore[misc]
+    prompt = phile.trigger.cli.Prompt(capabilities=capabilities)
+    reader = asyncio.StreamReader()
+    await loop.connect_read_pipe(
+        functools.partial(asyncio.StreamReaderProtocol, reader),
+        prompt.stdin
     )
-    async with contextlib.AsyncExitStack() as stack:
-        capabilities[watchdog.observers.api.BaseObserver] = (
-            await stack.enter_async_context(
-                phile.watchdog.observers.async_open()
+    writer = asyncio.StreamWriter(
+        *(
+            await loop.connect_write_pipe(
+                asyncio.streams.FlowControlMixin, prompt.stdout
             )
-        )
-        busy_tasks = list[asyncio.Task[typing.Any]]()
-        if 'TMUX' in os.environ:
-            capabilities[
-                phile.tmux.control_mode.Client] = control_mode = (
-                    await stack.enter_async_context(
-                        phile.tmux.control_mode.open(
-                            control_mode_arguments=(
-                                phile.tmux.control_mode.Arguments()
-                            )
-                        )
-                    )
-                )
-            control_mode_task = await stack.enter_async_context(
-                phile.asyncio.open_task(control_mode.run())
-            )
-            busy_tasks.append(control_mode_task)
-        run_task = await stack.enter_async_context(
-            phile.asyncio.open_task(run(capabilities=capabilities))
-        )
-        busy_tasks.append(run_task)
-        stdin_task = await stack.enter_async_context(
-            phile.asyncio.open_task(
-                phile.tray.tmux.read_byte(sys.stdin)
-            )
-        )
-        busy_tasks.append(stdin_task)
-        done, pending = await asyncio.wait(
-            busy_tasks,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        ), reader, loop
+    )
+    if prompt.intro:
+        writer.write(prompt.intro)
+    is_stopping = False
+    while not is_stopping:
+        writer.write(prompt.prompt.encode())
+        next_command = await reader.readline()
+        is_stopping = prompt.onecmd(next_command.decode())
+
+
+async def run(capabilities: phile.Capabilities) -> int:
+    with TriggerProvider(capabilities=capabilities):
+        await open_prompt(capabilities=capabilities)
     return 0
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
-    with contextlib.suppress(KeyboardInterrupt):
-        return asyncio.run(async_main(argv))
-    return 1
+async def async_main(capabilities: phile.Capabilities) -> int:
+    clean_ups = capabilities[CleanUps]
+    loop = asyncio.get_running_loop()
+    AbstractEventLoop = (  # pylint: disable=invalid-name
+            asyncio.events.AbstractEventLoop
+    )
+    # TODO[mypy issue #4717]: Remove `ignore[misc]`.
+    # Cannot use abstract class.
+    capabilities[AbstractEventLoop] = loop  # type: ignore[misc]
+
+    async with contextlib.AsyncExitStack() as stack:
+        stack.enter_context(contextlib.suppress(asyncio.CancelledError))
+
+        if 'TMUX' in os.environ:
+            control_mode = await stack.enter_async_context(
+                phile.tmux.control_mode.open(
+                    control_mode_arguments=(
+                        phile.tmux.control_mode.Arguments()
+                    )
+                )
+            )
+            capabilities[phile.tmux.control_mode.Client] = control_mode
+            await stack.enter_async_context(
+                open_task(control_mode.run())
+            )
+        await stack.enter_async_context(
+            open_task(run(capabilities=capabilities))
+        )
+        quit_event = asyncio.Event()
+        stack.enter_context(
+            clean_ups.open(
+                functools.partial(
+                    loop.call_soon_threadsafe, quit_event.set
+                )
+            )
+        )
+        await quit_event.wait()
+    del capabilities[AbstractEventLoop]
+    return 0
+
+
+def is_gui_available() -> bool:
+    if platform.system() == 'Windows':
+        return True
+    try:
+        subprocess.run(
+            ['xset', 'q'],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return False
+    return True
+
+
+def is_pyside2_available() -> bool:
+    return importlib.util.find_spec('PySide2') is not None
+
+
+def import_pyside2_qtwidgets() -> None:
+    # pylint: disable=import-outside-toplevel
+    # pylint: disable=invalid-name
+    # pylint: disable=redefined-outer-name
+    # pylint: disable=unused-import
+    global PySide2
+    global phile
+    import PySide2.QtWidgets
+    import phile.PySide2
+
+
+def create_and_exec_qapplication(
+    capabilities: phile.Capabilities
+) -> None:
+    clean_ups = capabilities[CleanUps]
+    import_pyside2_qtwidgets()
+    qt_app = (
+        # pylint: disable=undefined-variable
+        PySide2.QtWidgets.QApplication()  # type: ignore[name-defined]
+    )
+    capabilities.set(qt_app)
+    with clean_ups.open(
+        functools.partial(
+            phile.PySide2.call_soon_threadsafe, qt_app.quit
+        )
+    ):
+        qt_app.exec_()
+    del capabilities[
+        # pylint: disable=undefined-variable
+        PySide2.QtWidgets.QApplication  # type: ignore[name-defined]
+    ]
+    del qt_app
+
+
+def main(
+    argv: typing.Optional[list[str]] = None
+) -> int:  # pragma: no cover
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(contextlib.suppress(KeyboardInterrupt))
+
+        if argv is None:
+            argv = sys.argv
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            '--gui', action=argparse.BooleanOptionalAction
+        )
+        args = parser.parse_args(argv[1:])
+
+        capabilities = phile.Capabilities()
+        capabilities.set(phile.Configuration())
+
+        registry = phile.trigger.Registry()
+        capabilities.set(registry)
+
+        capabilities.set(
+            stack.enter_context(CleanUps(capabilities=capabilities))
+        )
+
+        BaseObserver = watchdog.observers.api.BaseObserver
+        capabilities[BaseObserver] = (
+            stack.enter_context(phile.watchdog.observers.open())
+        )
+        stack.enter_context(
+            phile.trigger.watchdog.View(capabilities=capabilities)
+        )
+        KeyringBackend = keyring.backend.KeyringBackend
+        # TODO[mypy issue #4717]: Remove `ignore[misc]`.
+        # Cannot use abstract class.
+        capabilities[KeyringBackend] = (  # type: ignore[misc]
+            # Don't reformat -- causes linebreak at [ ].
+            keyring.get_keyring()
+        )
+
+        if args.gui or (
+            args.gui is None and is_gui_available()
+            and is_pyside2_available()
+        ):
+            non_gui_loop_thread = threading.Thread(
+                target=functools.
+                partial(asyncio.run, async_main(capabilities))
+            )
+            non_gui_loop_thread.start()
+
+            create_and_exec_qapplication(capabilities)
+
+            registry.activate_if_shown('quit')
+            non_gui_loop_thread.join()
+        else:
+            asyncio.run(async_main(capabilities))
+    return 0
 
 
 if __name__ == '__main__':  # pragma: no cover

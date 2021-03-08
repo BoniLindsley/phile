@@ -31,6 +31,9 @@ import appdirs  # type: ignore[import]
 _T_co = typing.TypeVar('_T_co')
 
 
+# TODO[mypy issue #4717]: Remove `ignore[misc]` from uses of this class.
+# The `type` type hint does not accept abstract types.
+# So an ignore is necessary on all uses with abstract types.
 class Capabilities(dict[type, typing.Any]):
 
     def __getitem__(self, capability: type[_T_co]) -> _T_co:
