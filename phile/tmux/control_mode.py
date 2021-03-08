@@ -201,9 +201,11 @@ class Client:
             # TODO[python/mypy#9922]: Remove type declaration.
             command_task: asyncio.Task[str]
             async with phile.asyncio.open_task(
-                self.protocol.drop_lines_not_starting_with('%exit')
+                self.protocol.drop_lines_not_starting_with('%exit'),
+                suppress_cancelled_error_if_not_done=True,
             ) as exit_task, phile.asyncio.open_task(
-                self._commands.get()
+                self._commands.get(),
+                suppress_cancelled_error_if_not_done=True,
             ) as command_task:
                 done, pending = await asyncio.wait(
                     (exit_task, command_task),
@@ -225,11 +227,14 @@ class Client:
 
     async def run(self) -> None:
         async with phile.asyncio.open_task(
-            self.run_message_loop()
+            self.run_message_loop(),
+            suppress_cancelled_error_if_not_done=True,
         ) as message_task, phile.asyncio.open_task(
-            self.protocol.at_eof.wait()
+            self.protocol.at_eof.wait(),
+            suppress_cancelled_error_if_not_done=True,
         ) as eof_task, phile.asyncio.open_task(
-            self.subprocess.wait()
+            self.subprocess.wait(),
+            suppress_cancelled_error_if_not_done=True,
         ) as terminate_task:
             await asyncio.wait(
                 (message_task, eof_task, terminate_task),
