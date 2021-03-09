@@ -19,7 +19,7 @@ import watchdog.observers
 
 # Internal packages.
 import phile
-import phile.PySide2
+import phile.PySide2.QtCore
 import phile.PySide2.QtGui
 import phile.PySide2.QtWidgets
 import phile.tray
@@ -219,21 +219,21 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(not gui_icon_list.is_hidden())
         # Respond to a hide trigger.
         trigger_path = trigger_directory / ('hide' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(gui_icon_list.is_hidden())
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(
                 not gui_icon_list._trigger_scheduler.is_scheduled
             )
@@ -334,7 +334,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_with_soon(tray_file.path)
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         children = gui_icon_list.tray_children()
         self.assertEqual(len(children), 1)
         self.assertEqual(children[0].icon().name(), tray_file.icon_name)
@@ -366,7 +366,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_with_soon(tray_file.path)
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertListEqual(
             [
                 child.icon().name()
@@ -397,7 +397,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
 
     @unittest.mock.patch(
@@ -431,7 +431,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         children = gui_icon_list.tray_children()
         self.assertEqual(len(children), 1)
         self.assertEqual(children[0].icon().name(), tray_file.icon_name)
@@ -462,7 +462,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 1)
         self.assertListEqual(
             gui_icon_list._tray_sorter.tracked_data, [new_tray_file]
@@ -498,7 +498,7 @@ class TestGuiIconList(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertEqual(len(gui_icon_list.tray_children()), 0)
 
 

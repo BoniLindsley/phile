@@ -343,7 +343,7 @@ def import_pyside2_qtwidgets() -> None:
     global PySide2
     global phile
     import PySide2.QtWidgets
-    import phile.PySide2
+    import phile.PySide2.QtCore
 
 
 def create_and_exec_qapplication(
@@ -358,7 +358,7 @@ def create_and_exec_qapplication(
     capabilities.set(qt_app)
     with clean_ups.open(
         functools.partial(
-            phile.PySide2.call_soon_threadsafe, qt_app.quit
+            phile.PySide2.QtCore.call_soon_threadsafe, qt_app.quit
         )
     ):
         qt_app.exec_()

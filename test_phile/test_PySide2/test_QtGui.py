@@ -13,7 +13,7 @@ import PySide2.QtGui
 
 # Internal packages.
 import phile.PySide2.QtGui
-from .test_init import UsesPySide2
+from .test_QtCore import UsesPySide2
 
 
 class UsesQGuiApplication(UsesPySide2, unittest.TestCase):
@@ -23,8 +23,10 @@ class UsesQGuiApplication(UsesPySide2, unittest.TestCase):
         super().setUp()
         application = PySide2.QtGui.QGuiApplication()
         self.addCleanup(application.shutdown)
-        self.addCleanup(phile.PySide2.process_deferred_delete_events)
-        self.addCleanup(phile.PySide2.process_events)
+        self.addCleanup(
+            phile.PySide2.QtCore.process_deferred_delete_events,
+        )
+        self.addCleanup(phile.PySide2.QtCore.process_events)
 
 
 class TestQIconFromSpecifiedTheme(
