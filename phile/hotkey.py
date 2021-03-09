@@ -6,18 +6,12 @@ Global GUI hotkey handling
 """
 
 # Standard libraries.
-import asyncio
 import collections.abc
 import contextlib
-import functools
-import pathlib
 import sys
-import threading
-import types
 import typing
 
 # External dependencies.
-import portalocker  # type: ignore[import]
 import pynput  # type: ignore[import]
 
 # Internal modules.
@@ -34,16 +28,7 @@ ButtonCallback = collections.abc.Callable[[typing.Optional[Button]],
                                           typing.Any]
 
 
-class AsyncKeyboardListener(
-    phile.asyncio.Thread,
-    pynput.keyboard.Listener,  # type: ignore[misc]
-):
-    pass
-
-
-async def run(
-    capabilities: phile.Capabilities
-) -> int:  # pragma: no cover
+def run(capabilities: phile.Capabilities) -> int:  # pragma: no cover
     configuration = capabilities[phile.Configuration]
     trigger_registry = capabilities[phile.trigger.Registry]
 
@@ -55,13 +40,14 @@ async def run(
         for keys, trigger in keymap_source.items()
     }
     state: list[Button] = []
-    listener: AsyncKeyboardListener
+    listener: pynput.keyboard.Listener
 
     def on_press(button: typing.Optional[Button]) -> None:
         if button is None:
             return
         button = listener.canonical(button)
         state.append(button)
+        print(state, button)
         trigger = keymap.get(tuple(state))
         if trigger is not None:
             trigger_registry.activate_if_shown(trigger)
@@ -74,32 +60,18 @@ async def run(
             state.remove(button)
 
     def stop() -> None:
-        raise AsyncKeyboardListener.StopException()
+        raise pynput.keyboard.Listener.StopException()
 
     with phile.trigger.Provider(
         callback_map={_loader_name + '.stop': stop},
         registry=trigger_registry,
-        show_all=True,
-    ), AsyncKeyboardListener(
+    ) as provider, pynput.keyboard.Listener(
         capabilities=capabilities,
         on_press=on_press,
         on_release=on_release,
     ) as listener:
-        await listener.async_join()
-    return 0
-
-
-async def async_main(argv: list[str]) -> int:  # pragma: no cover
-    del argv
-    capabilities = phile.Capabilities()
-    capabilities.set(phile.Configuration())
-    trigger_registry = phile.trigger.Registry()
-    capabilities.set(trigger_registry)
-    trigger_registry.event_callback_map.append(
-        lambda method, _registry, trigger_name:
-        print(trigger_name, method.__name__)
-    )
-    await run(capabilities=capabilities)
+        provider.show_all()
+        listener.join()
     return 0
 
 
@@ -109,7 +81,15 @@ def main(
     if argv is None:
         argv = sys.argv
     with contextlib.suppress(KeyboardInterrupt):
-        return asyncio.run(async_main(argv))
+        capabilities = phile.Capabilities()
+        capabilities.set(phile.Configuration())
+        trigger_registry = phile.trigger.Registry()
+        capabilities.set(trigger_registry)
+        trigger_registry.event_callback_map.append(
+            lambda method, _registry, trigger_name:
+            print(trigger_name, method.__name__)
+        )
+        return run(capabilities=capabilities)
     return 1
 
 
