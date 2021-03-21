@@ -11,6 +11,7 @@ setup(
     packages=[
         'phile',
         'phile.data',
+        'phile.hotkey',
         'phile.notify',
         'phile.PySide2',
         'phile.tmux',
