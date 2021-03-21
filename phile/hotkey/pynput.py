@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
---------------------------
-Global GUI hotkey handling
---------------------------
+----------------------
+Global hotkey handling
+----------------------
 """
 
 # Standard libraries.
@@ -32,12 +32,15 @@ def run(capabilities: phile.Capabilities) -> int:  # pragma: no cover
     configuration = capabilities[phile.Configuration]
     trigger_registry = capabilities[phile.trigger.Registry]
 
-    keymap_source = configuration.data.get('hotkey')
-    if keymap_source is None:
+    hotkey_map: typing.Optional[dict[str, typing.Any]] = None
+    hotkey_config = configuration.data.get('hotkey')
+    if hotkey_config is not None:
+        hotkey_map = hotkey_config.get('global map')
+    if hotkey_map is None:
         return 1
     keymap: dict[tuple[Button, ...], str] = {
         tuple(pynput.keyboard.HotKey.parse(keys)): trigger
-        for keys, trigger in keymap_source.items()
+        for keys, trigger in hotkey_map.items()
     }
     state: list[Button] = []
     listener: pynput.keyboard.Listener
@@ -50,7 +53,8 @@ def run(capabilities: phile.Capabilities) -> int:  # pragma: no cover
         print(state, button)
         trigger = keymap.get(tuple(state))
         if trigger is not None:
-            trigger_registry.activate_if_shown(trigger)
+            with contextlib.suppress(phile.trigger.Registry.NotBound):
+                trigger_registry.activate_if_shown(trigger)
 
     def on_release(button: typing.Optional[Button]) -> None:
         if button is None:
