@@ -3,16 +3,11 @@
 # Standard library.
 import argparse
 import asyncio
-import collections.abc
 import contextlib
 import dataclasses
 import functools
-import importlib.util
 import os
-import platform
-import subprocess
 import sys
-import threading
 import types
 import typing
 
@@ -23,6 +18,10 @@ import watchdog.observers
 # Internal packages.
 import phile
 import phile.asyncio
+import phile.capability
+import phile.capability.asyncio
+import phile.capability.pyside2
+import phile.capability.tmux
 import phile.tray.publishers.battery
 import phile.tray.publishers.cpu
 import phile.tray.publishers.datetime
@@ -41,13 +40,13 @@ Launcher = typing.Callable[[phile.Capabilities], typing.Coroutine]
 LauncherEntry = tuple[Launcher, set[type]]
 
 default_launchers: typing.Dict[str, LauncherEntry] = {
-    'imap-idle': (
-        phile.tray.publishers.imap_idle.run,
-        {
-            phile.Configuration,
-            keyring.backend.KeyringBackend,
-        },
-    ),
+    #'imap-idle': (
+    #    phile.tray.publishers.imap_idle.run,
+    #    {
+    #        phile.Configuration,
+    #        keyring.backend.KeyringBackend,
+    #    },
+    #),
     'tray-battery':
         (phile.tray.publishers.battery.run, {
             phile.Configuration,
@@ -202,46 +201,6 @@ class TriggerProvider(phile.trigger.Provider):
             self.show(self.start_prefix + task_name)
 
 
-class CleanUps(phile.trigger.Provider):
-
-    __Self = typing.TypeVar('__Self', bound='CleanUps')
-
-    def __init__(
-        self, *args: typing.Any, capabilities: phile.Capabilities,
-        **kwargs: typing.Any
-    ) -> None:
-        self.callbacks = set[NullaryCallable]()
-        registry = capabilities[phile.trigger.Registry]
-        super().__init__(
-            *args,
-            callback_map={'quit': self.run},
-            registry=registry,
-            **kwargs
-        )
-
-    def __enter__(self: __Self) -> __Self:
-        super().__enter__()
-        self.show_all()
-        return self
-
-    def run(self) -> None:
-        for callback in self.callbacks.copy():
-            callback()
-
-    @contextlib.contextmanager
-    def open(
-        self, callback: NullaryCallable
-    ) -> collections.abc.Iterator[None]:
-        try:
-            self.callbacks.add(callback)
-            yield
-        finally:
-            self.callbacks.discard(callback)
-
-
-_T_co = typing.TypeVar('_T_co', covariant=True)
-
-
 async def open_prompt(capabilities: phile.Capabilities) -> None:
     # TODO[mypy issue #4717]: Remove `ignore[misc]`.
     # Cannot use abstract class.
@@ -259,34 +218,30 @@ async def open_prompt(capabilities: phile.Capabilities) -> None:
             )
         ), reader, loop
     )
+    prompt.preloop()
     if prompt.intro:
         writer.write(prompt.intro)
     is_stopping = False
     while not is_stopping:
         writer.write(prompt.prompt.encode())
-        next_command = await reader.readline()
-        is_stopping = prompt.onecmd(next_command.decode())
+        next_command = (await reader.readline()).decode()
+        next_command = prompt.precmd(next_command)
+        is_stopping = prompt.onecmd(next_command)
+        is_stopping = prompt.postcmd(is_stopping, next_command)
+    prompt.postloop()
 
 
-async def run(capabilities: phile.Capabilities) -> int:
-    with TriggerProvider(capabilities=capabilities):
-        await open_prompt(capabilities=capabilities)
+async def run(capability_registry: phile.capability.Registry) -> int:
+    with TriggerProvider(capabilities=capability_registry):
+        await open_prompt(capabilities=capability_registry)
     return 0
 
 
-async def async_main(capabilities: phile.Capabilities) -> int:
-    clean_ups = capabilities[CleanUps]
-    loop = asyncio.get_running_loop()
-    AbstractEventLoop = (  # pylint: disable=invalid-name
-            asyncio.events.AbstractEventLoop
-    )
-    # TODO[mypy issue #4717]: Remove `ignore[misc]`.
-    # Cannot use abstract class.
-    capabilities[AbstractEventLoop] = loop  # type: ignore[misc]
-
+async def async_main(
+    capability_registry: phile.capability.Registry
+) -> None:
     async with contextlib.AsyncExitStack() as stack:
         stack.enter_context(contextlib.suppress(asyncio.CancelledError))
-
         if 'TMUX' in os.environ:
             control_mode = await stack.enter_async_context(
                 phile.tmux.control_mode.open(
@@ -295,83 +250,21 @@ async def async_main(capabilities: phile.Capabilities) -> int:
                     )
                 )
             )
-            capabilities[phile.tmux.control_mode.Client] = control_mode
+            stack.enter_context(
+                capability_registry.provide(
+                    control_mode, phile.tmux.control_mode.Client
+                )
+            )
             await stack.enter_async_context(
                 phile.asyncio.open_task(control_mode.run())
             )
-        await stack.enter_async_context(
-            phile.asyncio.open_task(run(capabilities=capabilities))
-        )
-        quit_event = asyncio.Event()
-        stack.enter_context(
-            clean_ups.open(
-                functools.partial(
-                    loop.call_soon_threadsafe, quit_event.set
-                )
-            )
-        )
-        await quit_event.wait()
-    del capabilities[AbstractEventLoop]
-    return 0
-
-
-def is_gui_available() -> bool:
-    if platform.system() == 'Windows':
-        return True
-    try:
-        subprocess.run(
-            ['xset', 'q'],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-    except subprocess.CalledProcessError:
-        return False
-    return True
-
-
-def is_pyside2_available() -> bool:
-    return importlib.util.find_spec('PySide2') is not None
-
-
-def import_pyside2_qtwidgets() -> None:
-    # pylint: disable=import-outside-toplevel
-    # pylint: disable=invalid-name
-    # pylint: disable=redefined-outer-name
-    # pylint: disable=unused-import
-    global PySide2
-    global phile
-    import PySide2.QtWidgets
-    import phile.PySide2.QtCore
-
-
-def create_and_exec_qapplication(
-    capabilities: phile.Capabilities
-) -> None:
-    clean_ups = capabilities[CleanUps]
-    import_pyside2_qtwidgets()
-    qt_app = (
-        # pylint: disable=undefined-variable
-        PySide2.QtWidgets.QApplication()  # type: ignore[name-defined]
-    )
-    capabilities.set(qt_app)
-    with clean_ups.open(
-        functools.partial(
-            phile.PySide2.QtCore.call_soon_threadsafe, qt_app.quit
-        )
-    ):
-        qt_app.exec_()
-    del capabilities[
-        # pylint: disable=undefined-variable
-        PySide2.QtWidgets.QApplication  # type: ignore[name-defined]
-    ]
-    del qt_app
+        await run(capability_registry)
 
 
 def main(
     argv: typing.Optional[list[str]] = None
 ) -> int:  # pragma: no cover
+    capability_registry = phile.capability.Registry()
     with contextlib.ExitStack() as stack:
         stack.enter_context(contextlib.suppress(KeyboardInterrupt))
 
@@ -383,47 +276,68 @@ def main(
         )
         args = parser.parse_args(argv[1:])
 
-        capabilities = phile.Capabilities()
-        capabilities.set(phile.Configuration())
-
-        registry = phile.trigger.Registry()
-        capabilities.set(registry)
-
-        capabilities.set(
-            stack.enter_context(CleanUps(capabilities=capabilities))
+        providers = phile.capability.Providers(
+            target_registry=capability_registry, undo_stack=stack
         )
 
-        BaseObserver = watchdog.observers.api.BaseObserver
-        capabilities[BaseObserver] = (
-            stack.enter_context(phile.watchdog.observers.open())
+        providers.register(phile.Configuration())
+        providers.register(trigger_registry := phile.trigger.Registry())
+        providers.register(clean_ups := phile.capability.CleanUps())
+        stack.enter_context(
+            clean_ups.provide_trigger(
+                capability_registry=capability_registry
+            )
+        )
+        providers.register(
+            stack.enter_context(phile.watchdog.observers.open()),
+            watchdog.observers.api.BaseObserver,
+        )
+        providers.register(
+            keyring.get_keyring(), keyring.backend.KeyringBackend
         )
         stack.enter_context(
-            phile.trigger.watchdog.View(capabilities=capabilities)
-        )
-        KeyringBackend = keyring.backend.KeyringBackend
-        # TODO[mypy issue #4717]: Remove `ignore[misc]`.
-        # Cannot use abstract class.
-        capabilities[KeyringBackend] = (  # type: ignore[misc]
-            # Don't reformat -- causes linebreak at [ ].
-            keyring.get_keyring()
-        )
-
-        if args.gui or (
-            args.gui is None and is_gui_available()
-            and is_pyside2_available()
-        ):
-            non_gui_loop_thread = threading.Thread(
-                target=functools.
-                partial(asyncio.run, async_main(capabilities))
+            phile.trigger.watchdog.View(
+                capabilities=capability_registry
             )
-            non_gui_loop_thread.start()
+        )
+        providers.register(
+            loop := asyncio.new_event_loop(),
+            asyncio.events.AbstractEventLoop,
+        )
+        stack.enter_context(
+            clean_ups.connect(
+                functools.partial(
+                    phile.capability.asyncio.stop, capability_registry
+                )
+            )
+        )
+        loop.call_soon_threadsafe(
+            asyncio.create_task,
+            async_main(capability_registry=capability_registry),
+        )
 
-            create_and_exec_qapplication(capabilities)
-
-            registry.activate_if_shown('quit')
-            non_gui_loop_thread.join()
+        use_pyside_2: bool
+        if args.gui is None:
+            use_pyside_2 = phile.capability.pyside2.is_available()
         else:
-            asyncio.run(async_main(capabilities))
+            use_pyside_2 = args.gui
+
+        if use_pyside_2:
+            stack.enter_context(
+                phile.capability.asyncio.start(capability_registry)
+            )
+            stack.enter_context(
+                phile.capability.pyside2.provide_qapplication_in(
+                    capability_registry=capability_registry,
+                )
+            )
+            stack.enter_context(
+                clean_ups.connect(phile.capability.pyside2.stop)
+            )
+            phile.capability.pyside2.run(capability_registry)
+            trigger_registry.activate_if_shown('quit')
+        else:
+            phile.capability.asyncio.run(capability_registry)
     return 0
 
 
