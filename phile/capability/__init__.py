@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
+.. automodule:: phile.capability.asyncio
 .. automodule:: phile.capability.pyside2
+.. automodule:: phile.capability.tmux
 """
 
 # Standard libraries.

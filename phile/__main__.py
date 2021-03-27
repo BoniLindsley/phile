@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import dataclasses
 import functools
-import os
 import sys
 import types
 import typing
@@ -237,30 +236,6 @@ async def run(capability_registry: phile.capability.Registry) -> int:
     return 0
 
 
-async def async_main(
-    capability_registry: phile.capability.Registry
-) -> None:
-    async with contextlib.AsyncExitStack() as stack:
-        stack.enter_context(contextlib.suppress(asyncio.CancelledError))
-        if 'TMUX' in os.environ:
-            control_mode = await stack.enter_async_context(
-                phile.tmux.control_mode.open(
-                    control_mode_arguments=(
-                        phile.tmux.control_mode.Arguments()
-                    )
-                )
-            )
-            stack.enter_context(
-                capability_registry.provide(
-                    control_mode, phile.tmux.control_mode.Client
-                )
-            )
-            await stack.enter_async_context(
-                phile.asyncio.open_task(control_mode.run())
-            )
-        await run(capability_registry)
-
-
 def main(
     argv: typing.Optional[list[str]] = None
 ) -> int:  # pragma: no cover
@@ -311,11 +286,15 @@ def main(
                 )
             )
         )
+        stack.enter_context(
+            phile.capability.tmux.provide_async_tmux_client(
+                capability_registry=capability_registry,
+            )
+        )
         loop.call_soon_threadsafe(
             asyncio.create_task,
-            async_main(capability_registry=capability_registry),
+            run(capability_registry=capability_registry),
         )
-
         use_pyside_2: bool
         if args.gui is None:
             use_pyside_2 = phile.capability.pyside2.is_available()

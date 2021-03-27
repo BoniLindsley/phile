@@ -22,9 +22,8 @@ def is_available() -> bool:
     return _is_inside_tmux()
 
 
-async def async_provide_async_tmux_client(
+async def _async_provide_async_tmux_client(
     capability_registry: phile.capability.Registry,
-    ready: asyncio.Event,
 ) -> None:
     async with contextlib.AsyncExitStack() as stack:
         control_mode = await stack.enter_async_context(
@@ -42,5 +41,25 @@ async def async_provide_async_tmux_client(
         await stack.enter_async_context(
             phile.asyncio.open_task(control_mode.run())
         )
+        asyncio.get_running_loop().stop()
         await asyncio.Event().wait()
     assert False, 'Unreaachable code'
+
+
+def provide_async_tmux_client(
+    capability_registry: phile.capability.Registry
+) -> contextlib.AbstractContextManager[typing.Any]:
+    loop = phile.capability.asyncio.get_instance(capability_registry)
+    assert not loop.is_closed()
+    assert not loop.is_running()
+    client_task = loop.create_task(
+        _async_provide_async_tmux_client(capability_registry)
+    )
+    loop.run_forever()
+
+    with contextlib.ExitStack() as stack:
+        # This is to ensure a reference to the task is kept alive
+        # so that the task would not be cancelled.
+        stack.callback(client_task.done)
+        return stack.pop_all()
+    assert False, 'Unreachable code'
