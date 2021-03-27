@@ -11,6 +11,21 @@ import typing
 # Internal modules.
 import phile.capability
 
+# TODO(BoniLindsley): Add unit test.
+#
+# 1.  Need to test that it does not import PySide2 until requested.
+# 2.  The `provide_qapplication_in` might need to support using
+#     `PySide2.QtCore.QCoreApplication.instance()`,
+#     otherwise it is difficult to use a custom instance for testing.
+#     Add a `no_create` flag? But normal usage does not need it.
+# 3.  Need to decided whether `run` and `stop` functions
+#     should use the instance specified in `capability_registry`
+#     rather than operating directly on the PySide2 given on.
+#     It probably makes sense to?
+# 4.  Might need a function to return `Q*Application` instances.
+#     How does this work with respect to `typing`,
+#     since annotations cannot return instances without imports?
+
 
 def _is_gui_available() -> bool:
     if platform.system() == 'Windows':

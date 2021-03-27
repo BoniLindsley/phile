@@ -43,7 +43,7 @@ async def _async_provide_async_tmux_client(
         )
         asyncio.get_running_loop().stop()
         await asyncio.Event().wait()
-    assert False, 'Unreaachable code'
+    assert False, 'Unreachable code'  # pragma: no cover
 
 
 def provide_async_tmux_client(
@@ -60,6 +60,11 @@ def provide_async_tmux_client(
     with contextlib.ExitStack() as stack:
         # This is to ensure a reference to the task is kept alive
         # so that the task would not be cancelled.
+        # Futhuremore, if the context manager goes out of scop,
+        # and the task is not referenced elsewhere,
+        # the task would be cancelled as clean-up.
+        # However, that requires the loop to run for clean-up.
+        # Whether the loop should be running depends on the user.
         stack.callback(client_task.done)
         return stack.pop_all()
-    assert False, 'Unreachable code'
+    assert False, 'Unreachable code'  # pragma: no cover
