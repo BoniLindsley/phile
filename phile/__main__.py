@@ -3,6 +3,7 @@
 # Standard library.
 import argparse
 import asyncio
+import collections.abc
 import contextlib
 import dataclasses
 import functools
@@ -236,6 +237,28 @@ async def run(capability_registry: phile.capability.Registry) -> int:
     return 0
 
 
+class CleanUps:
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.callbacks = set[NullaryCallable]()
+
+    @contextlib.contextmanager
+    def connect(
+        self, callback: NullaryCallable
+    ) -> collections.abc.Iterator[None]:
+        try:
+            self.callbacks.add(callback)
+            yield
+        finally:
+            self.callbacks.discard(callback)
+
+    def run(self) -> None:
+        for callback in self.callbacks.copy():
+            callback()
+
+
 def main(
     argv: typing.Optional[list[str]] = None
 ) -> int:  # pragma: no cover
@@ -251,33 +274,47 @@ def main(
         )
         args = parser.parse_args(argv[1:])
 
-        providers = phile.capability.Providers(
-            target_registry=capability_registry, undo_stack=stack
-        )
-
-        providers.register(phile.Configuration())
-        providers.register(trigger_registry := phile.trigger.Registry())
-        providers.register(clean_ups := phile.capability.CleanUps())
         stack.enter_context(
-            clean_ups.provide_trigger(
-                capability_registry=capability_registry
+            capability_registry.provide(phile.Configuration())
+        )
+        stack.enter_context(
+            capability_registry.provide(
+                trigger_registry := phile.trigger.Registry()
             )
         )
-        providers.register(
-            stack.enter_context(phile.watchdog.observers.open()),
-            watchdog.observers.api.BaseObserver,
+        stack.enter_context(
+            capability_registry.provide(clean_ups := CleanUps())
         )
-        providers.register(
-            keyring.get_keyring(), keyring.backend.KeyringBackend
+        stack.enter_context(
+            quit_trigger_provider := phile.trigger.Provider(
+                callback_map={'quit': clean_ups.run},
+                registry=trigger_registry,
+            )
+        )
+        quit_trigger_provider.show_all()
+        stack.enter_context(
+            capability_registry.provide(
+                stack.enter_context(phile.watchdog.observers.open()),
+                watchdog.observers.api.BaseObserver,
+            )
+        )
+        stack.enter_context(
+            capability_registry.provide(
+                keyring.get_keyring(), keyring.backend.KeyringBackend
+            )
         )
         stack.enter_context(
             phile.trigger.watchdog.View(
                 capabilities=capability_registry
             )
         )
-        providers.register(
-            loop := asyncio.new_event_loop(),
-            asyncio.events.AbstractEventLoop,
+        stack.enter_context(
+            phile.capability.asyncio.provide(
+                capability_registry=capability_registry
+            )
+        )
+        loop = phile.capability.asyncio.get_instance(
+            capability_registry=capability_registry
         )
         stack.enter_context(
             clean_ups.connect(

@@ -56,16 +56,20 @@ def _shutdown() -> None:
     loop.run_until_complete(loop.shutdown_default_executor())
 
 
+def provide(
+    capability_registry: phile.capability.Registry
+) -> contextlib.AbstractContextManager[typing.Any]:
+    return capability_registry.provide(
+        asyncio.new_event_loop(),
+        asyncio.events.AbstractEventLoop,
+    )
+
+
 def get_instance(
     capability_registry: phile.capability.Registry
 ) -> asyncio.AbstractEventLoop:
     Loop = asyncio.AbstractEventLoop
     return capability_registry[Loop]  # type: ignore[misc]
-
-
-def stop(capability_registry: phile.capability.Registry) -> None:
-    loop = get_instance(capability_registry)
-    loop.stop()
 
 
 def run(capability_registry: phile.capability.Registry) -> None:
@@ -79,6 +83,11 @@ def run(capability_registry: phile.capability.Registry) -> None:
         clean_up.callback(asyncio.set_event_loop, None)
         clean_up.callback(_shutdown)
         loop.run_forever()
+
+
+def stop(capability_registry: phile.capability.Registry) -> None:
+    loop = get_instance(capability_registry)
+    loop.call_soon_threadsafe(loop.stop)
 
 
 @contextlib.contextmanager
