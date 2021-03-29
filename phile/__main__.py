@@ -40,13 +40,13 @@ Launcher = typing.Callable[[phile.Capabilities], typing.Coroutine]
 LauncherEntry = tuple[Launcher, set[type]]
 
 default_launchers: typing.Dict[str, LauncherEntry] = {
-    #'imap-idle': (
-    #    phile.tray.publishers.imap_idle.run,
-    #    {
-    #        phile.Configuration,
-    #        keyring.backend.KeyringBackend,
-    #    },
-    #),
+    'imap-idle': (
+        phile.tray.publishers.imap_idle.run,
+        {
+            phile.Configuration,
+            keyring.backend.KeyringBackend,
+        },
+    ),
     'tray-battery':
         (phile.tray.publishers.battery.run, {
             phile.Configuration,
@@ -201,42 +201,6 @@ class TriggerProvider(phile.trigger.Provider):
             self.show(self.start_prefix + task_name)
 
 
-async def open_prompt(capabilities: phile.Capabilities) -> None:
-    # TODO[mypy issue #4717]: Remove `ignore[misc]`.
-    # Cannot use abstract class.
-    loop = capabilities[asyncio.AbstractEventLoop]  # type: ignore[misc]
-    prompt = phile.trigger.cli.Prompt(capabilities=capabilities)
-    reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(
-        functools.partial(asyncio.StreamReaderProtocol, reader),
-        prompt.stdin
-    )
-    writer = asyncio.StreamWriter(
-        *(
-            await loop.connect_write_pipe(
-                asyncio.streams.FlowControlMixin, prompt.stdout
-            )
-        ), reader, loop
-    )
-    prompt.preloop()
-    if prompt.intro:
-        writer.write(prompt.intro)
-    is_stopping = False
-    while not is_stopping:
-        writer.write(prompt.prompt.encode())
-        next_command = (await reader.readline()).decode()
-        next_command = prompt.precmd(next_command)
-        is_stopping = prompt.onecmd(next_command)
-        is_stopping = prompt.postcmd(is_stopping, next_command)
-    prompt.postloop()
-
-
-async def run(capability_registry: phile.capability.Registry) -> int:
-    with TriggerProvider(capabilities=capability_registry):
-        await open_prompt(capabilities=capability_registry)
-    return 0
-
-
 class CleanUps:
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -257,6 +221,14 @@ class CleanUps:
     def run(self) -> None:
         for callback in self.callbacks.copy():
             callback()
+
+
+async def run(capability_registry: phile.capability.Registry) -> int:
+    with TriggerProvider(capabilities=capability_registry):
+        await phile.trigger.cli.async_run(
+            capability_registry=capability_registry
+        )
+    return 0
 
 
 def main(
@@ -318,9 +290,8 @@ def main(
         )
         stack.enter_context(
             clean_ups.connect(
-                functools.partial(
-                    phile.capability.asyncio.stop, capability_registry
-                )
+                lambda: phile.capability.asyncio.
+                stop(capability_registry) if loop.is_running() else None
             )
         )
         stack.enter_context(
@@ -328,10 +299,10 @@ def main(
                 capability_registry=capability_registry,
             )
         )
-        loop.call_soon_threadsafe(
-            asyncio.create_task,
-            run(capability_registry=capability_registry),
+        run_task = loop.create_task(
+            run(capability_registry=capability_registry)
         )
+        run_task.add_done_callback(lambda _future: clean_ups.run())
         use_pyside_2: bool
         if args.gui is None:
             use_pyside_2 = phile.capability.pyside2.is_available()
