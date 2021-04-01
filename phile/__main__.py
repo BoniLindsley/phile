@@ -91,13 +91,13 @@ class TaskRegistry:
     class MissingCapability(RuntimeError):
         pass
 
-    capabilities: phile.Capabilities
+    capability_registry: phile.capability.Registry
     launchers: types.MappingProxyType[
         str, LauncherEntry] = types.MappingProxyType(default_launchers)
 
     def __post_init__(self) -> None:
         self.running_tasks: dict[str, asyncio.Task[typing.Any]] = {}
-        capability_set = set(self.capabilities.keys())
+        capability_set = set(self.capability_registry.keys())
         self.usable_launcher_names = {
             name
             for name, launcher_entry in self.launchers.items()
@@ -108,18 +108,21 @@ class TaskRegistry:
         assert name not in self.running_tasks
         launcher_entry = self.launchers[name]
         if name not in self.usable_launcher_names:
-            required_launcher_capabilities = launcher_entry[1]
-            missing_capabilities = (
-                required_launcher_capabilities.difference(
-                    self.capabilities
+            required_launcher_capability_registry = launcher_entry[1]
+            missing_capability_registry = (
+                required_launcher_capability_registry.difference(
+                    self.capability_registry
                 )
             )
             raise TaskRegistry.MissingCapability(
-                f"Launcher {name} requires {missing_capabilities}."
+                f"Launcher {name} requires {missing_capability_registry}."
             )
         launcher = launcher_entry[0]
-        self.running_tasks[name] = task = asyncio.create_task(
-            launcher(self.capabilities), name=name
+        loop = phile.capability.asyncio.get_instance(
+            capability_registry=self.capability_registry,
+        )
+        self.running_tasks[name] = task = loop.create_task(
+            launcher(self.capability_registry), name=name
         )
         task.add_done_callback(self.on_task_done)
         return task
@@ -140,15 +143,17 @@ class TriggerProvider(phile.trigger.Provider):
     def __init__(
         self,
         *args: typing.Any,
-        capabilities: phile.Capabilities,
+        capability_registry: phile.capability.Registry,
         **kwargs: typing.Any,
     ) -> None:
-        self._capabilities = capabilities
+        self._capability_registry = capability_registry
         self.start_prefix = 'start-task_'
         self.stop_prefix = 'stop-task_'
-        self.task_registry = TaskRegistry(capabilities=capabilities)
+        self.task_registry = TaskRegistry(
+            capability_registry=capability_registry
+        )
         callbacks = self.get_triggers()
-        trigger_registry = capabilities[phile.trigger.Registry]
+        trigger_registry = capability_registry[phile.trigger.Registry]
         super().__init__(
             *args,
             callback_map=callbacks,
@@ -169,11 +174,9 @@ class TriggerProvider(phile.trigger.Provider):
             for (name, launcher) in self.task_registry.launchers.items()
             if name in self.task_registry.usable_launcher_names
         }
-        # TODO[mypy issue #4717]: Remove `ignore[misc]`.
-        # Cannot use abstract class.
-        loop = self._capabilities[
-            asyncio.events.AbstractEventLoop  # type: ignore[misc]
-        ]
+        loop = phile.capability.asyncio.get_instance(
+            capability_registry=self._capability_registry,
+        )
         for task_name in usable_launchers:
             callbacks[self.start_prefix + task_name] = functools.partial(
                 loop.call_soon_threadsafe,
@@ -221,14 +224,6 @@ class CleanUps:
     def run(self) -> None:
         for callback in self.callbacks.copy():
             callback()
-
-
-async def run(capability_registry: phile.capability.Registry) -> int:
-    with TriggerProvider(capabilities=capability_registry):
-        await phile.trigger.cli.async_run(
-            capability_registry=capability_registry
-        )
-    return 0
 
 
 def main(
@@ -299,10 +294,15 @@ def main(
                 capability_registry=capability_registry,
             )
         )
-        run_task = loop.create_task(
-            run(capability_registry=capability_registry)
+        stack.enter_context(
+            TriggerProvider(capability_registry=capability_registry)
         )
-        run_task.add_done_callback(lambda _future: clean_ups.run())
+        cli_task = loop.create_task(
+            phile.trigger.cli.async_run(
+                capability_registry=capability_registry
+            )
+        )
+        cli_task.add_done_callback(lambda _future: clean_ups.run())
         use_pyside_2: bool
         if args.gui is None:
             use_pyside_2 = phile.capability.pyside2.is_available()
