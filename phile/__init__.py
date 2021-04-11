@@ -6,6 +6,7 @@
 .. automodule:: phile.datetime
 .. automodule:: phile.hotkey
 .. automodule:: phile.imapclient
+.. automodule:: phile.launcher
 .. automodule:: phile.notify
 .. automodule:: phile.os
 .. automodule:: phile.tmux
