@@ -5,6 +5,7 @@
 .. automodule:: test_phile.test_data
 .. automodule:: test_phile.test_datetime
 .. automodule:: test_phile.test_imapclient
+.. automodule:: test_phile.test_launcher
 .. automodule:: test_phile.test_notify
 .. automodule:: test_phile.test_os
 .. automodule:: test_phile.test_tmux
