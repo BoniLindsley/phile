@@ -488,7 +488,18 @@ class StateMachine:
         return entry_name in self._running_tasks
 
 
-# TODO(BoniLindsley): Add Registry class.
-# Wrap Database and StateMachine class usages.
-# Adding to database is installing.
-# Uninstalling should stop launcher first.
+class Registry(StateMachine, Database):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, database=self, **kwargs)
+
+    async def register(
+        self, entry_name: str, descriptor: Descriptor
+    ) -> None:
+        self.add(entry_name, descriptor)
+
+    async def deregister(self, entry_name: str) -> None:
+        # No defensive mechanism to ensure it is not started again.
+        # This is done in a best effort basis.
+        await self.stop(entry_name)
+        self.remove(entry_name)
