@@ -111,10 +111,10 @@ class Database:
         Therefore, the data is parsed when adding as necessary,
         and should not be relied upon afterwards.
         """
+        self.after: dict[str, set[str]] = {}
+        """Order dependencies of launchers."""
         self.binds_to: dict[str, set[str]] = {}
         """Dependencies of launchers."""
-        self.bound_by: dict[str, set[str]] = {}
-        """Dependents of launchers."""
         self.exec_start: dict[str, CommandLines] = {}
         """Coroutines to call to start a launcher."""
         self.exec_stop: dict[str, CommandLines] = {}
@@ -123,6 +123,12 @@ class Database:
         """Callback to call to remove launchers from the database."""
         self.type: dict[str, Type] = {}
         """Initialisation and termination conditions of launchers."""
+        # The data after this are not given in descriptors,
+        # but derived from them.
+        self.bound_by: dict[str, set[str]] = {}
+        """Dependents of launchers."""
+        self.stop_after: dict[str, set[str]] = {}
+        """Order dependencies for stopping launchers."""
 
     def add(self, entry_name: str, descriptor: Descriptor) -> None:
         """Not thread-safe."""
@@ -130,6 +136,7 @@ class Database:
             stack.enter_context(
                 self._update_descriptor(entry_name, descriptor)
             )
+            stack.enter_context(self._update_after(entry_name))
             stack.enter_context(self._update_type(entry_name))
             stack.enter_context(self._update_exec_start(entry_name))
             stack.enter_context(self._update_exec_stop(entry_name))
@@ -154,6 +161,40 @@ class Database:
             yield
         finally:
             known_descriptors.pop(entry_name, None)
+
+    @contextlib.contextmanager
+    def _update_after(
+        self,
+        entry_name: str,
+    ) -> collections.abc.Iterator[None]:
+        descriptor = self.known_descriptors[entry_name]
+        descriptor_after = descriptor.get('after', set())
+        entry_after = set[str]()
+        after = self.after
+        try:
+            after[entry_name] = entry_after
+            stop_after = self.stop_after
+            try:
+                for dependency in descriptor_after:
+                    entry_after.add(dependency)
+                    dependency_stop_after = stop_after.setdefault(
+                        dependency, set[str]()
+                    )
+                    dependency_stop_after.add(entry_name)
+                    del dependency_stop_after
+                del descriptor_after
+                yield
+            finally:
+                for dependency in entry_after:
+                    dependency_stop_after = stop_after.get(
+                        dependency, set[str]()
+                    )
+                    dependency_stop_after.discard(entry_name)
+                    if not dependency_stop_after:
+                        stop_after.pop(dependency, None)
+                    del dependency_stop_after
+        finally:
+            after.pop(entry_name, None)
 
     @contextlib.contextmanager
     def _update_type(
@@ -259,6 +300,12 @@ class StateMachine:
         self._stop_tasks: dict[str, asyncio.Future[typing.Any]] = {}
 
     async def start(self, entry_name: str) -> None:
+        await self._get_start_task(entry_name)
+
+    def _get_start_task(
+        self,
+        entry_name: str,
+    ) -> asyncio.Future[typing.Any]:
         start_tasks = self._start_tasks
         try:
             entry_start_task = start_tasks[entry_name]
@@ -269,7 +316,7 @@ class StateMachine:
             entry_start_task.add_done_callback(
                 functools.partial(start_tasks.pop, entry_name)
             )
-        await entry_start_task
+        return entry_start_task
 
     async def _ensure_started(self, entry_name: str) -> None:
         # If a launcher is started while it is being stopped,
@@ -281,16 +328,33 @@ class StateMachine:
         running_tasks = self._running_tasks
         if entry_name in running_tasks:
             return
-        runner = self._run(entry_name)
-        await runner.__aenter__()
+        ready_event = asyncio.Event()
+        ready_task = asyncio.create_task(ready_event.wait())
         entry_task = running_tasks[entry_name] = asyncio.create_task(
-            runner.__aexit__(None, None, None)
+            self._run(entry_name, ready_event)
         )
         entry_task.add_done_callback(
             functools.partial(running_tasks.pop, entry_name)
         )
+        done, _pending = await asyncio.wait(
+            (ready_task, entry_task),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if ready_task.cancel():
+            with contextlib.suppress(asyncio.CancelledError):
+                await ready_task
+        if ready_task not in done:
+            # Launcher did not start successfully.
+            # Propagate error by awaiting on it.
+            await entry_task
 
     async def stop(self, entry_name: str) -> None:
+        await self._get_stop_task(entry_name)
+
+    def _get_stop_task(
+        self,
+        entry_name: str,
+    ) -> asyncio.Future[typing.Any]:
         stop_tasks = self._stop_tasks
         try:
             entry_stop_task = stop_tasks[entry_name]
@@ -301,7 +365,7 @@ class StateMachine:
             entry_stop_task.add_done_callback(
                 functools.partial(stop_tasks.pop, entry_name)
             )
-        await entry_stop_task
+        return entry_stop_task
 
     async def _ensure_stopped(self, entry_name: str) -> None:
         entry_start_task = self._start_tasks.get(entry_name)
@@ -317,24 +381,77 @@ class StateMachine:
             with contextlib.suppress(asyncio.CancelledError):
                 await entry_running_task
 
-    @contextlib.asynccontextmanager
     async def _run(
+        self,
+        entry_name: str,
+        ready_event: asyncio.Event,
+    ) -> None:
+        await self._start_dependencies(entry_name)
+        await self._ensure_dependencies_are_started(entry_name)
+        async with contextlib.AsyncExitStack() as stack:
+            main_task = await stack.enter_async_context(
+                self._create_main_task(entry_name)
+            )
+            stack.push_async_callback(
+                self._run_command_lines,
+                self._database.exec_stop[entry_name],
+            )
+            stack.push_async_callback(
+                self._ensure_dependents_are_stopped, entry_name
+            )
+            stack.push_async_callback(self._stop_dependents, entry_name)
+            ready_event.set()
+            await asyncio.shield(main_task)
+
+    async def _start_dependencies(self, entry_name: str) -> None:
+        for dependency_name in self._database.binds_to[entry_name]:
+            self._get_start_task(dependency_name)
+
+    async def _stop_dependents(self, entry_name: str) -> None:
+        # Unlike bind_by entries, the bound_by entries
+        # are not provided by descriptors.
+        # So they are generated as dependencies are found.
+        # In particular, there need not be a bound_by entry
+        # if there are no dependencies for a particular launcher.
+        try:
+            entry_bound_by = self._database.bound_by[entry_name]
+        except KeyError:
+            return
+        for dependent_name in entry_bound_by:
+            self._get_stop_task(dependent_name)
+
+    async def _ensure_dependencies_are_started(
         self, entry_name: str
-    ) -> collections.abc.AsyncIterator[None]:
-        # TODO(BoniLindsley): Start all dependencies here.
-        # TODO(BoniLindsley): Await any after and starting here.
-        async with self._create_main_task(entry_name) as main_task:
-            try:
-                # Notify caller the launcher is successfully started.
-                yield
-                await asyncio.shield(main_task)
-                # TODO(BoniLindsley): Stop dependents.
-                # If they are not already stopping.
-                # TODO(BoniLindsley): Await any after-this and stopping.
-            finally:
-                await self._run_command_lines(
-                    self._database.exec_stop[entry_name]
-                )
+    ) -> None:
+        start_tasks = self._start_tasks
+        after_tasks = (
+            start_tasks.get(dependency_name)
+            for dependency_name in self._database.after[entry_name]
+        )
+        order_dependency_tasks = tuple(
+            tasks for tasks in after_tasks if tasks is not None
+        )
+        if order_dependency_tasks:
+            await asyncio.wait(order_dependency_tasks)
+
+    async def _ensure_dependents_are_stopped(
+        self, entry_name: str
+    ) -> None:
+        stop_after = self._database.stop_after
+        try:
+            entry_stop_after = stop_after[entry_name]
+        except KeyError:
+            return
+        stop_tasks = self._stop_tasks
+        after_tasks = (
+            stop_tasks.get(dependency_name)
+            for dependency_name in entry_stop_after
+        )
+        order_dependency_tasks = tuple(
+            tasks for tasks in after_tasks if tasks is not None
+        )
+        if order_dependency_tasks:
+            await asyncio.wait(order_dependency_tasks)
 
     @contextlib.asynccontextmanager
     async def _create_main_task(

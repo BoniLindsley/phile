@@ -71,6 +71,23 @@ class TestDatabase(unittest.TestCase):
         with self.assertRaises(phile.launcher.MissingDescriptorData):
             self.launcher_database.add('no_exec_start', {})
 
+    def test_add_updates_afters(self) -> None:
+        self.launcher_database.add(
+            'dependent',
+            {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            },
+        )
+        self.assertEqual(
+            self.launcher_database.after['dependent'],
+            {'dependency'},
+        )
+        self.assertEqual(
+            self.launcher_database.stop_after['dependency'],
+            {'dependent'},
+        )
+
     def test_add_binds_to_creates_bound_by(self) -> None:
         self.launcher_database.add(
             'dependent',
@@ -128,6 +145,49 @@ class TestDatabase(unittest.TestCase):
 
     def test_remove_ignores_if_not_added(self) -> None:
         self.launcher_database.remove('not_added_unit')
+
+    def test_remove_with_after_removes_from_stop_after(self) -> None:
+        self.launcher_database.add(
+            'dependent_1', {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            }
+        )
+        self.launcher_database.add(
+            'dependent_2', {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            }
+        )
+        self.launcher_database.add('dependency', {'exec_start': [noop]})
+        self.assertEqual(
+            self.launcher_database.stop_after['dependency'],
+            {'dependent_1', 'dependent_2'},
+        )
+        self.launcher_database.remove('dependent_1')
+        self.assertEqual(
+            self.launcher_database.stop_after['dependency'],
+            {'dependent_2'},
+        )
+
+    def test_remove__with_after_removes_stop_after_if_it_empties(
+        self
+    ) -> None:
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            }
+        )
+        self.launcher_database.add('dependency', {'exec_start': [noop]})
+        self.assertEqual(
+            self.launcher_database.stop_after['dependency'],
+            {'dependent'},
+        )
+        self.launcher_database.remove('dependent')
+        self.assertNotIn(
+            'bind_target', self.launcher_database.stop_after
+        )
 
     def test_remove_unbinds_from_bound_by(self) -> None:
         self.launcher_database.add(
@@ -292,6 +352,102 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             self.launcher_state_machine.start(name)
         )
         self.assertTrue(self.launcher_state_machine.is_running(name))
+
+    async def test_start_starts_binds_to(self) -> None:
+        dependency_started = asyncio.Event()
+
+        async def dependency_exec_start() -> None:
+            dependency_started.set()
+            await asyncio.Event().wait()
+
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [asyncio.Event().wait],
+                'binds_to': {'dependency'}
+            }
+        )
+        self.launcher_database.add(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependent')
+        )
+        await phile.asyncio.wait_for(dependency_started.wait())
+
+    async def test_start_starts_after_dependencies(self) -> None:
+        dependency_started = asyncio.Event()
+
+        async def dependency_exec_start() -> None:
+            dependency_started.set()
+            await asyncio.Event().wait()
+
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [asyncio.Event().wait],
+                'after': {'dependency'},
+                'binds_to': {'dependency'},
+            }
+        )
+        self.launcher_database.add(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependent')
+        )
+        await phile.asyncio.wait_for(dependency_started.wait())
+
+    async def test_start_does_not_start_afters_without_binds_to(
+        self
+    ) -> None:
+        dependency_started = asyncio.Event()
+        dependent_started = asyncio.Event()
+
+        async def dependency_exec_start() -> None:
+            dependency_started.set()
+            await asyncio.Event().wait()
+
+        async def dependent_exec_start() -> None:
+            dependent_started.set()
+            await asyncio.Event().wait()
+
+        self.launcher_database.add(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+            }
+        )
+
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [dependent_exec_start],
+                'after': {'dependency'},
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependent')
+        )
+        await phile.asyncio.wait_for(dependent_started.wait())
+        self.assertFalse(dependency_started.is_set())
+
+    async def test_start_rewinds_if_exec_start_raises(self) -> None:
+        name = 'exec_start_raises'
+
+        async def divide_by_zero() -> None:
+            1 / 0  # pylint: disable=pointless-statement
+
+        self.launcher_database.add(
+            name, {
+                'exec_start': [divide_by_zero],
+                'type': phile.launcher.Type.FORKING,
+            }
+        )
+        with self.assertRaises(ZeroDivisionError):
+            await phile.asyncio.wait_for(
+                self.launcher_state_machine.start(name)
+            )
 
     async def test_stop_cancel_main_task_if_not_done(self) -> None:
         name = 'simple_stop'
@@ -459,3 +615,128 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaises(asyncio.CancelledError):
             await phile.asyncio.wait_for(start_task)
+        await phile.asyncio.wait_for(stop_task)
+
+    async def test_stop_stops_bound_by_entries(self) -> None:
+        dependent_started = asyncio.Event()
+        dependent_stopped = asyncio.Event()
+
+        async def dependent_exec_start() -> None:
+            dependent_started.set()
+            await asyncio.Event().wait()
+
+        async def dependent_exec_stop() -> None:
+            dependent_stopped.set()
+
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [dependent_exec_start],
+                'exec_stop': [dependent_exec_stop],
+                'binds_to': {'dependency'}
+            }
+        )
+        self.launcher_database.add(
+            'dependency', {
+                'exec_start': [asyncio.Event().wait],
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependent')
+        )
+        await phile.asyncio.wait_for(dependent_started.wait())
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependency')
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.stop('dependency')
+        )
+        await phile.asyncio.wait_for(dependent_stopped.wait())
+
+    async def test_stop_stops_after_dependents(self) -> None:
+        dependency_started = asyncio.Event()
+        dependency_stopped = asyncio.Event()
+        dependent_stopped = asyncio.Event()
+        dependent_exec_stop_continue = asyncio.Event()
+
+        async def dependency_exec_start() -> None:
+            dependency_started.set()
+            await asyncio.Event().wait()
+
+        async def dependency_exec_stop() -> None:
+            dependency_stopped.set()
+
+        async def dependent_exec_stop() -> None:
+            dependent_stopped.set()
+            await dependent_exec_stop_continue.wait()
+
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [asyncio.Event().wait],
+                'exec_stop': [dependent_exec_stop],
+                'after': {'dependency'},
+                'binds_to': {'dependency'},
+            }
+        )
+        self.launcher_database.add(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+                'exec_stop': [dependency_exec_stop],
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependent')
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependency')
+        )
+        await phile.asyncio.wait_for(dependency_started.wait())
+        dependency_stop_task = asyncio.create_task(
+            self.launcher_state_machine.stop('dependency')
+        )
+        await phile.asyncio.wait_for(dependent_stopped.wait())
+        self.assertFalse(dependency_stopped.is_set())
+        dependent_exec_stop_continue.set()
+        await phile.asyncio.wait_for(dependency_stop_task)
+        await phile.asyncio.wait_for(dependent_stopped.wait())
+
+    async def test_stop_does_not_stop_afters_without_binds_to(
+        self
+    ) -> None:
+        dependency_started = asyncio.Event()
+        dependency_stopped = asyncio.Event()
+        dependent_stopped = asyncio.Event()
+
+        async def dependency_exec_start() -> None:
+            dependency_started.set()
+
+        async def dependency_exec_stop() -> None:
+            dependency_stopped.set()
+
+        async def dependent_exec_stop() -> None:
+            dependent_stopped.set()
+
+        self.launcher_database.add(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+                'exec_stop': [dependency_exec_stop],
+            }
+        )
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [asyncio.Event().wait],
+                'exec_stop': [dependent_exec_stop],
+                'after': {'dependency'},
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependency')
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('dependent')
+        )
+        await phile.asyncio.wait_for(dependency_started.wait())
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.stop('dependency')
+        )
+        await phile.asyncio.wait_for(dependency_stopped.wait())
+        self.assertFalse(dependent_stopped.is_set())
