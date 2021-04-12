@@ -18,11 +18,11 @@ import typing
 # Internal modules.
 import phile
 
-#Command = collections.abc.Coroutine[typing.Any, typing.Any, typing.Any]
 Awaitable = collections.abc.Awaitable[typing.Any]
-Command = collections.abc.Callable[[], Awaitable]
-CommandLines = list[Command]
+NullaryAsyncCallable = collections.abc.Callable[[], Awaitable]
 NullaryCallable = collections.abc.Callable[[], typing.Any]
+Command = NullaryAsyncCallable
+CommandLines = list[Command]
 
 
 class Type(enum.IntEnum):
@@ -244,3 +244,134 @@ class Database:
 
     def contains(self, entry_name: str) -> bool:
         return entry_name in self.remover
+
+
+class StateMachine:
+
+    def __init__(
+        self, *args: typing.Any, database: Database, **kwargs: typing.Any
+    ) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self._database = database
+        self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
+        self._start_tasks: dict[str, asyncio.Future[typing.Any]] = {}
+        self._stop_tasks: dict[str, asyncio.Future[typing.Any]] = {}
+
+    async def start(self, entry_name: str) -> None:
+        start_tasks = self._start_tasks
+        try:
+            entry_start_task = start_tasks[entry_name]
+        except KeyError:
+            entry_start_task = start_tasks[entry_name] = (
+                asyncio.create_task(self._ensure_started(entry_name))
+            )
+            entry_start_task.add_done_callback(
+                functools.partial(start_tasks.pop, entry_name)
+            )
+        await entry_start_task
+
+    async def _ensure_started(self, entry_name: str) -> None:
+        # If a launcher is started while it is being stopped,
+        # assume a restart-like behaviour is desired.
+        # So wait till the launcher has stopped before starting.
+        entry_stop_task = self._stop_tasks.get(entry_name)
+        if entry_stop_task is not None:
+            await entry_stop_task
+        running_tasks = self._running_tasks
+        if entry_name in running_tasks:
+            return
+        runner = self._run(entry_name)
+        await runner.__aenter__()
+        entry_task = running_tasks[entry_name] = asyncio.create_task(
+            runner.__aexit__(None, None, None)
+        )
+        entry_task.add_done_callback(
+            functools.partial(running_tasks.pop, entry_name)
+        )
+
+    async def stop(self, entry_name: str) -> None:
+        stop_tasks = self._stop_tasks
+        try:
+            entry_stop_task = stop_tasks[entry_name]
+        except KeyError:
+            entry_stop_task = stop_tasks[entry_name] = (
+                asyncio.create_task(self._ensure_stopped(entry_name))
+            )
+            entry_stop_task.add_done_callback(
+                functools.partial(stop_tasks.pop, entry_name)
+            )
+        await entry_stop_task
+
+    async def _ensure_stopped(self, entry_name: str) -> None:
+        entry_start_task = self._start_tasks.get(entry_name)
+        if entry_start_task is not None and entry_start_task.cancel():
+            with contextlib.suppress(asyncio.CancelledError):
+                await entry_start_task
+            return
+        del entry_start_task
+
+        entry_running_task = self._running_tasks.get(entry_name)
+        if entry_running_task is not None and entry_running_task.cancel(
+        ):
+            with contextlib.suppress(asyncio.CancelledError):
+                await entry_running_task
+
+    @contextlib.asynccontextmanager
+    async def _run(
+        self, entry_name: str
+    ) -> collections.abc.AsyncIterator[None]:
+        # TODO(BoniLindsley): Start all dependencies here.
+        # TODO(BoniLindsley): Await any after and starting here.
+        async with self._create_main_task(entry_name) as main_task:
+            try:
+                # Notify caller the launcher is successfully started.
+                yield
+                await asyncio.shield(main_task)
+                # TODO(BoniLindsley): Stop dependents.
+                # If they are not already stopping.
+                # TODO(BoniLindsley): Await any after-this and stopping.
+            finally:
+                await self._run_command_lines(
+                    self._database.exec_stop[entry_name]
+                )
+
+    @contextlib.asynccontextmanager
+    async def _create_main_task(
+        self, entry_name: str
+    ) -> collections.abc.AsyncIterator[asyncio.Future[typing.Any]]:
+        database = self._database
+        main_task: asyncio.Future[typing.Any] = asyncio.create_task(
+            self._run_command_lines(database.exec_start[entry_name])
+        )
+        try:
+            unit_type = database.type[entry_name]
+            if unit_type is Type.EXEC:
+                await asyncio.sleep(0)
+            elif unit_type is Type.FORKING:
+                main_task = await main_task
+                assert isinstance(main_task, asyncio.Future)
+            del unit_type
+            yield main_task
+        finally:
+            if main_task.cancel():
+                with contextlib.suppress(asyncio.CancelledError):
+                    await main_task
+
+    async def _run_command_lines(
+        self, command_lines: CommandLines
+    ) -> typing.Any:
+        """Await the given command lines and return the last result."""
+        return_value: typing.Any = None
+        for command in command_lines:
+            return_value = await command()
+        return return_value
+
+    def is_running(self, entry_name: str) -> bool:
+        return entry_name in self._running_tasks
+
+
+# TODO(BoniLindsley): Add Registry class.
+# Wrap Database and StateMachine class usages.
+# Adding to database is installing.
+# Uninstalling should stop launcher first.
