@@ -740,3 +740,58 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         )
         await phile.asyncio.wait_for(dependency_stopped.wait())
         self.assertFalse(dependent_stopped.is_set())
+
+
+class TestRegistry(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.launcher.Registry`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_registry = phile.launcher.Registry()
+
+    async def test_register_adds_to_database(self) -> None:
+        name = 'register_to_registry'
+        await phile.asyncio.wait_for(
+            self.launcher_registry.register(
+                name, {'exec_start': [noop]}
+            )
+        )
+        self.assertIn(name, self.launcher_registry.type)
+
+    async def test_deregister_removes_from_database(self) -> None:
+        name = 'deregister_from_registry'
+        await phile.asyncio.wait_for(
+            self.launcher_registry.register(
+                name, {'exec_start': [noop]}
+            )
+        )
+        self.assertIn(name, self.launcher_registry.type)
+        await phile.asyncio.wait_for(
+            self.launcher_registry.deregister(name)
+        )
+        self.assertNotIn(name, self.launcher_registry.type)
+
+    async def test_deregister_stops_launcher(self) -> None:
+        name = 'to_be_stopped_when_deregistering'
+        started = asyncio.Event()
+        stopped = asyncio.Event()
+
+        async def exec_start() -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        async def exec_stop() -> None:
+            stopped.set()
+
+        await phile.asyncio.wait_for(
+            self.launcher_registry.register(
+                name, {
+                    'exec_start': [exec_start],
+                    'exec_stop': [exec_stop],
+                }
+            )
+        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(started.wait())
+        await self.launcher_registry.deregister(name)
+        await phile.asyncio.wait_for(stopped.wait())
