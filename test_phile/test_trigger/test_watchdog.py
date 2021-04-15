@@ -14,7 +14,7 @@ import unittest
 # External dependencies.
 # TODO[portalocker issue #60]: Remove type: ignore.
 # Type hinting is not yet activated.
-import portalocker  # type: ignore[import]
+import portalocker
 import watchdog.events
 
 # Internal packages.
