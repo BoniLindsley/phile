@@ -18,7 +18,7 @@ import typing
 # External dependencies.
 # TODO[portalocker issue #60]: Remove type: ignore.
 # Type hinting is not yet activated.
-import portalocker  # type: ignore[import]
+import portalocker
 import watchdog.observers
 
 # Internal modules.
@@ -111,12 +111,15 @@ class View:
     # Annotations are stored as strings and evalated later in 3.10.
     __Self = typing.TypeVar('__Self', bound='View')
 
-    # TODO[portalocker issue #60]: Remove type: ignore.
-    # Type hinting is not yet activated.
-    class DirectoryInUse(
-        portalocker.LockException  # type: ignore[misc]
-    ):
-        pass
+    class DirectoryInUse(portalocker.LockException):
+
+        def __init__(
+            self, *args: typing.Any, **kwargs: typing.Any
+        ) -> None:
+            # TODO[portalocker issue #60]: Remove type: ignore.
+            super().__init__(  # type: ignore[no-untyped-call]
+               *args, **kwargs,
+            )
 
     def __init__(
         self, *args: typing.Any, capabilities: phile.Capabilities,

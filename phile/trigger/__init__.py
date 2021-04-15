@@ -22,7 +22,7 @@ import typing
 import warnings
 
 # External dependencies.
-import portalocker  # type: ignore[import]
+import portalocker
 
 # Internal packages.
 import phile
