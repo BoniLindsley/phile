@@ -749,27 +749,19 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         super().setUp()
         self.launcher_registry = phile.launcher.Registry()
 
-    async def test_register_adds_to_database(self) -> None:
+    def test_register_adds_to_database(self) -> None:
         name = 'register_to_registry'
-        await phile.asyncio.wait_for(
-            self.launcher_registry.register(
-                name, {'exec_start': [noop]}
-            )
-        )
-        self.assertIn(name, self.launcher_registry.type)
+        self.launcher_registry.register(name, {'exec_start': [noop]})
+        self.assertTrue(self.launcher_registry.is_registered(name))
 
     async def test_deregister_removes_from_database(self) -> None:
         name = 'deregister_from_registry'
-        await phile.asyncio.wait_for(
-            self.launcher_registry.register(
-                name, {'exec_start': [noop]}
-            )
-        )
-        self.assertIn(name, self.launcher_registry.type)
+        self.launcher_registry.register(name, {'exec_start': [noop]})
+        self.assertTrue(self.launcher_registry.is_registered(name))
         await phile.asyncio.wait_for(
             self.launcher_registry.deregister(name)
         )
-        self.assertNotIn(name, self.launcher_registry.type)
+        self.assertFalse(self.launcher_registry.is_registered(name))
 
     async def test_deregister_stops_launcher(self) -> None:
         name = 'to_be_stopped_when_deregistering'
@@ -783,13 +775,11 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         async def exec_stop() -> None:
             stopped.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_registry.register(
-                name, {
-                    'exec_start': [exec_start],
-                    'exec_stop': [exec_stop],
-                }
-            )
+        self.launcher_registry.register(
+            name, {
+                'exec_start': [exec_start],
+                'exec_stop': [exec_stop],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(started.wait())
