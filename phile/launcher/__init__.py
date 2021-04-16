@@ -488,18 +488,20 @@ class StateMachine:
         return entry_name in self._running_tasks
 
 
-class Registry(StateMachine, Database):
+class Registry(StateMachine):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, database=self, **kwargs)
+        self._database = database = Database()
+        super().__init__(*args, database=database, **kwargs)
 
-    async def register(
-        self, entry_name: str, descriptor: Descriptor
-    ) -> None:
-        self.add(entry_name, descriptor)
+    def register(self, entry_name: str, descriptor: Descriptor) -> None:
+        self._database.add(entry_name, descriptor)
 
     async def deregister(self, entry_name: str) -> None:
         # No defensive mechanism to ensure it is not started again.
         # This is done in a best effort basis.
         await self.stop(entry_name)
-        self.remove(entry_name)
+        self._database.remove(entry_name)
+
+    def is_registered(self, entry_name: str) -> bool:
+        return self._database.contains(entry_name)
