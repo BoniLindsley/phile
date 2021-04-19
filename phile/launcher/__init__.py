@@ -488,11 +488,13 @@ class StateMachine:
         return entry_name in self._running_tasks
 
 
-class Registry(StateMachine):
+class Registry:
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._database = database = Database()
-        super().__init__(*args, database=database, **kwargs)
+        self._state_machine = StateMachine(database=database)
 
     def register(self, entry_name: str, descriptor: Descriptor) -> None:
         self._database.add(entry_name, descriptor)
@@ -505,3 +507,12 @@ class Registry(StateMachine):
 
     def is_registered(self, entry_name: str) -> bool:
         return self._database.contains(entry_name)
+
+    async def start(self, entry_name: str) -> None:
+        await self._state_machine.start(entry_name)
+
+    async def stop(self, entry_name: str) -> None:
+        await self._state_machine.stop(entry_name)
+
+    def is_running(self, entry_name: str) -> bool:
+        return self._state_machine.is_running(entry_name)
