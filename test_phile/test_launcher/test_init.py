@@ -8,6 +8,7 @@ Test :mod:`phile.launcher`
 # Standard libraries.
 import asyncio
 import dataclasses
+import functools
 import unittest
 import unittest.mock
 
@@ -785,3 +786,33 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(started.wait())
         await self.launcher_registry.deregister(name)
         await phile.asyncio.wait_for(stopped.wait())
+
+    async def test_start_calls_exec_run(self) -> None:
+        name = 'registry_start'
+        queue = asyncio.Queue[int]()
+        self.launcher_registry.register(
+            name, {'exec_start': [functools.partial(queue.put, 1)]}
+        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(queue.get())
+
+    async def test_stop_calls_exec_stop(self) -> None:
+        name = 'registry_stop'
+        queue = asyncio.Queue[int]()
+        self.launcher_registry.register(
+            name, {
+                'exec_start': [asyncio.Event().wait],
+                'exec_stop': [functools.partial(queue.put, 1)]
+            }
+        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(self.launcher_registry.stop(name))
+        await phile.asyncio.wait_for(queue.get())
+
+    async def test_is_running_after_start(self) -> None:
+        name = 'registry_is_running'
+        self.launcher_registry.register(
+            name, {'exec_start': [asyncio.Event().wait]}
+        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        self.assertTrue(self.launcher_registry.is_running(name))
