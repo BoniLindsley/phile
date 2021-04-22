@@ -111,6 +111,24 @@ class TestProducer(
         with self.producer:
             # Not bound. Unbind to mimic a double unbind.
             self.producer._on_path_change(self.trigger_file_path)
+            self.producer._on_path_change(self.trigger_file_path)
+
+    def test_double_create_should_be_ignored(self) -> None:
+        # This can happen if a file is created,
+        # and then deleted and created again
+        # before the trigger list is updated.
+        # There are no reliable way to force this to happen,
+        # so implementation detail is used to mimic it.
+        with self.producer:
+            self.trigger_file_path.touch()
+            self.event_callback.assert_called_with_soon(
+                phile.trigger.Registry.bind,
+                self.trigger_registry,
+                self.trigger_name,
+            )
+            # Already bound. Force it to try to double bind again.
+            self.producer._on_path_change(self.trigger_file_path)
+            self.producer._on_path_change(self.trigger_file_path)
 
     def test_activate_trigger_deletes_file(self) -> None:
         self.trigger_file_path.touch()
