@@ -74,9 +74,17 @@ class Producer:
         exc_value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType]
     ) -> None:
-        for name in self._bound_names.copy():
-            self._unbind(name)
-        self._scheduler.__exit__(exc_type, exc_value, traceback)
+        with contextlib.ExitStack() as stack:
+            # Make sure scheduler `__exit__`
+            # is called with appropriate arguments.
+            stack.push(self._scheduler)
+            # If unbind fails,
+            # exception is propagated to scheduler through exit stack.
+            for name in self._bound_names.copy():
+                self._unbind(name)
+            # If unbind succeeds,
+            # then exception for `self` is propagated instead.
+            stack.__exit__(exc_type, exc_value, traceback)
 
     def _on_path_change(self, path: pathlib.Path) -> None:
         trigger_name = path.stem
