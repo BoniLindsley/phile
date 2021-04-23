@@ -10,6 +10,7 @@ import asyncio
 import collections
 import collections.abc
 import contextlib
+import dataclasses
 import enum
 import functools
 import types
@@ -17,6 +18,7 @@ import typing
 
 # Internal modules.
 import phile
+import phile.pubsub_event
 
 Awaitable = collections.abc.Awaitable[typing.Any]
 NullaryAsyncCallable = collections.abc.Callable[[], Awaitable]
@@ -94,9 +96,19 @@ class NameInUse(RuntimeError):
 
 class Database:
 
+    @dataclasses.dataclass
+    class Event:
+        source: 'Database'
+        type: collections.abc.Callable[..., typing.Any]
+        entry_name: str
+
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.event_publisher = (
+            phile.pubsub_event.Publisher[Database.Event]()
+        )
+        """Pushes events to subscribers."""
         self.known_descriptors: dict[str, Descriptor] = {}
         """
         The launcher names added, with given :class:`Descriptor`.
@@ -141,6 +153,7 @@ class Database:
             stack.enter_context(self._update_exec_start(entry_name))
             stack.enter_context(self._update_exec_stop(entry_name))
             stack.enter_context(self._update_binds_to(entry_name))
+            stack.enter_context(self._update_events(entry_name))
             self.remover[entry_name] = functools.partial(
                 stack.pop_all().__exit__, None, None, None
             )
@@ -277,6 +290,34 @@ class Database:
                     del target_bound_by
         finally:
             binds_to.pop(entry_name, None)
+
+    @contextlib.contextmanager
+    def _update_events(
+        self,
+        entry_name: str,
+    ) -> collections.abc.Iterator[None]:
+        self.event_publisher.push(
+            self.Event(
+                source=self,
+                type=Database.add,
+                entry_name=entry_name,
+            )
+        )
+        try:
+            yield
+        finally:
+            try:
+                self.event_publisher.push(
+                    self.Event(
+                        source=self,
+                        type=Database.remove,
+                        entry_name=entry_name,
+                    )
+                )
+            except RuntimeError:  # pragma: no cover  # Defensive.
+                # If there is no current event loop,
+                # pushing is not possible, and asyncio raises this.
+                pass
 
     def remove(self, entry_name: str) -> None:
         entry_remover = self.remover.pop(entry_name, None)
