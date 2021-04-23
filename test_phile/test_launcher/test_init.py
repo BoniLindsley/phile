@@ -44,7 +44,7 @@ def create_awaiter(limit: int) -> tuple[Counter, phile.launcher.Command]:
     return counter, awaiter
 
 
-class TestDatabase(unittest.TestCase):
+class TestDatabase(unittest.IsolatedAsyncioTestCase):
     """Tests :func:`~phile.launcher.Database`."""
 
     def setUp(self) -> None:
@@ -228,6 +228,39 @@ class TestDatabase(unittest.TestCase):
         )
         self.launcher_database.remove('dependent')
         self.assertNotIn('bind_target', self.launcher_database.bound_by)
+
+    async def test_add_emits_events(self) -> None:
+        entry_name = 'add_emits_events'
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_database.event_publisher,
+        )
+        self.launcher_database.add(entry_name, {'exec_start': [noop]})
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.Database.Event(
+                source=self.launcher_database,
+                type=phile.launcher.Database.add,
+                entry_name=entry_name,
+            ),
+        )
+
+    async def test_remove_emits_events(self) -> None:
+        entry_name = 'remove_emits_events'
+        self.launcher_database.add(entry_name, {'exec_start': [noop]})
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_database.event_publisher,
+        )
+        self.launcher_database.remove(entry_name)
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.Database.Event(
+                source=self.launcher_database,
+                type=phile.launcher.Database.remove,
+                entry_name=entry_name,
+            ),
+        )
 
 
 class TestStateMachine(unittest.IsolatedAsyncioTestCase):
