@@ -9,6 +9,7 @@ Test :mod:`phile.launcher`
 import asyncio
 import dataclasses
 import functools
+import typing
 import unittest
 import unittest.mock
 
@@ -822,7 +823,11 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
     """Tests :func:`~phile.launcher.Registry`."""
 
-    def setUp(self) -> None:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_registry: phile.launcher.Registry
+
+    async def asyncSetUp(self) -> None:
         super().setUp()
         self.launcher_registry = phile.launcher.Registry()
 
@@ -892,3 +897,94 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         self.assertTrue(self.launcher_registry.is_running(name))
+
+    async def test_register_emits_events(self) -> None:
+        entry_name = 'register_emits_events'
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_registry.event_publisher,
+        )
+        self.launcher_registry.register(
+            entry_name, {'exec_start': [noop]}
+        )
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.Registry.Event(
+                source=self.launcher_registry,
+                type=phile.launcher.Registry.register,
+                entry_name=entry_name,
+            ),
+        )
+
+    async def test_deregister_emits_events(self) -> None:
+        entry_name = 'deregister_emits_events'
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_registry.event_publisher,
+        )
+        self.launcher_registry.register(
+            entry_name, {'exec_start': [noop]}
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.deregister(entry_name)
+        )
+        # Discard the register event.
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.Registry.Event(
+                source=self.launcher_registry,
+                type=phile.launcher.Registry.deregister,
+                entry_name=entry_name,
+            ),
+        )
+
+    async def test_start_emits_events(self) -> None:
+        entry_name = 'start_emits_events'
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_registry.event_publisher,
+        )
+        self.launcher_registry.register(
+            entry_name, {'exec_start': [noop]}
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start(entry_name),
+        )
+        # Discard the register event.
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.Registry.Event(
+                source=self.launcher_registry,
+                type=phile.launcher.Registry.start,
+                entry_name=entry_name,
+            ),
+        )
+
+    async def test_stop_emits_events(self) -> None:
+        entry_name = 'start_emits_events'
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_registry.event_publisher,
+        )
+        self.launcher_registry.register(
+            entry_name, {'exec_start': [noop]}
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start(entry_name),
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.stop(entry_name),
+        )
+        # Discard the register and start events.
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.Registry.Event(
+                source=self.launcher_registry,
+                type=phile.launcher.Registry.stop,
+                entry_name=entry_name,
+            ),
+        )

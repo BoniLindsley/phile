@@ -577,11 +577,24 @@ class StateMachine:
 
 class Registry:
 
+    @dataclasses.dataclass
+    class Event:
+        source: 'Registry'
+        type: collections.abc.Callable[..., typing.Any]
+        entry_name: str
+
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.event_publisher = (
+            phile.pubsub_event.Publisher[Registry.Event]()
+        )
         self._database = database = Database()
         self._state_machine = StateMachine(database=database)
+        self._event_forwarding_tasks = (
+            asyncio.create_task(self._forward_database_events()),
+            asyncio.create_task(self._forward_state_machine_events()),
+        )
 
     def register(self, entry_name: str, descriptor: Descriptor) -> None:
         self._database.add(entry_name, descriptor)
@@ -603,3 +616,51 @@ class Registry:
 
     def is_running(self, entry_name: str) -> bool:
         return self._state_machine.is_running(entry_name)
+
+    async def _forward_database_events(self) -> None:
+        subscriber = phile.pubsub_event.Subscriber[Database.Event](
+            publisher=self._database.event_publisher
+        )
+        while event := await subscriber.pull():
+            if event.type == Database.add:
+                self.event_publisher.push(
+                    self.Event(
+                        source=self,
+                        type=Registry.register,
+                        entry_name=event.entry_name,
+                    )
+                )
+            elif event.type == Database.remove:
+                self.event_publisher.push(
+                    self.Event(
+                        source=self,
+                        type=Registry.deregister,
+                        entry_name=event.entry_name,
+                    )
+                )
+            else:  # pragma: no cover  # Defensive.
+                assert True, 'Unexpected event'
+
+    async def _forward_state_machine_events(self) -> None:
+        subscriber = phile.pubsub_event.Subscriber[StateMachine.Event](
+            publisher=self._state_machine.event_publisher
+        )
+        while event := await subscriber.pull():
+            if event.type == StateMachine.start:
+                self.event_publisher.push(
+                    self.Event(
+                        source=self,
+                        type=Registry.start,
+                        entry_name=event.entry_name,
+                    )
+                )
+            elif event.type == StateMachine.stop:
+                self.event_publisher.push(
+                    self.Event(
+                        source=self,
+                        type=Registry.stop,
+                        entry_name=event.entry_name,
+                    )
+                )
+            else:  # pragma: no cover  # Defensive.
+                assert True, 'Unexpected event'
