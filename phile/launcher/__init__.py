@@ -330,11 +330,21 @@ class Database:
 
 class StateMachine:
 
+    @dataclasses.dataclass
+    class Event:
+        source: 'StateMachine'
+        type: collections.abc.Callable[..., typing.Any]
+        entry_name: str
+
     def __init__(
         self, *args: typing.Any, database: Database, **kwargs: typing.Any
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.event_publisher = (
+            phile.pubsub_event.Publisher[StateMachine.Event]()
+        )
+        """Pushes events to subscribers."""
         self._database = database
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
         self._start_tasks: dict[str, asyncio.Future[typing.Any]] = {}
@@ -430,6 +440,11 @@ class StateMachine:
         await self._start_dependencies(entry_name)
         await self._ensure_dependencies_are_started(entry_name)
         async with contextlib.AsyncExitStack() as stack:
+            # When unwinding the stack,
+            # emit event only when the task is assumed to be done.
+            event_stack = await stack.enter_async_context(
+                contextlib.AsyncExitStack()
+            )
             main_task = await stack.enter_async_context(
                 self._create_main_task(entry_name)
             )
@@ -441,6 +456,9 @@ class StateMachine:
                 self._ensure_dependents_are_stopped, entry_name
             )
             stack.push_async_callback(self._stop_dependents, entry_name)
+            # When setting up,
+            # emit event only when all clean-up is set up.
+            event_stack.enter_context(self._update_events(entry_name))
             ready_event.set()
             await asyncio.shield(main_task)
 
@@ -527,6 +545,34 @@ class StateMachine:
 
     def is_running(self, entry_name: str) -> bool:
         return entry_name in self._running_tasks
+
+    @contextlib.contextmanager
+    def _update_events(
+        self,
+        entry_name: str,
+    ) -> collections.abc.Iterator[None]:
+        self.event_publisher.push(
+            self.Event(
+                source=self,
+                type=StateMachine.start,
+                entry_name=entry_name,
+            )
+        )
+        try:
+            yield
+        finally:
+            try:
+                self.event_publisher.push(
+                    self.Event(
+                        source=self,
+                        type=StateMachine.stop,
+                        entry_name=entry_name,
+                    )
+                )
+            except RuntimeError:  # pragma: no cover  # Defensive.
+                # If there is no current event loop,
+                # pushing is not possible, and asyncio raises this.
+                pass
 
 
 class Registry:

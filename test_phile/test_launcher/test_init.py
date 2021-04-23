@@ -775,6 +775,49 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(dependency_stopped.wait())
         self.assertFalse(dependent_stopped.is_set())
 
+    async def test_start_emits_events(self) -> None:
+        entry_name = 'start_emits_events'
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_state_machine.event_publisher,
+        )
+        self.launcher_database.add(entry_name, {'exec_start': [noop]})
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start(entry_name)
+        )
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.StateMachine.Event(
+                source=self.launcher_state_machine,
+                type=phile.launcher.StateMachine.start,
+                entry_name=entry_name,
+            ),
+        )
+
+    async def test_stop_emits_events(self) -> None:
+        entry_name = 'remove_emits_events'
+        self.launcher_database.add(
+            entry_name, {'exec_start': [asyncio.Event().wait]}
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start(entry_name)
+        )
+        subscriber = phile.pubsub_event.Subscriber(
+            publisher=self.launcher_state_machine.event_publisher,
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.stop(entry_name)
+        )
+        event = await phile.asyncio.wait_for(subscriber.pull())
+        self.assertEqual(
+            event,
+            phile.launcher.StateMachine.Event(
+                source=self.launcher_state_machine,
+                type=phile.launcher.StateMachine.stop,
+                entry_name=entry_name,
+            ),
+        )
+
 
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
     """Tests :func:`~phile.launcher.Registry`."""
