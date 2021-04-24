@@ -39,6 +39,8 @@ NullaryCallable = typing.Callable[[], typing.Any]
 Launcher = typing.Callable[[phile.Capabilities], typing.Coroutine]
 LauncherEntry = tuple[Launcher, set[type]]
 
+_T_co = typing.TypeVar('_T_co')
+
 default_launchers: typing.Dict[str, LauncherEntry] = {
     'imap-idle': (
         phile.tray.publishers.imap_idle.run,
@@ -241,17 +243,17 @@ def main(
         )
         args = parser.parse_args(argv[1:])
 
-        stack.enter_context(
-            capability_registry.provide(phile.Configuration())
-        )
-        stack.enter_context(
-            capability_registry.provide(
-                trigger_registry := phile.trigger.Registry()
+        def stack_provide(
+            value: _T_co,
+            capability: typing.Optional[type[_T_co]] = None,
+        ) -> None:
+            stack.enter_context(
+                capability_registry.provide(value, capability)
             )
-        )
-        stack.enter_context(
-            capability_registry.provide(clean_ups := CleanUps())
-        )
+
+        stack_provide(phile.Configuration())
+        stack_provide(trigger_registry := phile.trigger.Registry())
+        stack_provide(clean_ups := CleanUps())
         stack.enter_context(
             quit_trigger_provider := phile.trigger.Provider(
                 callback_map={'quit': clean_ups.run},
@@ -259,16 +261,12 @@ def main(
             )
         )
         quit_trigger_provider.show_all()
-        stack.enter_context(
-            capability_registry.provide(
-                stack.enter_context(phile.watchdog.observers.open()),
-                watchdog.observers.api.BaseObserver,
-            )
+        stack_provide(
+            stack.enter_context(phile.watchdog.observers.open()),
+            watchdog.observers.api.BaseObserver,
         )
-        stack.enter_context(
-            capability_registry.provide(
-                keyring.get_keyring(), keyring.backend.KeyringBackend
-            )
+        stack_provide(
+            keyring.get_keyring(), keyring.backend.KeyringBackend
         )
         stack.enter_context(
             phile.trigger.watchdog.View(
