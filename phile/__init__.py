@@ -2,6 +2,7 @@
 """
 .. automodule:: phile.PySide2
 .. automodule:: phile.asyncio
+.. automodule:: phile.cmd
 .. automodule:: phile.data
 .. automodule:: phile.datetime
 .. automodule:: phile.hotkey

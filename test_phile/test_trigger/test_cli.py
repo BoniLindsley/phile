@@ -19,7 +19,7 @@ from test_phile.test_init import UsesCapabilities
 from test_phile.test_trigger.test_init import UsesRegistry
 
 
-class _UsesPrompt(UsesRegistry, UsesCapabilities, unittest.TestCase):
+class TestPrompt(UsesRegistry, UsesCapabilities, unittest.TestCase):
     """Tests :func:`~phile.trigger.cli.Prompt`."""
 
     def setUp(self) -> None:
@@ -31,13 +31,6 @@ class _UsesPrompt(UsesRegistry, UsesCapabilities, unittest.TestCase):
             stdin=self.stdin,
             stdout=self.stdout
         )
-
-
-class TestPrompt(_UsesPrompt, unittest.TestCase):
-    """Tests :func:`~phile.trigger.cli.Prompt`."""
-
-    def setUp(self) -> None:
-        super().setUp()
         self.run_mock = unittest.mock.Mock()
         self.trigger_registry.bind('run', self.run_mock)
         self.trigger_registry.show('run')
@@ -124,82 +117,6 @@ class TestPrompt(_UsesPrompt, unittest.TestCase):
             'Listing IDs of 1 available triggers.\n'
             'Trigger 1 is run\n'
         )
-
-
-class TestProcessCommand(_UsesPrompt, unittest.TestCase):
-    """Tests :func:`~phile.trigger.cli.process_command`."""
-
-    def test_exits_without_command(self) -> None:
-        self.assertTrue(
-            phile.trigger.cli.process_command(self.prompt, '')
-        )
-
-    def test_exits_with_eof(self) -> None:
-        self.assertTrue(
-            phile.trigger.cli.process_command(self.prompt, 'EOF')
-        )
-
-    def test_run_precmd(self) -> None:
-        with unittest.mock.patch.object(
-            self.prompt, 'precmd', return_value='EOF'
-        ) as precmd:
-            phile.trigger.cli.process_command(self.prompt, 'EOF')
-            precmd.assert_called_with('EOF')
-
-    def test_run_postcmd(self) -> None:
-        with unittest.mock.patch.object(
-            self.prompt, 'postcmd', return_value=True
-        ) as postcmd:
-            phile.trigger.cli.process_command(self.prompt, 'EOF')
-            postcmd.assert_called_with(True, 'EOF')
-
-
-class TestAsyncCmdloopThreadedStdin(
-    _UsesPrompt, unittest.IsolatedAsyncioTestCase
-):
-    """Tests :func:`~phile.trigger.cli.async_cmdloop_threaded_stdin`."""
-
-    async def test_exits_with_eof(self) -> None:
-        self.stdin.write('EOF\n')
-        await phile.asyncio.wait_for(
-            phile.trigger.cli.async_cmdloop_threaded_stdin(
-                prompt=self.prompt,
-            )
-        )
-
-    async def test_respects_intro(self) -> None:
-        self.prompt.intro = 'Hello\n'
-        self.stdin.write('EOF\n')
-        await phile.asyncio.wait_for(
-            phile.trigger.cli.async_cmdloop_threaded_stdin(
-                prompt=self.prompt,
-            )
-        )
-        self.assertEqual(self.stdout.getvalue(), 'Hello\n(Cmd) ')
-
-    async def test_run_preloop(self) -> None:
-        with unittest.mock.patch.object(
-            self.prompt, 'preloop'
-        ) as preloop:
-            self.stdin.write('EOF\n')
-            await phile.asyncio.wait_for(
-                phile.trigger.cli.async_cmdloop_threaded_stdin(
-                    prompt=self.prompt,
-                )
-            )
-            preloop.assert_called_with()
-
-    async def test_run_postloop(self) -> None:
-        with unittest.mock.patch.object(
-            self.prompt, 'postloop'
-        ) as postloop:
-            self.stdin.write('EOF\n')
-            await phile.asyncio.wait_for(
-                phile.trigger.cli.async_cmdloop_threaded_stdin(
-                    prompt=self.prompt,
-                )
-            )
-            postloop.assert_called_with()
 
 
 if __name__ == '__main__':
