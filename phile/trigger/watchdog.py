@@ -253,7 +253,16 @@ class View:
         # this avoids the double activation situation.
         trigger_name = path.stem
         if not path.is_file():
-            self._registry.activate_if_shown(trigger_name)
+            # File system is not under the application's control,
+            # so ignore some file events that are unexpected.
+            # In particular, if a trigger file is to be deleted
+            # even though it is not bound or shown,
+            # then the activation request is ignored.
+            with contextlib.suppress(
+                phile.trigger.Registry.NotBound,
+                phile.trigger.Registry.NotShown,
+            ):
+                self._registry.activate(trigger_name)
 
     def _is_trigger_path(self, path: pathlib.Path) -> bool:
         return path.suffix == self._trigger_suffix
