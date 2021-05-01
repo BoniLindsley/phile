@@ -7,6 +7,7 @@ import contextlib
 import contextvars
 import datetime
 import socket
+import threading
 import typing
 
 _T_co = typing.TypeVar('_T_co', covariant=True)
@@ -36,6 +37,7 @@ async def wait_for(
 async def open_task(
     awaitable: collections.abc.Awaitable[_T_co],
     *args: typing.Any,
+    suppress_cancelled_error_if_not_done: bool = False,
     **kwargs: typing.Any,
 ) -> collections.abc.AsyncIterator[asyncio.Task[typing.Any]]:
     if isinstance(awaitable, asyncio.Task):
@@ -48,6 +50,11 @@ async def open_task(
         yield task
     finally:
         task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            if not suppress_cancelled_error_if_not_done:
+                raise
 
 
 async def close_subprocess(
@@ -88,3 +95,18 @@ async def readable(
     with open_reader(file_descriptor, readable.set):
         await readable.wait()
     return True
+
+
+class Thread(threading.Thread):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.__running_loop = asyncio.get_running_loop()
+        self.__stopped = asyncio.Event()
+
+    def run(self) -> None:
+        super().run()
+        self.__running_loop.call_soon_threadsafe(self.__stopped.set)
+
+    async def async_join(self) -> None:
+        await self.__stopped.wait()

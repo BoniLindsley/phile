@@ -6,10 +6,8 @@ Test :mod:`phile.watchdog`
 """
 
 # Standard library.
-import contextlib
 import dataclasses
 import pathlib
-import typing
 import unittest
 import unittest.mock
 
@@ -20,7 +18,7 @@ import watchdog.observers
 # Internal packages.
 import phile.watchdog
 import phile.watchdog.observers
-import test_phile.threaded_mock
+from test_phile.test_init import UsesCapabilities
 
 IntCallback = (phile.watchdog.SingleParameterCallback[int, None])
 
@@ -41,8 +39,8 @@ class TestSingleParameterCallback(unittest.TestCase):
         class Parent:
             callback: IntCallback
 
-        self.parent = Parent(callback=callback)
-        self.parent.callback(0)
+        parent = Parent(callback=callback)
+        parent.callback(0)
 
     def test_class_method(self) -> None:
         """Methods of with proper parameter satisfies the protocol."""
@@ -50,7 +48,7 @@ class TestSingleParameterCallback(unittest.TestCase):
         class IntObject:
 
             @classmethod
-            def int_method(self, _: int) -> None:
+            def int_method(cls, _: int) -> None:
                 pass
 
         self.do_callback_test(IntObject.int_method)
@@ -106,7 +104,7 @@ class TestEventHandler(unittest.TestCase):
         """
 
         def event_handle_function(
-            event: watchdog.events.FileSystemEvent
+            _event: watchdog.events.FileSystemEvent
         ) -> None:
             pass
 
@@ -121,7 +119,7 @@ class TestPathFilter(unittest.TestCase):
         A function can be a :data:`~phile.watchdog.PathFilter`.
         """
 
-        def path_handle_function(path: pathlib.Path) -> bool:
+        def path_handle_function(_path: pathlib.Path) -> bool:
             return True
 
         path_filter: phile.watchdog.PathFilter = (path_handle_function)
@@ -136,7 +134,7 @@ class TestPathHandler(unittest.TestCase):
         A function can be a :data:`~phile.watchdog.PathHandler`.
         """
 
-        def path_handle_function(path: pathlib.Path) -> None:
+        def path_handle_function(_path: pathlib.Path) -> None:
             pass
 
         handler: phile.watchdog.PathHandler = (path_handle_function)
@@ -232,7 +230,7 @@ class TestScheduler(unittest.TestCase):
 
     def test_schedule_in_context_manager(self) -> None:
         scheduler = self.scheduler
-        with scheduler as scheduler_context:
+        with scheduler:
             self.assertTrue(scheduler.is_scheduled)
         self.assertTrue(not scheduler.is_scheduled)
 
@@ -313,3 +311,13 @@ class TestScheduler(unittest.TestCase):
                 for call_args in self.path_handler.call_args_list
             ), {source_path, dest_path}
         )
+
+
+class UsesObserver(UsesCapabilities, unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.watchdog_observer = observer = watchdog.observers.Observer()
+        observer.start()
+        self.addCleanup(observer.stop)
+        self.capabilities[watchdog.observers.api.BaseObserver] = observer

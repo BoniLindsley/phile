@@ -190,8 +190,10 @@ async def run(
 async def async_main(argv: typing.List[str]) -> int:  # pragma: no cover
     capabilities = phile.Capabilities()
     capabilities.set(phile.Configuration())
-    capabilities[keyring.backend.KeyringBackend] = (
-        keyring.get_keyring()  # type: ignore[no-untyped-call]
+    KeyringBackend = keyring.backend.KeyringBackend
+    capabilities[KeyringBackend] = (  # type: ignore[misc]
+        # Don't reformat -- causes linebreak at [ ].
+        keyring.get_keyring()
     )
     await run(capabilities=capabilities)
     return 0

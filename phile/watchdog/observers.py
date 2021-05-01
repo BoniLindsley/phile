@@ -6,10 +6,10 @@ Convenience module for using :attr:`~watchdog.observers.Observer`
 """
 
 # Standard library.
+import asyncio
 import collections.abc
 import contextlib
 import pathlib
-import threading
 import typing
 
 # External dependencies.
@@ -70,13 +70,11 @@ def was_stop_called(
 
 
 @contextlib.contextmanager
-def open(
-    *args: typing.Any,
-    opener: type[watchdog.observers.api.BaseObserver
-                 ] = watchdog.observers.Observer,
-    **kwargs: typing.Any,
+def open(  # pylint: disable=redefined-builtin
+    opener: typing.Callable[[], watchdog.observers.api.
+                            BaseObserver] = watchdog.observers.Observer,
 ) -> collections.abc.Iterator[watchdog.observers.api.BaseObserver]:
-    observer = opener(*args, **kwargs)
+    observer = opener()
     try:
         observer.start()
         yield observer
@@ -86,17 +84,16 @@ def open(
 
 @contextlib.asynccontextmanager
 async def async_open(
-    *args: typing.Any,
-    opener: type[watchdog.observers.api.BaseObserver
-                 ] = watchdog.observers.Observer,
-    **kwargs: typing.Any,
+    opener: typing.Callable[[], watchdog.observers.api.
+                            BaseObserver] = watchdog.observers.Observer,
 ) -> collections.abc.AsyncIterator[watchdog.observers.api.BaseObserver]:
-    observer = opener(*args, **kwargs)
+    loop = asyncio.get_running_loop()
+    observer = opener()
     try:
-        observer.start()
+        await loop.run_in_executor(None, observer.start)
         yield observer
     finally:
-        observer.stop()
+        await loop.run_in_executor(None, observer.stop)
 
 
 def has_handlers(
@@ -112,7 +109,9 @@ def has_handlers(
        as it uses underscore variables.
     """
     try:
-        return bool(observer._handlers[watch])
+        return bool(
+            observer._handlers[watch]  # pylint: disable=protected-access
+        )
     except KeyError:
         return False
 
@@ -164,7 +163,7 @@ def remove_handler(
     event_handler: watchdog.events.FileSystemEventHandler,
     watch: watchdog.observers.api.ObservedWatch,
 ) -> None:
-    """
+    """  # pylint: disable=line-too-long
     Stop notifying ``event_handler`` of changes in ``watch``.
 
     It merges
@@ -199,6 +198,7 @@ def remove_handler(
        it stops the monitoring if there are no more handlers registered
        for the given ``watch```, bridging functionality gaps.
     """
+    # pylint: disable=protected-access
 
     with observer._lock:
         handlers = observer._handlers.get(watch)

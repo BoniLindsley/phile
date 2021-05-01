@@ -20,7 +20,7 @@ import watchdog.observers
 
 # Internal packages.
 import phile
-import phile.PySide2
+import phile.PySide2.QtCore
 import phile.notify
 import phile.notify.gui
 import test_phile.threaded_mock
@@ -299,7 +299,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # Closing the window `deleteLater` the window.
         # Handle the event to trigger retiling.
         notification_sub_window_2.close()
-        phile.PySide2.process_deferred_delete_events()
+        phile.PySide2.QtCore.process_deferred_delete_events()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
     def test_maximise_and_minimise_sub_window(self) -> None:
@@ -343,7 +343,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         self.assertEqual(notification_sub_window.pos().x(), 0)
         self.assertEqual(notification_sub_window_2.pos().x(), 0)
         # Empty the event queue.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertEqual(notification_sub_window.pos().x(), 0)
         self.assertEqual(notification_sub_window_2.pos().x(), 0)
 
@@ -357,7 +357,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
 
         # Do the same with minimising.
         # Empty the event queue.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertEqual(notification_sub_window.pos().x(), 0)
         self.assertEqual(notification_sub_window_2.pos().x(), 0)
         # Move the second sub-window.
@@ -398,7 +398,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         self.assertEqual(notification_sub_window.pos().x(), 0)
         # Process all events so we know the re-tile
         # will only be from the resize.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
         # Move the sub-window
@@ -610,7 +610,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
         ).mkdir()
         # Check that they are all detected when showing the main window.
         self.main_window.show()
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(2)
         self.assertEqual(
             self.main_window.sorter.tracked_data[0].text,
@@ -645,7 +645,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             sub_window.close()
             self.assertTrue(not notification.path.is_file())
             handler_mock.assert_called_with_soon(notification.path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(not main_window.isHidden())
             self.assert_tracked_data_length(0)
 
@@ -659,21 +659,21 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(not main_window.isHidden())
         # Respond to a hide trigger.
         trigger_path = trigger_directory / ('hide' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(main_window.isHidden())
         # Respond to a close trigger.
         trigger_path = trigger_directory / ('close' + trigger_suffix)
         with self.trigger_path_handler_patch as handler_mock:
             trigger_path.unlink()
             handler_mock.assert_called_with_soon(trigger_path)
-            phile.PySide2.process_events()
+            phile.PySide2.QtCore.process_events()
             self.assertTrue(
                 not main_window._trigger_scheduler.is_scheduled
             )
@@ -698,7 +698,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(1)
         self.assertEqual(
             self.main_window.sorter.tracked_data[0].text,
@@ -724,7 +724,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(0)
 
     def test_modifying_notification_updates_sub_window(self) -> None:
@@ -748,7 +748,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(1)
         self.assertEqual(
             self.main_window.sorter.tracked_data[0].text,
@@ -779,7 +779,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # Handle it to create the sub-window.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(1)
         self.assertEqual(
             self.main_window.sorter.tracked_data[0].text,
@@ -815,7 +815,7 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             handler_mock.assert_called_soon()
         # The Qt event should be posted by now.
         # The icon list should hve handled it by creating a tray icon.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(0)
 
 

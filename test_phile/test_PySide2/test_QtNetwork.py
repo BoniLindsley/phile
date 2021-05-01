@@ -18,10 +18,10 @@ import unittest.mock
 import PySide2.QtCore
 
 # Internal packages.
-import phile.PySide2
+import phile.PySide2.QtCore
 import phile.PySide2.QtNetwork
 import phile.signal
-from .test_init import UsesQCoreApplication
+from .test_QtCore import UsesQCoreApplication
 
 platform_can_handle_sigint = (sys.platform != "win32")
 
@@ -59,7 +59,7 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
         self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
 
         self.posix_signal.deleteLater()
-        phile.PySide2.process_deferred_delete_events()
+        phile.PySide2.QtCore.process_deferred_delete_events()
         self.assertEqual(phile.signal.get_wakeup_fd(), -1)
 
         # Give the test `tearDown` something to delete.
@@ -97,7 +97,7 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
         # If the signal.signal handler has already been called,
         # then the CPython signal handler had already wrote
         # to the signal fd.
-        phile.PySide2.process_events()
+        phile.PySide2.QtCore.process_events()
         self.assertTrue(slot_mock.called)
 
 

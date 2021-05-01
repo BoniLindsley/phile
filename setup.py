@@ -11,6 +11,7 @@ setup(
     packages=[
         'phile',
         'phile.data',
+        'phile.hotkey',
         'phile.notify',
         'phile.PySide2',
         'phile.tmux',
@@ -26,6 +27,7 @@ setup(
         'pathvalidate',
         'portalocker',
         'psutil',
+        'pynput',
         'PySide2',
         'watchdog',
     ],

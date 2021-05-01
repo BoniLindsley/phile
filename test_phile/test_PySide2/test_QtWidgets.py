@@ -13,9 +13,9 @@ import PySide2.QtGui
 import PySide2.QtWidgets
 
 # Internal packages.
-import phile.PySide2
+import phile.PySide2.QtCore
 import phile.PySide2.QtWidgets
-from .test_init import UsesPySide2
+from .test_QtCore import UsesPySide2
 
 
 class UsesQApplication(UsesPySide2, unittest.TestCase):
@@ -25,8 +25,10 @@ class UsesQApplication(UsesPySide2, unittest.TestCase):
         super().setUp()
         application = PySide2.QtWidgets.QApplication()
         self.addCleanup(application.shutdown)
-        self.addCleanup(phile.PySide2.process_deferred_delete_events)
-        self.addCleanup(phile.PySide2.process_events)
+        self.addCleanup(
+            phile.PySide2.QtCore.process_deferred_delete_events
+        )
+        self.addCleanup(phile.PySide2.QtCore.process_events)
 
 
 class TestOffscreenSystemTrayIcon(UsesQApplication, unittest.TestCase):

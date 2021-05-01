@@ -10,6 +10,7 @@ import asyncio
 import datetime
 import socket
 import sys
+import threading
 import typing
 import unittest
 import unittest.mock
@@ -60,24 +61,29 @@ class TestOpenTask(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancels_given_task(self) -> None:
         task: (asyncio.Task[typing.Any]) = asyncio.create_task(
-            asyncio.sleep(2048)
+            asyncio.Event().wait()
         )
         self.addCleanup(task.cancel)
-        async with phile.asyncio.open_task(task) as returned_task:
-            self.assertIs(returned_task, task)
-            self.assertFalse(task.cancelled())
         with self.assertRaises(asyncio.CancelledError):
-            await phile.asyncio.wait_for(task)
+            async with phile.asyncio.open_task(task) as returned_task:
+                self.assertIs(returned_task, task)
+                self.assertFalse(task.cancelled())
+        self.assertTrue(task.cancelled())
 
     async def test_creates_task_for_coroutine(self) -> None:
-
-        async def sleep() -> None:
-            await asyncio.sleep(2048)
-
-        async with phile.asyncio.open_task(sleep()) as task:
-            self.assertIsInstance(task, asyncio.Task)
         with self.assertRaises(asyncio.CancelledError):
-            await phile.asyncio.wait_for(task)
+            async with phile.asyncio.open_task(
+                asyncio.Event().wait()
+            ) as task:
+                self.assertIsInstance(task, asyncio.Task)
+
+    async def test_suppress_cancelled_error_if_not_done(self) -> None:
+        async with phile.asyncio.open_task(
+            asyncio.Event().wait(),
+            suppress_cancelled_error_if_not_done=True,
+        ) as task:
+            self.assertIsInstance(task, asyncio.Task)
+        self.assertTrue(task.cancelled())
 
 
 class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
@@ -179,3 +185,27 @@ class TestReadable(unittest.IsolatedAsyncioTestCase):
                 phile.asyncio.readable(self.read_socket)
             )
         )
+
+
+class TestThread(unittest.IsolatedAsyncioTestCase):
+    """Tests :class:`~phile.asyncio.Thread`."""
+
+    async def test_async_join_returns_after_run(self) -> None:
+        event = threading.Event()
+        thread = phile.asyncio.Thread(target=event.set, daemon=True)
+        thread.start()
+        self.assertTrue(event.wait(timeout=2))
+        await phile.asyncio.wait_for(thread.async_join())
+
+    async def test_run_override_should_call_super_at_end(self) -> None:
+        event = threading.Event()
+
+        class Thread(phile.asyncio.Thread):
+
+            def run(self) -> None:
+                event.set()
+                super().run()
+
+        thread = Thread()
+        thread.start()
+        await phile.asyncio.wait_for(thread.async_join())

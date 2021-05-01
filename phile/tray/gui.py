@@ -30,7 +30,7 @@ import watchdog.observers
 
 # Internal packages.
 import phile
-import phile.PySide2
+import phile.PySide2.QtCore
 import phile.PySide2.QtNetwork
 import phile.data
 import phile.tray
@@ -141,7 +141,7 @@ class GuiIconList(QObject):
                     (path.suffix == configuration.tray_suffix)
                 ),
                 path_handler=functools.partial(
-                    phile.PySide2.call_soon_threadsafe,
+                    phile.PySide2.QtCore.call_soon_threadsafe,
                     tray_sorter.update
                 ),
                 watched_path=configuration.tray_directory,
@@ -177,7 +177,7 @@ class GuiIconList(QObject):
             phile.watchdog.Scheduler(
                 path_filter=entry_point.check_path,
                 path_handler=functools.partial(
-                    phile.PySide2.call_soon_threadsafe,
+                    phile.PySide2.QtCore.call_soon_threadsafe,
                     entry_point.activate_trigger
                 ),
                 watched_path=entry_point.trigger_directory,
