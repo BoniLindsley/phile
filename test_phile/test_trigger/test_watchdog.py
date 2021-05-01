@@ -177,6 +177,14 @@ class TestView(
 ):
     """Tests :func:`~phile.trigger.watchdog.View`."""
 
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        self.dispatch_mock: test_phile.threaded_mock.ThreadedMock
+        self.trigger_callback: test_phile.threaded_mock.ThreadedMock
+        self.trigger_file_path: pathlib.Path
+        self.trigger_name: str
+        self.view: phile.trigger.watchdog.View
+        super().__init__(*args, **kwargs)
+
     def setUp(self) -> None:
         """Also tests constructor of View."""
         super().setUp()
@@ -318,6 +326,24 @@ class TestView(
             )
             wrong_file.touch()
             wrong_file.unlink()
+
+    def test_deleting_file_of_unbound_trigger_is_ignored(self) -> None:
+        unbound_trigger_file_path = self.configuration.trigger_root / (
+            'unbound' + self.configuration.trigger_suffix
+        )
+        with self.view:
+            self.assertFalse(unbound_trigger_file_path.is_file())
+            unbound_trigger_file_path.touch()
+            unbound_trigger_file_path.unlink()
+            # Cannot really test that there are no side effects.
+            # Just check that normal operations are possbile here.
+            self.assertTrue(not self.trigger_file_path.is_file())
+            self.trigger_registry.show(self.trigger_name)
+            self.dispatch_mock.dispatch.assert_called_with_soon(
+                watchdog.events.FileCreatedEvent(
+                    str(self.trigger_file_path)
+                )
+            )
 
 
 class TestRun(
