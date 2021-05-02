@@ -7,7 +7,6 @@ Test :mod:`phile.capability.asyncio`
 
 # Standard libraries.
 import asyncio
-import concurrent.futures
 import contextlib
 import functools
 import unittest
@@ -32,6 +31,20 @@ class TestProvide(unittest.TestCase):
         self.assertIn(
             asyncio.AbstractEventLoop, self.capability_registry
         )
+
+
+class TestProvideLoops(unittest.TestCase):
+    """Tests :func:`~phile.capability.asyncio.provide`."""
+
+    def test_add_capability(self) -> None:
+        capability_registry = phile.capability.Registry()
+        with phile.capability.asyncio.provide_loop(
+            capability_registry=capability_registry,
+        ) as loop:
+            self.assertFalse(loop.is_closed())
+            self.assertIn(asyncio.AbstractEventLoop, capability_registry)
+        self.assertTrue(loop.is_closed())
+        self.assertNotIn(asyncio.AbstractEventLoop, capability_registry)
 
 
 class TestGetInstance(unittest.TestCase):

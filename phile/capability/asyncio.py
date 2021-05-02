@@ -65,6 +65,26 @@ def provide(
     )
 
 
+@contextlib.contextmanager
+def provide_loop(
+    capability_registry: phile.capability.Registry,
+) -> collections.abc.Iterator[asyncio.AbstractEventLoop]:
+    with contextlib.ExitStack() as clean_up:
+        loop = asyncio.new_event_loop()
+        clean_up.callback(loop.close)
+        asyncio.set_event_loop(loop)
+        clean_up.callback(asyncio.set_event_loop, None)
+        clean_up.callback(_shutdown)
+        clean_up.callback(asyncio.set_event_loop, loop)
+        clean_up.enter_context(
+            capability_registry.provide(
+                loop,
+                asyncio.AbstractEventLoop,
+            )
+        )
+        yield loop
+
+
 def get_instance(
     capability_registry: phile.capability.Registry
 ) -> asyncio.AbstractEventLoop:
