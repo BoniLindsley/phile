@@ -831,6 +831,16 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         super().setUp()
         self.launcher_registry = phile.launcher.Registry()
 
+    def test_has_properties(self) -> None:
+        self.assertIsInstance(
+            self.launcher_registry.database,
+            phile.launcher.Database,
+        )
+        self.assertIsInstance(
+            self.launcher_registry.state_machine,
+            phile.launcher.StateMachine,
+        )
+
     def test_register_adds_to_database(self) -> None:
         name = 'register_to_registry'
         self.launcher_registry.register(name, {'exec_start': [noop]})
