@@ -596,6 +596,14 @@ class Registry:
             asyncio.create_task(self._forward_state_machine_events()),
         )
 
+    @property
+    def database(self) -> Database:
+        return self._database
+
+    @property
+    def state_machine(self) -> StateMachine:
+        return self._state_machine
+
     def register(self, entry_name: str, descriptor: Descriptor) -> None:
         self._database.add(entry_name, descriptor)
 
