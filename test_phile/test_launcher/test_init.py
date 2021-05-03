@@ -15,6 +15,7 @@ import unittest.mock
 
 # Internal packages.
 import phile.asyncio
+import phile.capability
 import phile.launcher
 
 
@@ -1021,3 +1022,19 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
                 entry_name=entry_name,
             ),
         )
+
+
+class TestProvideRegistry(unittest.IsolatedAsyncioTestCase):
+    """Tests :func:`~phile.launcher.provide_registry`."""
+
+    async def test_adds_registry(self) -> None:
+        capability_registry = phile.capability.Registry()
+        async with phile.launcher.provide_registry(
+            capability_registry=capability_registry,
+        ) as launcher_registry:
+            self.assertIsInstance(
+                launcher_registry,
+                phile.launcher.Registry,
+            )
+            self.assertIn(phile.launcher.Registry, capability_registry)
+        self.assertNotIn(phile.launcher.Registry, capability_registry)
