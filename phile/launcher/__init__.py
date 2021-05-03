@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+.. automodule:: phile.launcher.defaults
+
 ----------------------------------
 For starting and stopping services
 ----------------------------------
