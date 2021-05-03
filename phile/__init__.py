@@ -8,6 +8,7 @@
 .. automodule:: phile.hotkey
 .. automodule:: phile.imapclient
 .. automodule:: phile.launcher
+.. automodule:: phile.main
 .. automodule:: phile.notify
 .. automodule:: phile.os
 .. automodule:: phile.pubsub_event
