@@ -484,6 +484,16 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 self.launcher_state_machine.start(name)
             )
 
+    async def test_start_soon_returns_future(self) -> None:
+        name = 'start_soon_returns_future'
+        self.launcher_database.add(
+            name,
+            {'exec_start': [asyncio.get_running_loop().create_future]},
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start_soon(name)
+        )
+
     async def test_stop_cancel_main_task_if_not_done(self) -> None:
         name = 'simple_stop'
         task_to_cancel = asyncio.create_task(asyncio.Event().wait())
@@ -562,6 +572,19 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         continue_stopper.set()
         await phile.asyncio.wait_for(stop_2)
         await phile.asyncio.wait_for(stop_1)
+
+    async def test_stop_soon_returns_future(self) -> None:
+        name = 'stop_soon_returns_future'
+        self.launcher_database.add(
+            name,
+            {'exec_start': [asyncio.get_running_loop().create_future]},
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start(name)
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.stop_soon(name)
+        )
 
     async def test_is_not_running_after_stop(self) -> None:
         name = 'simple_stop'

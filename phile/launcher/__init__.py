@@ -353,6 +353,9 @@ class StateMachine:
     async def start(self, entry_name: str) -> None:
         await self._get_start_task(entry_name)
 
+    def start_soon(self, entry_name: str) -> asyncio.Future[typing.Any]:
+        return self._get_start_task(entry_name)
+
     def _get_start_task(
         self,
         entry_name: str,
@@ -401,6 +404,9 @@ class StateMachine:
 
     async def stop(self, entry_name: str) -> None:
         await self._get_stop_task(entry_name)
+
+    def stop_soon(self, entry_name: str) -> asyncio.Future[typing.Any]:
+        return self._get_stop_task(entry_name)
 
     def _get_stop_task(
         self,
