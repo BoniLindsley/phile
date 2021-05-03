@@ -49,3 +49,10 @@ class TestRegistry(unittest.TestCase):
             with self.capability_registry.provide(1):
                 pass
         self.assertEqual(self.capability_registry[int], 0)
+
+
+class UsesRegistry(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.capability_registry = phile.capability.Registry()
