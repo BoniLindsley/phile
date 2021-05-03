@@ -18,6 +18,7 @@ import typing
 
 # Internal modules.
 import phile
+import phile.capability
 import phile.pubsub_event
 
 Awaitable = collections.abc.Awaitable[typing.Any]
@@ -678,3 +679,17 @@ class Registry:
                 )
             else:  # pragma: no cover  # Defensive.
                 assert True, 'Unexpected event'
+
+
+@contextlib.asynccontextmanager
+async def provide_registry(
+    capability_registry: phile.capability.Registry,
+) -> collections.abc.AsyncIterator[Registry]:
+    with capability_registry.provide(launcher_registry := Registry()):
+        launcher_registry.database.add(
+            launcher_name := 'phile.launcher',
+            phile.launcher.Descriptor(exec_start=[asyncio.Event().wait])
+        )
+        await launcher_registry.state_machine.start(launcher_name)
+        yield launcher_registry
+        await launcher_registry.state_machine.stop(launcher_name)
