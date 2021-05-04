@@ -6,6 +6,8 @@ Test :mod:`phile.PySide2.QtCore`
 """
 
 # Standard library.
+import concurrent.futures
+import datetime
 import functools
 import tempfile
 import threading
@@ -20,6 +22,7 @@ import PySide2.QtCore
 import phile.PySide2.QtCore
 import phile.os
 import phile.signal
+from test_phile.test_init import UsesCapabilities
 
 
 class UsesPySide2(unittest.TestCase):
@@ -217,3 +220,156 @@ class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
             unittest.mock.Mock(),
             thread=0
         )
+
+
+class TestFuture(unittest.TestCase):
+    """Tests :class:`~phile.PySide2.QtCore.Future`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.done = False
+
+    def done_callback(
+        self, future: phile.PySide2.QtCore.Future[int]
+    ) -> None:
+        del future
+        self.done = True
+
+    def test_static_check_add_done_callback(self) -> None:
+        future = phile.PySide2.QtCore.Future[int]()
+        future.add_done_callback(self.done_callback)
+        future.set_result(0)
+        self.assertTrue(self.done)
+
+
+class TestTask(unittest.TestCase):
+    """Tests :class:`~phile.PySide2.QtCore.Task`."""
+
+    def test_run_sets_result(self) -> None:
+
+        def zero() -> int:
+            return 0
+
+        task = phile.PySide2.QtCore.Task[int](callback=zero)
+        task.run()
+        self.assertEqual(task.result(), zero())
+
+    def test_run_propagates_exception(self) -> None:
+
+        class SomethingBadHappened(RuntimeError):
+            pass
+
+        def bad() -> int:
+            raise SomethingBadHappened()
+
+        task = phile.PySide2.QtCore.Task[int](callback=bad)
+        task.run()
+        with self.assertRaises(SomethingBadHappened):
+            task.result()
+        self.assertIsInstance(task.exception(), SomethingBadHappened)
+
+    def test_run_respects_cancellation_before_run_call(self) -> None:
+
+        def zero() -> int:
+            return 0
+
+        task = phile.PySide2.QtCore.Task[int](callback=zero)
+        task.cancel()
+        task.run()
+        with self.assertRaises(concurrent.futures.CancelledError):
+            task.result()
+
+
+class TestExecutor(UsesQCoreApplication, unittest.TestCase):
+    """Tests :class:`~phile.PySide2.QtCore.Executor`."""
+
+    def test_calls_submitted_callable(self) -> None:
+        callback_mock = unittest.mock.Mock()
+        with phile.PySide2.QtCore.Executor() as executor:
+            executor.submit(callback_mock)
+            callback_mock.assert_not_called()
+            phile.PySide2.QtCore.process_events()
+        callback_mock.assert_called_once_with()
+
+    def test_calls_submitted_callable_with_given_arguments(self) -> None:
+        callback_mock = unittest.mock.Mock()
+        arg = 0
+        with phile.PySide2.QtCore.Executor() as executor:
+            executor.submit(callback_mock, arg)
+            phile.PySide2.QtCore.process_events()
+        callback_mock.assert_called_once_with(arg)
+
+    def test_shutdown_twice_is_okay(self) -> None:
+        with phile.PySide2.QtCore.Executor() as executor:
+            executor.shutdown()
+
+    def test_shutdown_waits_for_task_to_finish(self) -> None:
+        callback_mock = unittest.mock.Mock()
+        process_gui_events = threading.Event()
+
+        def run() -> None:
+            with phile.PySide2.QtCore.Executor() as executor:
+                executor.submit(callback_mock)
+                process_gui_events.set()
+                executor.shutdown()
+
+        worker_thread = threading.Thread(target=run, daemon=True)
+        worker_thread.start()
+        process_gui_events.wait()
+        phile.PySide2.QtCore.process_events()
+        worker_thread.join(
+            timeout=datetime.timedelta(seconds=2).total_seconds()
+        )
+        callback_mock.assert_called_with()
+
+    def test_shutdown_can_cancel_futures(self) -> None:
+        callback_mock = unittest.mock.Mock()
+        process_gui_events = threading.Event()
+
+        def run() -> None:
+            with phile.PySide2.QtCore.Executor() as executor:
+                executor.submit(callback_mock)
+                executor.shutdown(cancel_futures=True)
+                process_gui_events.set()
+
+        worker_thread = threading.Thread(target=run, daemon=True)
+        worker_thread.start()
+        process_gui_events.wait()
+        phile.PySide2.QtCore.process_events()
+        worker_thread.join(
+            timeout=datetime.timedelta(seconds=2).total_seconds()
+        )
+        callback_mock.assert_not_called()
+
+    def test_shutdown_does_not_have_to_wait(self) -> None:
+        callback_mock = unittest.mock.Mock()
+        process_gui_events = threading.Event()
+
+        def run() -> None:
+            with phile.PySide2.QtCore.Executor() as executor:
+                executor.submit(callback_mock)
+                executor.shutdown(wait=False)
+                process_gui_events.set()
+
+        worker_thread = threading.Thread(target=run, daemon=True)
+        worker_thread.start()
+        process_gui_events.wait()
+        phile.PySide2.QtCore.process_events()
+        worker_thread.join(
+            timeout=datetime.timedelta(seconds=2).total_seconds()
+        )
+        callback_mock.assert_called_with()
+
+    def test_submission_fails_after_shutdown(self) -> None:
+        with phile.PySide2.QtCore.Executor() as executor:
+            pass
+        with self.assertRaises(RuntimeError):
+            executor.submit(lambda: None)
+
+
+class UsesExecutor(UsesCapabilities, unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.executor = phile.PySide2.QtCore.Executor()
+        self.capabilities.set(self.executor)
