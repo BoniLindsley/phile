@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+.. automodule:: phile.launcher.cmd
 .. automodule:: phile.launcher.defaults
 
 ----------------------------------
