@@ -604,7 +604,7 @@ def add(capability_registry: phile.capability.Registry) -> None:
     add_tray_battery(capability_registry=capability_registry)
     add_tray_cpu(capability_registry=capability_registry)
     add_tray_datetime(capability_registry=capability_registry)
-    #add_tray_imap(capability_registry=capability_registry)
+    add_tray_imap(capability_registry=capability_registry)
     add_tray_memory(capability_registry=capability_registry)
     add_tray_network(capability_registry=capability_registry)
     add_tray_notify(capability_registry=capability_registry)
