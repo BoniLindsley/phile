@@ -8,7 +8,6 @@ GUI hotkey handling
 # Standard libraries.
 import asyncio
 import collections.abc
-import concurrent.futures
 import contextlib
 import functools
 import itertools
@@ -29,109 +28,6 @@ import phile.trigger
 
 # TODO[mypy issue #1422]: __loader__ not defined
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
-
-_T = typing.TypeVar('_T')
-
-
-class Future(concurrent.futures.Future[_T]):
-    """Fixes typing of add_done_callback."""
-
-    __Self_contra = typing.TypeVar(
-        '__Self_contra', bound='Future[_T]', contravariant=True
-    )
-
-    # The name is used by superclass. Keeping it for consistency.
-    def add_done_callback(  # pylint: disable=invalid-name
-        self: __Self_contra,
-        fn: collections.abc.Callable[[__Self_contra], typing.Any]
-    ) -> None:
-        super().add_done_callback(
-            typing.cast(
-                collections.abc.Callable[
-                    [concurrent.futures.Future[typing.Any]], typing.Any],
-                fn,
-            )
-        )
-
-
-class Task(Future[_T]):
-
-    def __init__(
-        self,
-        *args: typing.Any,
-        callback: collections.abc.Callable[[], _T],
-        **kwargs: typing.Any,
-    ) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._callback = callback
-
-    def run(self) -> None:
-        if not self.set_running_or_notify_cancel():
-            return
-        try:
-            result = self._callback()
-        # Intentionally catching all exception to propagate.
-        except Exception as exception:  # pylint: disable=broad-except
-            self.set_exception(exception)
-        else:
-            self.set_result(result)
-
-
-class Executor(concurrent.futures.Executor):
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        # See: https://github.com/python/mypy/issues/4001
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.futures = set[Task[typing.Any]]()
-        self.future_done_event = threading.Event()
-        self.is_shutdown = False
-        self.shutdown_lock = threading.Lock()
-
-    def submit(
-        self,
-        fn: collections.abc.Callable[..., _T],
-        /,
-        *args: typing.Any,
-        **kwargs: typing.Any,
-    ) -> concurrent.futures.Future[_T]:
-        callback: collections.abc.Callable[[], _T]
-        if args or kwargs:
-            callback = functools.partial(
-                fn,
-                *args,
-                **kwargs,
-            )
-        else:
-            callback = fn
-        task = Task[_T](callback=callback)
-        task.add_done_callback(self.futures.discard)
-        task.add_done_callback(
-            lambda _future: self.future_done_event.set()
-        )
-        with self.shutdown_lock:
-            if self.is_shutdown:
-                raise RuntimeError('Executor is shut down.')
-            phile.PySide2.QtCore.call_soon_threadsafe(callback=task.run)
-            self.futures.add(task)
-        return task
-
-    def shutdown(
-        self,
-        wait: bool = True,
-        *,
-        cancel_futures: bool = False
-    ) -> None:
-        with self.shutdown_lock:
-            self.is_shutdown = True
-        if cancel_futures:
-            for future in self.futures.copy():
-                future.cancel()
-        if wait:
-            while self.futures:
-                self.future_done_event.wait()
-        super().shutdown(wait=wait, cancel_futures=cancel_futures)
-
 
 Key = PySide2.QtCore.Qt.Key
 ordered_modifiers = (
@@ -364,7 +260,7 @@ class TriggerControlled:
         self._trigger_prefix = (
             _loader_name if trigger_prefix is None else trigger_prefix
         )
-        executor = capabilities[Executor]
+        executor = capabilities[phile.PySide2.QtCore.Executor]
         registry = capabilities[phile.trigger.Registry]
         self.trigger_producer = phile.trigger.Provider(
             callback_map={
@@ -435,13 +331,13 @@ async def run(
     for capability in (
         phile.Configuration,
         phile.trigger.Registry,
-        Executor,
+        phile.PySide2.QtCore.Executor,
         PySide2.QtWidgets.QApplication,
     ):
         assert capability in capabilities, (
             "Capability not found: {}".format(capability)
         )
-    executor = capabilities[Executor]
+    executor = capabilities[phile.PySide2.QtCore.Executor]
     dialog = await asyncio.wrap_future(
         executor.submit(HotkeyDialog, capabilities=capabilities)
     )
@@ -456,7 +352,7 @@ async def async_main(
     capabilities: phile.Capabilities,
 ) -> int:  # pragma: no cover
     qt_app = capabilities[PySide2.QtWidgets.QApplication]
-    with Executor() as executor:
+    with phile.PySide2.QtCore.Executor() as executor:
         capabilities.set(executor)
         try:
             tasks: set[asyncio.Task[typing.Any]] = {
