@@ -6,55 +6,18 @@ Test :mod:`phile.launcher`
 """
 
 # Standard libraries.
+import asyncio
 import unittest
-import unittest.mock
 
 # Internal packages.
 import phile.asyncio
 import phile.pubsub_event
 
 
-class TestNode(unittest.IsolatedAsyncioTestCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.node = phile.pubsub_event.Node[int]()
+class TestNoMoreMessages(unittest.TestCase):
 
     def test_default_initialisable(self) -> None:
-        self.assertIsNone(self.node.content)
-
-    def test_init_with_content(self) -> None:
-        new_content = 1
-        new_node = phile.pubsub_event.Node[int](content=new_content)
-        self.assertEqual(new_node.content, new_content)
-
-    async def test_next_get_set(self) -> None:
-        next_content = 2
-        self.node.set_next(content=next_content)
-        next_node = await phile.asyncio.wait_for(self.node.next())
-        self.assertEqual(next_node.content, next_content)
-
-    def test_set_next_raises_if_repeated(self) -> None:
-        next_content = 3
-        self.node.set_next(content=next_content)
-        with self.assertRaises(AssertionError):
-            self.node.set_next(content=next_content)
-
-    async def test_set_to_end_causes_next_to_raise(self) -> None:
-        self.node.set_to_end()
-        with self.assertRaises(phile.pubsub_event.Node.EndReached):
-            await phile.asyncio.wait_for(self.node.next())
-
-    async def test_set_to_end_rasies_if_set(self) -> None:
-        self.node.set_next(content=4)
-        with self.assertRaises(AssertionError):
-            self.node.set_to_end()
-
-
-class TestNoMoreEvents(unittest.TestCase):
-
-    def test_default_initialisable(self) -> None:
-        _error = phile.pubsub_event.NoMoreEvents()
+        _error = phile.pubsub_event.NoMoreMessages()
 
 
 class TestPublisher(unittest.IsolatedAsyncioTestCase):
@@ -76,8 +39,12 @@ class TestPublisher(unittest.IsolatedAsyncioTestCase):
 
     def test_push_after_stop_raises(self) -> None:
         self.publisher.stop()
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(asyncio.InvalidStateError):
             self.publisher.push(2)
+
+    def test_double_stop_is_fine(self) -> None:
+        self.publisher.stop()
+        self.publisher.stop()
 
 
 class TestSubscriber(unittest.IsolatedAsyncioTestCase):
@@ -102,5 +69,12 @@ class TestSubscriber(unittest.IsolatedAsyncioTestCase):
 
     async def test_pull_raises_if_no_more_content(self) -> None:
         self.publisher.stop()
-        with self.assertRaises(phile.pubsub_event.NoMoreEvents):
+        with self.assertRaises(phile.pubsub_event.NoMoreMessages):
             await phile.asyncio.wait_for(self.subscriber.pull())
+
+    async def test_cancelling_pull_does_not_cancel_node(self) -> None:
+        pull_task = asyncio.create_task(self.subscriber.pull())
+        pull_task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await pull_task
+        self.publisher.push(1)
