@@ -27,6 +27,7 @@ setup(
         'pathvalidate',
         'portalocker',
         'psutil',
+        'pydantic',
         'pynput',
         'PySide2',
         'watchdog',
