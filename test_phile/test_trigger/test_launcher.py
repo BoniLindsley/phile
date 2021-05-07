@@ -72,11 +72,11 @@ class TestProducer(
             phile.trigger.launcher.Producer,
         )
 
-    def set_up_launcher_entry(self) -> None:
+    async def set_up_launcher_entry(self) -> None:
         self.entry_name = entry_name = 'add-launcher'
         self.start_trigger_name = 'launcher_' + entry_name + '_start'
         self.stop_trigger_name = 'launcher_' + entry_name + '_stop'
-        self.launcher_registry.database.add(
+        await self.launcher_registry.database.add(
             entry_name,
             descriptor=phile.launcher.Descriptor(
                 exec_start=[
@@ -114,12 +114,14 @@ class TestProducer(
             await asyncio.sleep(0)
 
     async def test_add_launcher_binds_triggers(self) -> None:
-        self.set_up_launcher_entry()
+        await phile.asyncio.wait_for(self.set_up_launcher_entry())
         await phile.asyncio.wait_for(self.wait_for_trigger_binding())
 
     async def test_remove_launcher_unbinds_trigger(self) -> None:
         await self.test_add_launcher_binds_triggers()
-        self.launcher_registry.database.remove(self.entry_name)
+        await phile.asyncio.wait_for(
+            self.launcher_registry.database.remove(self.entry_name)
+        )
         await phile.asyncio.wait_for(self.wait_for_trigger_unbinding())
 
     async def test_start_launcher_toggles_trigger(self) -> None:
@@ -147,7 +149,7 @@ class TestProducer(
             self.launcher_triggers.__aexit__(None, None, None)
         )
         try:
-            self.set_up_launcher_entry()
+            await phile.asyncio.wait_for(self.set_up_launcher_entry())
         finally:
             await phile.asyncio.wait_for(
                 self.launcher_triggers.__aenter__()

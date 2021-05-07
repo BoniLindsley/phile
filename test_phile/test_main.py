@@ -54,7 +54,7 @@ class TestRunWithPySide2(UsesPySide2, unittest.IsolatedAsyncioTestCase):
                 capability_registry[phile.launcher.Registry]
             )
             await phile.asyncio.wait_for(
-                launcher_registry.start('pyside2')
+                launcher_registry.state_machine.start('pyside2')
             )
             import PySide2.QtWidgets
             self.assertIn(

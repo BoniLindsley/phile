@@ -30,9 +30,11 @@ class TestAddKeyring(
 ):
     """Tests :func:`~phile.launcher.defaults.add_keyring`."""
 
-    def test_keyring_added(self) -> None:
-        phile.launcher.defaults.add_keyring(
-            capability_registry=self.capability_registry
+    async def test_keyring_added(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_keyring(
+                capability_registry=self.capability_registry
+            )
         )
         self.assertTrue(
             self.launcher_registry.database.contains('keyring')
@@ -47,9 +49,11 @@ class TestAddConfiguration(
 ):
     """Tests :func:`~phile.launcher.defaults.add_configuration`."""
 
-    def test_add_launcher(self) -> None:
-        phile.launcher.defaults.add_configuration(
-            capability_registry=self.capability_registry
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
         )
         self.assertTrue(
             self.launcher_registry.database.contains(
@@ -60,11 +64,15 @@ class TestAddConfiguration(
     async def test_adds_capability(self) -> None:
         file_content: dict[str, str] = {'pid_path': '.pid_file'}
         self.configuration_path.write_text(json.dumps(file_content))
-        phile.launcher.defaults.add_configuration(
-            capability_registry=self.capability_registry
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
         )
         await phile.asyncio.wait_for(
-            self.launcher_registry.start('phile.configuration')
+            self.launcher_registry.state_machine.start(
+                'phile.configuration',
+            )
         )
         configuration = (
             self.capability_registry[phile.configuration.Entries]
