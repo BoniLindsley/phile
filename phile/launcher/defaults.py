@@ -15,7 +15,7 @@ import typing
 import phile.capability
 
 
-def add_configuration(
+async def add_configuration(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -42,7 +42,7 @@ def add_configuration(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.configuration',
         phile.launcher.Descriptor(
             exec_start=[
@@ -56,7 +56,7 @@ def add_configuration(
     )
 
 
-def add_keyring(
+async def add_keyring(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -83,7 +83,7 @@ def add_keyring(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'keyring',
         phile.launcher.Descriptor(
             exec_start=[
@@ -97,7 +97,9 @@ def add_keyring(
     )
 
 
-def add_tmux(capability_registry: phile.capability.Registry) -> None:
+async def add_tmux(
+    capability_registry: phile.capability.Registry
+) -> None:
 
     async def phile_tmux_control_mode(
         capability_registry: phile.capability.Registry,
@@ -127,7 +129,7 @@ def add_tmux(capability_registry: phile.capability.Registry) -> None:
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tmux.control_mode',
         phile.launcher.Descriptor(
             after={'phile.launcher'},
@@ -143,7 +145,7 @@ def add_tmux(capability_registry: phile.capability.Registry) -> None:
     )
 
 
-def add_tray_battery(
+async def add_tray_battery(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -156,7 +158,7 @@ def add_tray_battery(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.battery',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -171,7 +173,9 @@ def add_tray_battery(
     )
 
 
-def add_tray_cpu(capability_registry: phile.capability.Registry) -> None:
+async def add_tray_cpu(
+    capability_registry: phile.capability.Registry
+) -> None:
 
     async def phile_tray_publishers_cpu(
         capability_registry: phile.capability.Registry,
@@ -182,7 +186,7 @@ def add_tray_cpu(capability_registry: phile.capability.Registry) -> None:
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.cpu',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -197,7 +201,7 @@ def add_tray_cpu(capability_registry: phile.capability.Registry) -> None:
     )
 
 
-def add_tray_datetime(
+async def add_tray_datetime(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -210,7 +214,7 @@ def add_tray_datetime(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.datetime',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -225,7 +229,7 @@ def add_tray_datetime(
     )
 
 
-def add_tray_imap(
+async def add_tray_imap(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -238,7 +242,7 @@ def add_tray_imap(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.imap_idle',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'keyring'},
@@ -253,7 +257,7 @@ def add_tray_imap(
     )
 
 
-def add_tray_memory(
+async def add_tray_memory(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -266,7 +270,7 @@ def add_tray_memory(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.memory',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -281,7 +285,7 @@ def add_tray_memory(
     )
 
 
-def add_tray_network(
+async def add_tray_network(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -294,7 +298,7 @@ def add_tray_network(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.network',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -309,7 +313,7 @@ def add_tray_network(
     )
 
 
-def add_tray_notify(
+async def add_tray_notify(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -322,7 +326,7 @@ def add_tray_notify(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.publisher.notify_monitor',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'watchdog.observer'},
@@ -337,7 +341,7 @@ def add_tray_notify(
     )
 
 
-def add_tray_tmux(
+async def add_tray_tmux(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -348,7 +352,7 @@ def add_tray_tmux(
         await phile.tray.tmux.run(capabilities=capability_registry)
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.tray.tmux',
         phile.launcher.Descriptor(
             after={
@@ -371,7 +375,9 @@ def add_tray_tmux(
     )
 
 
-def add_trigger(capability_registry: phile.capability.Registry) -> None:
+async def add_trigger(
+    capability_registry: phile.capability.Registry
+) -> None:
 
     async def phile_trigger_registry(
         capability_registry: phile.capability.Registry,
@@ -391,7 +397,7 @@ def add_trigger(capability_registry: phile.capability.Registry) -> None:
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.trigger',
         phile.launcher.Descriptor(
             exec_start=[
@@ -405,7 +411,7 @@ def add_trigger(capability_registry: phile.capability.Registry) -> None:
     )
 
 
-def add_trigger_launcher(
+async def add_trigger_launcher(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -439,7 +445,7 @@ def add_trigger_launcher(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.trigger.launcher',
         phile.launcher.Descriptor(
             after={'phile.launcher', 'phile.trigger'},
@@ -455,7 +461,7 @@ def add_trigger_launcher(
     )
 
 
-def add_trigger_watchdog(
+async def add_trigger_watchdog(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -479,7 +485,7 @@ def add_trigger_watchdog(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'phile.trigger.watchdog',
         phile.launcher.Descriptor(
             after={
@@ -503,7 +509,7 @@ def add_trigger_watchdog(
     )
 
 
-def add_pyside2(
+async def add_pyside2(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -545,7 +551,7 @@ def add_pyside2(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'pyside2',
         phile.launcher.Descriptor(
             after={'phile.launcher'},
@@ -561,7 +567,7 @@ def add_pyside2(
     )
 
 
-def add_watchdog_observer(
+async def add_watchdog_observer(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -588,7 +594,7 @@ def add_watchdog_observer(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         'watchdog.observer',
         phile.launcher.Descriptor(
             exec_start=[
@@ -602,20 +608,20 @@ def add_watchdog_observer(
     )
 
 
-def add(capability_registry: phile.capability.Registry) -> None:
-    add_configuration(capability_registry=capability_registry)
-    add_keyring(capability_registry=capability_registry)
-    add_tmux(capability_registry=capability_registry)
-    add_tray_battery(capability_registry=capability_registry)
-    add_tray_cpu(capability_registry=capability_registry)
-    add_tray_datetime(capability_registry=capability_registry)
-    add_tray_imap(capability_registry=capability_registry)
-    add_tray_memory(capability_registry=capability_registry)
-    add_tray_network(capability_registry=capability_registry)
-    add_tray_notify(capability_registry=capability_registry)
-    add_tray_tmux(capability_registry=capability_registry)
-    add_trigger(capability_registry=capability_registry)
-    add_trigger_launcher(capability_registry=capability_registry)
-    add_trigger_watchdog(capability_registry=capability_registry)
-    add_pyside2(capability_registry=capability_registry)
-    add_watchdog_observer(capability_registry=capability_registry)
+async def add(capability_registry: phile.capability.Registry) -> None:
+    await add_configuration(capability_registry=capability_registry)
+    await add_keyring(capability_registry=capability_registry)
+    await add_tmux(capability_registry=capability_registry)
+    await add_tray_battery(capability_registry=capability_registry)
+    await add_tray_cpu(capability_registry=capability_registry)
+    await add_tray_datetime(capability_registry=capability_registry)
+    await add_tray_imap(capability_registry=capability_registry)
+    await add_tray_memory(capability_registry=capability_registry)
+    await add_tray_network(capability_registry=capability_registry)
+    await add_tray_notify(capability_registry=capability_registry)
+    await add_tray_tmux(capability_registry=capability_registry)
+    await add_trigger(capability_registry=capability_registry)
+    await add_trigger_launcher(capability_registry=capability_registry)
+    await add_trigger_watchdog(capability_registry=capability_registry)
+    await add_pyside2(capability_registry=capability_registry)
+    await add_watchdog_observer(capability_registry=capability_registry)

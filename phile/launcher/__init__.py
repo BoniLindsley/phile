@@ -13,7 +13,6 @@ import asyncio
 import collections
 import collections.abc
 import contextlib
-import dataclasses
 import enum
 import functools
 import types
@@ -100,18 +99,16 @@ class NameInUse(RuntimeError):
 
 class Database:
 
-    @dataclasses.dataclass
-    class Event:
-        source: 'Database'
-        type: collections.abc.Callable[..., typing.Any]
-        entry_name: str
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.event_publisher = (
-            phile.pubsub_event.Publisher[Database.Event]()
-        )
+        self.event_publishers: (
+            dict[collections.abc.Callable[..., typing.Any],
+                 phile.pubsub_event.Publisher[str]]
+        ) = {
+            Database.add: phile.pubsub_event.Publisher[str](),
+            Database.remove: phile.pubsub_event.Publisher[str](),
+        }
         """Pushes events to subscribers."""
         self.known_descriptors: dict[str, Descriptor] = {}
         """
@@ -146,7 +143,7 @@ class Database:
         self.stop_after: dict[str, set[str]] = {}
         """Order dependencies for stopping launchers."""
 
-    def add(self, entry_name: str, descriptor: Descriptor) -> None:
+    async def add(self, entry_name: str, descriptor: Descriptor) -> None:
         """Not thread-safe."""
         with contextlib.ExitStack() as stack:
             stack.enter_context(
@@ -300,30 +297,18 @@ class Database:
         self,
         entry_name: str,
     ) -> collections.abc.Iterator[None]:
-        self.event_publisher.push(
-            self.Event(
-                source=self,
-                type=Database.add,
-                entry_name=entry_name,
-            )
-        )
+        self.event_publishers[Database.add].push(entry_name)
         try:
             yield
         finally:
             try:
-                self.event_publisher.push(
-                    self.Event(
-                        source=self,
-                        type=Database.remove,
-                        entry_name=entry_name,
-                    )
-                )
+                self.event_publishers[Database.remove].push(entry_name)
             except RuntimeError:  # pragma: no cover  # Defensive.
                 # If there is no current event loop,
                 # pushing is not possible, and asyncio raises this.
                 pass
 
-    def remove(self, entry_name: str) -> None:
+    async def remove(self, entry_name: str) -> None:
         entry_remover = self.remover.pop(entry_name, None)
         if entry_remover is not None:
             entry_remover()
@@ -334,20 +319,18 @@ class Database:
 
 class StateMachine:
 
-    @dataclasses.dataclass
-    class Event:
-        source: 'StateMachine'
-        type: collections.abc.Callable[..., typing.Any]
-        entry_name: str
-
     def __init__(
         self, *args: typing.Any, database: Database, **kwargs: typing.Any
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.event_publisher = (
-            phile.pubsub_event.Publisher[StateMachine.Event]()
-        )
+        self.event_publishers: (
+            dict[collections.abc.Callable[..., typing.Any],
+                 phile.pubsub_event.Publisher[str]]
+        ) = {
+            StateMachine.start: phile.pubsub_event.Publisher[str](),
+            StateMachine.stop: phile.pubsub_event.Publisher[str](),
+        }
         """Pushes events to subscribers."""
         self._database = database
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
@@ -561,24 +544,12 @@ class StateMachine:
         self,
         entry_name: str,
     ) -> collections.abc.Iterator[None]:
-        self.event_publisher.push(
-            self.Event(
-                source=self,
-                type=StateMachine.start,
-                entry_name=entry_name,
-            )
-        )
+        self.event_publishers[StateMachine.start].push(entry_name)
         try:
             yield
         finally:
             try:
-                self.event_publisher.push(
-                    self.Event(
-                        source=self,
-                        type=StateMachine.stop,
-                        entry_name=entry_name,
-                    )
-                )
+                self.event_publishers[StateMachine.stop].push(entry_name)
             except RuntimeError:  # pragma: no cover  # Defensive.
                 # If there is no current event loop,
                 # pushing is not possible, and asyncio raises this.
@@ -587,101 +558,27 @@ class StateMachine:
 
 class Registry:
 
-    @dataclasses.dataclass
-    class Event:
-        source: 'Registry'
-        type: collections.abc.Callable[..., typing.Any]
-        entry_name: str
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.event_publisher = (
-            phile.pubsub_event.Publisher[Registry.Event]()
-        )
-        self._database = database = Database()
+        registry = self
+
+        class DatabaseStopsOnRemove(Database):
+
+            async def remove(self, entry_name: str) -> None:
+                await registry.state_machine.stop(entry_name)
+                await super().remove(entry_name=entry_name)
+
+        database = DatabaseStopsOnRemove()
         self._state_machine = StateMachine(database=database)
-        self._event_forwarding_tasks = (
-            asyncio.create_task(self._forward_database_events()),
-            asyncio.create_task(self._forward_state_machine_events()),
-        )
 
     @property
     def database(self) -> Database:
-        return self._database
+        return self._state_machine._database
 
     @property
     def state_machine(self) -> StateMachine:
         return self._state_machine
-
-    def register(self, entry_name: str, descriptor: Descriptor) -> None:
-        self._database.add(entry_name, descriptor)
-
-    async def deregister(self, entry_name: str) -> None:
-        # No defensive mechanism to ensure it is not started again.
-        # This is done in a best effort basis.
-        await self.stop(entry_name)
-        self._database.remove(entry_name)
-
-    def is_registered(self, entry_name: str) -> bool:
-        return self._database.contains(entry_name)
-
-    async def start(self, entry_name: str) -> None:
-        await self._state_machine.start(entry_name)
-
-    async def stop(self, entry_name: str) -> None:
-        await self._state_machine.stop(entry_name)
-
-    def is_running(self, entry_name: str) -> bool:
-        return self._state_machine.is_running(entry_name)
-
-    async def _forward_database_events(self) -> None:
-        subscriber = phile.pubsub_event.Subscriber[Database.Event](
-            publisher=self._database.event_publisher
-        )
-        while event := await subscriber.pull():
-            if event.type == Database.add:
-                self.event_publisher.push(
-                    self.Event(
-                        source=self,
-                        type=Registry.register,
-                        entry_name=event.entry_name,
-                    )
-                )
-            elif event.type == Database.remove:
-                self.event_publisher.push(
-                    self.Event(
-                        source=self,
-                        type=Registry.deregister,
-                        entry_name=event.entry_name,
-                    )
-                )
-            else:  # pragma: no cover  # Defensive.
-                assert True, 'Unexpected event'
-
-    async def _forward_state_machine_events(self) -> None:
-        subscriber = phile.pubsub_event.Subscriber[StateMachine.Event](
-            publisher=self._state_machine.event_publisher
-        )
-        while event := await subscriber.pull():
-            if event.type == StateMachine.start:
-                self.event_publisher.push(
-                    self.Event(
-                        source=self,
-                        type=Registry.start,
-                        entry_name=event.entry_name,
-                    )
-                )
-            elif event.type == StateMachine.stop:
-                self.event_publisher.push(
-                    self.Event(
-                        source=self,
-                        type=Registry.stop,
-                        entry_name=event.entry_name,
-                    )
-                )
-            else:  # pragma: no cover  # Defensive.
-                assert True, 'Unexpected event'
 
 
 @contextlib.asynccontextmanager
@@ -689,7 +586,7 @@ async def provide_registry(
     capability_registry: phile.capability.Registry,
 ) -> collections.abc.AsyncIterator[Registry]:
     with capability_registry.provide(launcher_registry := Registry()):
-        launcher_registry.database.add(
+        await launcher_registry.database.add(
             launcher_name := 'phile.launcher',
             phile.launcher.Descriptor(exec_start=[asyncio.Event().wait])
         )

@@ -27,7 +27,7 @@ async def _async_run(
     async with phile.launcher.provide_registry(
         capability_registry=capability_registry
     ):
-        phile.launcher.defaults.add(
+        await phile.launcher.defaults.add(
             capability_registry=capability_registry,
         )
         return await async_target(capability_registry)

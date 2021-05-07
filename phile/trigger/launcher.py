@@ -43,16 +43,12 @@ class Producer:
         """Not reentrant."""
         async with contextlib.AsyncExitStack() as stack:
             stack.push_async_exit(self)
-            tasks = self._event_processing_tasks
-            create_task = asyncio.get_running_loop().create_task
-            tasks.append(create_task(self._database_event_loop()))
-            tasks.append(create_task(self._state_machine_event_loop()))
-            launcher_names = self._launcher_registry.database.type.copy()
+            self._create_event_loop_tasks()
             bind = self._bind
             is_running = self._launcher_registry.state_machine.is_running
             on_start = self._on_start
             on_stop = self._on_stop
-            for name in launcher_names:
+            for name in self._launcher_registry.database.type.copy():
                 bind(name)
                 if is_running(name):
                     on_start(name)
@@ -81,43 +77,75 @@ class Producer:
                 unbind(name)
             assert not bound_launchers
 
-    async def _database_event_loop(self) -> None:
-        subscriber = phile.pubsub_event.Subscriber(
-            publisher=self._launcher_registry.database.event_publisher
-        )
-        while True:
-            event = await subscriber.pull()
-            entry_name = event.entry_name
-            if event.type == phile.launcher.Database.add:
-                self._bind(entry_name)
-            else:
-                self._unbind(entry_name)
+    def _create_event_loop_tasks(self) -> None:
+        append = self._event_processing_tasks.append
+        create_task = asyncio.get_running_loop().create_task
+        append(create_task(self._process_database_add_events()))
+        append(create_task(self._process_database_remove_events()))
+        append(create_task(self._process_state_machine_start_events()))
+        append(create_task(self._process_state_machine_stop_events()))
 
-    async def _state_machine_event_loop(self) -> None:
-        subscriber = phile.pubsub_event.Subscriber(
+    async def _process_database_add_events(self) -> None:
+        pull = phile.pubsub_event.Subscriber(
             publisher=(
-                self._launcher_registry.state_machine.event_publisher
+                self._launcher_registry.database.event_publishers[
+                    phile.launcher.Database.add]
             )
-        )
+        ).pull
+        bind = self._bind
         while True:
-            event = await subscriber.pull()
-            entry_name = event.entry_name
-            if event.type == phile.launcher.StateMachine.start:
-                self._on_start(entry_name)
-            else:
-                self._on_stop(entry_name)
+            launcher_name = await pull()
+            bind(launcher_name)
+
+    async def _process_database_remove_events(self) -> None:
+        pull = phile.pubsub_event.Subscriber(
+            publisher=(
+                self._launcher_registry.database.event_publishers[
+                    phile.launcher.Database.remove]
+            )
+        ).pull
+        unbind = self._unbind
+        while True:
+            launcher_name = await pull()
+            unbind(launcher_name)
+
+    async def _process_state_machine_start_events(self) -> None:
+        pull = phile.pubsub_event.Subscriber(
+            publisher=(
+                self._launcher_registry.state_machine.event_publishers[
+                    phile.launcher.StateMachine.start]
+            )
+        ).pull
+        on_start = self._on_start
+        while True:
+            launcher_name = await pull()
+            on_start(launcher_name)
+
+    async def _process_state_machine_stop_events(self) -> None:
+        pull = phile.pubsub_event.Subscriber(
+            publisher=(
+                self._launcher_registry.state_machine.event_publishers[
+                    phile.launcher.StateMachine.stop]
+            )
+        ).pull
+        on_stop = self._on_stop
+        while True:
+            launcher_name = await pull()
+            on_stop(launcher_name)
 
     def _on_start(self, launcher_name: str) -> None:
         start_trigger, stop_trigger = self._trigger_names(launcher_name)
         trigger_registry = self._trigger_registry
         trigger_registry.hide(start_trigger)
-        trigger_registry.show(stop_trigger)
+        with contextlib.suppress(phile.trigger.Registry.NotBound):
+            trigger_registry.show(stop_trigger)
 
     def _on_stop(self, launcher_name: str) -> None:
         start_trigger, stop_trigger = self._trigger_names(launcher_name)
         trigger_registry = self._trigger_registry
         trigger_registry.hide(stop_trigger)
-        trigger_registry.show(start_trigger)
+        with contextlib.suppress(phile.trigger.Registry.NotBound):
+            trigger_registry.show(start_trigger)
 
     def _bind(self, launcher_name: str) -> None:
         bound_launchers = self._bound_launchers
