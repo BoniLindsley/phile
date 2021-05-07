@@ -15,6 +15,47 @@ import typing
 import phile.capability
 
 
+def add_configuration(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def phile_configuration(
+        capability_registry: phile.capability.Registry,
+    ) -> asyncio.Future[typing.Any]:
+        loop = asyncio.get_running_loop()
+        create_future = loop.create_future
+        ready = create_future()
+
+        async def run() -> None:
+            import phile
+            import phile.configuration
+            with capability_registry.provide(
+                phile.Configuration()
+            ), capability_registry.provide(
+                await asyncio.to_thread(phile.configuration.load)
+            ):
+                ready.set_result(True)
+                await create_future()
+
+        running_task = loop.create_task(run())
+        await ready
+        return running_task
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    launcher_registry.database.add(
+        'phile.configuration',
+        phile.launcher.Descriptor(
+            exec_start=[
+                functools.partial(
+                    phile_configuration,
+                    capability_registry=capability_registry,
+                ),
+            ],
+            type=phile.launcher.Type.FORKING,
+        )
+    )
+
+
 def add_keyring(
     capability_registry: phile.capability.Registry,
 ) -> None:
@@ -48,42 +89,6 @@ def add_keyring(
             exec_start=[
                 functools.partial(
                     keyring_backend,
-                    capability_registry=capability_registry,
-                ),
-            ],
-            type=phile.launcher.Type.FORKING,
-        )
-    )
-
-
-def add_configuration(
-    capability_registry: phile.capability.Registry,
-) -> None:
-
-    async def phile_configuration(
-        capability_registry: phile.capability.Registry,
-    ) -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile
-            with capability_registry.provide(phile.Configuration()):
-                ready.set_result(True)
-                await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
-
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
-        'phile.configuration',
-        phile.launcher.Descriptor(
-            exec_start=[
-                functools.partial(
-                    phile_configuration,
                     capability_registry=capability_registry,
                 ),
             ],
@@ -598,8 +603,8 @@ def add_watchdog_observer(
 
 
 def add(capability_registry: phile.capability.Registry) -> None:
-    add_keyring(capability_registry=capability_registry)
     add_configuration(capability_registry=capability_registry)
+    add_keyring(capability_registry=capability_registry)
     add_tmux(capability_registry=capability_registry)
     add_tray_battery(capability_registry=capability_registry)
     add_tray_cpu(capability_registry=capability_registry)
