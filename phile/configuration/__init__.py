@@ -22,6 +22,9 @@ class Entries(pydantic.BaseSettings):
     configuration_path = pathlib.Path(
         appdirs.user_config_dir(**_app_meta_data)
     ) / 'config.json'
+    hotkey_global_map: dict[str, str] = {}
+    hotkey_map: dict[str, str] = {}
+    main_autostart = set[str]()
     notification_directory = pathlib.Path('notify')
     notification_suffix = '.notify'
     pid_path = pathlib.Path('pid')

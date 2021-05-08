@@ -9,6 +9,7 @@ import sys
 # Internal packages.
 import phile
 import phile.capability
+import phile.configuration
 import phile.cmd
 import phile.launcher
 import phile.launcher.cmd
@@ -18,7 +19,7 @@ async def async_run(
     capability_registry: phile.capability.Registry,
 ) -> int:  # pragma: no cover
     launcher_registry = capability_registry[phile.launcher.Registry]
-    launcher_registry.database.add(
+    await launcher_registry.database.add(
         launcher_name := 'phile.launcher.cmd',
         phile.launcher.Descriptor(
             after={'phile.launcher'},
@@ -35,8 +36,11 @@ async def async_run(
     )
     state_machine = launcher_registry.state_machine
     start = state_machine.start
+    await start('phile.configuration')
+    configurations = capability_registry[phile.configuration.Entries]
     await asyncio.gather(
-        *(start(name) for name in launcher_registry.database.type),
+        *(start(name) for name in configurations.main_autostart),
+        start('phile.launcher.cmd'),
         return_exceptions=True,
     )
     # pylint: disable=protected-access
