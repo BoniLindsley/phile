@@ -56,6 +56,128 @@ async def add_configuration(
     )
 
 
+async def add_hotkey_gui(
+    capability_registry: phile.capability.Registry,
+) -> None:
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.hotkey.gui',
+        phile.launcher.Descriptor(
+            after={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
+            binds_to={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
+            exec_start=[asyncio.get_running_loop().create_future],
+        )
+    )
+
+
+async def add_hotkey_pynput(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def run_pynput() -> None:
+        import phile.configuration
+        import phile.hotkey.pynput
+        import phile.trigger
+        await phile.hotkey.pynput.run(
+            configuration=(
+                capability_registry[phile.configuration.Entries]
+            ),
+            trigger_registry=(
+                capability_registry[phile.trigger.Registry]
+            ),
+        )
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.hotkey.pynput',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'phile.launcher',
+                'phile.trigger',
+                'phile.trigger.launcher',
+            },
+            binds_to={
+                'phile.configuration',
+                'phile.launcher',
+                'phile.trigger',
+                'phile.trigger.launcher',
+            },
+            exec_start=[run_pynput],
+        )
+    )
+
+
+async def add_hotkey_pyside2(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def run() -> None:
+        import phile.configuration
+        import phile.PySide2.QtCore
+        import phile.hotkey.pyside2
+        import phile.trigger
+        configurations = (
+            capability_registry[phile.configuration.Entries]
+        )
+        pyside2_executor = (
+            capability_registry[phile.PySide2.QtCore.Executor]
+        )
+        trigger_registry = (capability_registry[phile.trigger.Registry])
+        await phile.hotkey.pyside2.run(
+            configurations=configurations,
+            pyside2_executor=pyside2_executor,
+            trigger_registry=trigger_registry,
+        )
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.hotkey.pyside2',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'phile.launcher',
+                'phile.trigger',
+                'phile.trigger.launcher',
+                'pyside2',
+            },
+            binds_to={
+                'phile.configuration',
+                'phile.launcher',
+                'phile.trigger',
+                'phile.trigger.launcher',
+                'pyside2',
+            },
+            exec_start=[run],
+        )
+    )
+
+
+async def add_launcher_cmd(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def run() -> None:
+        import phile.cmd
+        import phile.launcher.cmd
+
+        await phile.cmd.async_cmdloop_threaded_stdin(
+            phile.launcher.cmd.Cmd(
+                launcher_registry=launcher_registry,
+            )
+        )
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.launcher.cmd',
+        phile.launcher.Descriptor(
+            after={'phile.launcher'},
+            binds_to={'phile.launcher'},
+            exec_start=[run],
+        )
+    )
+
+
 async def add_keyring(
     capability_registry: phile.capability.Registry,
 ) -> None:
@@ -93,44 +215,6 @@ async def add_keyring(
                 ),
             ],
             type=phile.launcher.Type.FORKING,
-        )
-    )
-
-
-async def add_pynput(
-    capability_registry: phile.capability.Registry,
-) -> None:
-
-    async def run_pynput() -> None:
-        import phile.configuration
-        import phile.hotkey.pynput
-        import phile.trigger
-        await phile.hotkey.pynput.run(
-            configuration=(
-                capability_registry[phile.configuration.Entries]
-            ),
-            trigger_registry=(
-                capability_registry[phile.trigger.Registry]
-            ),
-        )
-
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
-        'phile.hotkey.pynput',
-        phile.launcher.Descriptor(
-            after={
-                'phile.configuration',
-                'phile.launcher',
-                'phile.trigger',
-                'phile.trigger.launcher',
-            },
-            binds_to={
-                'phile.configuration',
-                'phile.launcher',
-                'phile.trigger',
-                'phile.trigger.launcher',
-            },
-            exec_start=[run_pynput],
         )
     )
 
@@ -566,10 +650,17 @@ async def add_pyside2(
             import phile.PySide2.QtCore
             provide = capability_registry.provide
             qt_app = PySide2.QtWidgets.QApplication.instance()
-            with provide(qt_app,
-                         PySide2.QtCore.QCoreApplication), provide(
-                             qt_app, PySide2.QtGui.QGuiApplication
-                         ), provide(qt_app):
+            with provide(
+                qt_app,
+                PySide2.QtCore.QCoreApplication,
+            ), provide(
+                qt_app,
+                PySide2.QtGui.QGuiApplication,
+            ), provide(
+                qt_app,
+            ), phile.PySide2.QtCore.Executor() as executor, provide(
+                executor,
+            ):
                 ready.set_result(True)
                 try:
                     await create_future()
@@ -648,8 +739,12 @@ async def add_watchdog_observer(
 
 async def add(capability_registry: phile.capability.Registry) -> None:
     await add_configuration(capability_registry=capability_registry)
+    await add_hotkey_gui(capability_registry=capability_registry)
+    await add_hotkey_pynput(capability_registry=capability_registry)
+    await add_hotkey_pyside2(capability_registry=capability_registry)
     await add_keyring(capability_registry=capability_registry)
-    await add_pynput(capability_registry=capability_registry)
+    await add_launcher_cmd(capability_registry=capability_registry)
+    await add_pyside2(capability_registry=capability_registry)
     await add_tmux(capability_registry=capability_registry)
     await add_tray_battery(capability_registry=capability_registry)
     await add_tray_cpu(capability_registry=capability_registry)
@@ -662,5 +757,4 @@ async def add(capability_registry: phile.capability.Registry) -> None:
     await add_trigger(capability_registry=capability_registry)
     await add_trigger_launcher(capability_registry=capability_registry)
     await add_trigger_watchdog(capability_registry=capability_registry)
-    await add_pyside2(capability_registry=capability_registry)
     await add_watchdog_observer(capability_registry=capability_registry)

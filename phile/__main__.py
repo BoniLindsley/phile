@@ -3,50 +3,33 @@
 # Standard library.
 import asyncio
 import contextlib
-import functools
 import sys
 
 # Internal packages.
-import phile
 import phile.capability
 import phile.configuration
-import phile.cmd
 import phile.launcher
 import phile.launcher.cmd
+import phile.main
 
 
 async def async_run(
     capability_registry: phile.capability.Registry,
 ) -> int:  # pragma: no cover
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
-        launcher_name := 'phile.launcher.cmd',
-        phile.launcher.Descriptor(
-            after={'phile.launcher'},
-            binds_to={'phile.launcher'},
-            exec_start=[
-                functools.partial(
-                    phile.cmd.async_cmdloop_threaded_stdin,
-                    phile.launcher.cmd.Cmd(
-                        launcher_registry=launcher_registry,
-                    ),
-                ),
-            ],
-        )
+    state_machine = (
+        capability_registry[phile.launcher.Registry].state_machine
     )
-    state_machine = launcher_registry.state_machine
     start = state_machine.start
     await start('phile.configuration')
     configurations = capability_registry[phile.configuration.Entries]
     await asyncio.gather(
         *(start(name) for name in configurations.main_autostart),
-        start('phile.launcher.cmd'),
+        start(cmd_name := 'phile.launcher.cmd'),
         return_exceptions=True,
     )
-    # pylint: disable=protected-access
-    running_tasks = state_machine._running_tasks
     try:
-        cmd_task = running_tasks[launcher_name]
+        # pylint: disable=protected-access
+        cmd_task = state_machine._running_tasks[cmd_name]
     except KeyError:
         return 1
     await cmd_task

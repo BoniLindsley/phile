@@ -11,8 +11,6 @@ import collections.abc
 import contextlib
 import functools
 import itertools
-import sys
-import threading
 import typing
 
 # External dependencies.
@@ -21,9 +19,8 @@ import PySide2.QtGui
 import PySide2.QtWidgets
 
 # Internal modules.
-import phile
+import phile.configuration
 import phile.PySide2.QtCore
-import phile.tray.tmux
 import phile.trigger
 
 # TODO[mypy issue #1422]: __loader__ not defined
@@ -127,19 +124,22 @@ class PressedKeys:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        assert widget.isWidgetType()
+        # Pylint is ignoring the type cast.
+        assert widget.isWidgetType()  # pylint: disable=no-member
         self.pressed_keys = set[int]()
 
     def keyPressEvent(self, event: PySide2.QtGui.QKeyEvent) -> None:
         if not self.update_pressed_key(event):
             widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-            widget.keyPressEvent(event)
+            # Pylint is ignoring the type cast.
+            widget.keyPressEvent(event)  # pylint: disable=no-member
 
     def keyReleaseEvent(self, event: PySide2.QtGui.QKeyEvent) -> None:
         is_event_handled = self.update_pressed_key(event)
         if not is_event_handled:
             widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-            widget.keyReleaseEvent(event)
+            # Pylint is ignoring the type cast.
+            widget.keyReleaseEvent(event)  # pylint: disable=no-member
 
     def update_pressed_key(self, event: PySide2.QtGui.QKeyEvent) -> bool:
         is_pressed_keys_changed = False
@@ -221,11 +221,11 @@ class HotkeyInput(PressedKeySequence, PySide2.QtWidgets.QLabel):
     def __init__(
         self,
         *args: typing.Any,
-        capabilities: phile.Capabilities,
+        trigger_registry: phile.trigger.Registry,
         **kwargs: typing.Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._trigger_registry = capabilities[phile.trigger.Registry]
+        self._trigger_registry = trigger_registry
 
     def on_pressed_sequence_changed(
         self, bound_value: typing.Any
@@ -249,45 +249,54 @@ class TriggerControlled:
     def __init__(
         self,
         *args: typing.Any,
-        capabilities: phile.Capabilities,
+        pyside2_executor: phile.PySide2.QtCore.Executor,
         trigger_prefix: typing.Optional[str] = None,
+        trigger_registry: phile.trigger.Registry,
         **kwargs: typing.Any,
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        assert widget.isWidgetType()
+        # Pylint is ignoring the type cast.
+        assert widget.isWidgetType()  # pylint: disable=no-member
         self._trigger_prefix = (
             _loader_name if trigger_prefix is None else trigger_prefix
         )
-        executor = capabilities[phile.PySide2.QtCore.Executor]
-        registry = capabilities[phile.trigger.Registry]
         self.trigger_producer = phile.trigger.Provider(
             callback_map={
                 self._trigger_prefix + '.show':
-                    functools.partial(executor.submit, widget.show),
+                    functools.partial(
+                        pyside2_executor.submit,
+                        widget.show,  # pylint: disable=no-member
+                    ),
                 self._trigger_prefix + '.hide':
-                    functools.partial(executor.submit, widget.hide),
+                    functools.partial(
+                        pyside2_executor.submit,
+                        widget.hide,  # pylint: disable=no-member
+                    ),
             },
-            registry=registry
+            registry=trigger_registry
         )
         self.trigger_producer.bind()
         self.trigger_producer.show(self._trigger_prefix + '.show')
 
     def closeEvent(self, event: PySide2.QtGui.QCloseEvent) -> None:
         widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        widget.closeEvent(event)
+        # Pylint is ignoring the type cast.
+        widget.closeEvent(event)  # pylint: disable=no-member
         self.trigger_producer.unbind()
 
     def hideEvent(self, event: PySide2.QtGui.QHideEvent) -> None:
         widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        widget.hideEvent(event)
+        # Pylint is ignoring the type cast.
+        widget.hideEvent(event)  # pylint: disable=no-member
         self.trigger_producer.hide(self._trigger_prefix + '.hide')
         self.trigger_producer.show(self._trigger_prefix + '.show')
 
     def showEvent(self, event: PySide2.QtGui.QShowEvent) -> None:
         widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        widget.showEvent(event)
+        # Pylint is ignoring the type cast.
+        widget.showEvent(event)  # pylint: disable=no-member
         self.trigger_producer.hide(self._trigger_prefix + '.show')
         self.trigger_producer.show(self._trigger_prefix + '.hide')
 
@@ -301,20 +310,25 @@ class HotkeyDialog(
 ):  # pragma: no cover
 
     def __init__(
-        self, *args: typing.Any, capabilities: phile.Capabilities,
-        **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        configurations: phile.configuration.Entries,
+        trigger_registry: phile.trigger.Registry,
+        **kwargs: typing.Any,
     ) -> None:
-        super().__init__(*args, capabilities=capabilities, **kwargs)
-        configuration = capabilities[phile.Configuration]
+        super().__init__(
+            *args,
+            trigger_registry=trigger_registry,
+            **kwargs,
+        )
         self.setLayout(layout := PySide2.QtWidgets.QGridLayout(self))
-        self.hotkey_widget = HotkeyInput(self, capabilities=capabilities)
+        self.hotkey_widget = HotkeyInput(
+            self,
+            trigger_registry=trigger_registry,
+        )
         layout.addWidget(self.hotkey_widget)
         self.setWindowFlag(PySide2.QtCore.Qt.WindowStaysOnTopHint)
-        hotkey_config = configuration.data.get('hotkey')
-        if hotkey_config is not None:
-            hotkey_map = hotkey_config.get('map')
-            if hotkey_map is not None:
-                self.hotkey_widget.add_key_bindings(hotkey_map)
+        self.hotkey_widget.add_key_bindings(configurations.hotkey_map)
         self.hotkey_widget.setFocus(
             PySide2.QtCore.Qt.FocusReason.OtherFocusReason
         )
@@ -325,81 +339,21 @@ class HotkeyDialog(
 
 
 async def run(
-    capabilities: phile.Capabilities,
+    *,
+    configurations: phile.configuration.Entries,
+    pyside2_executor: phile.PySide2.QtCore.Executor,
+    trigger_registry: phile.trigger.Registry,
 ) -> None:  # pragma: no cover
-    # Ensure required capabilities are available.
-    for capability in (
-        phile.Configuration,
-        phile.trigger.Registry,
-        phile.PySide2.QtCore.Executor,
-        PySide2.QtWidgets.QApplication,
-    ):
-        assert capability in capabilities, (
-            "Capability not found: {}".format(capability)
-        )
-    executor = capabilities[phile.PySide2.QtCore.Executor]
     dialog = await asyncio.wrap_future(
-        executor.submit(HotkeyDialog, capabilities=capabilities)
+        pyside2_executor.submit(
+            HotkeyDialog,
+            configurations=configurations,
+            pyside2_executor=pyside2_executor,
+            trigger_registry=trigger_registry,
+        )
     )
     try:
-        await asyncio.wrap_future(executor.submit(dialog.show))
+        await asyncio.wrap_future(pyside2_executor.submit(dialog.show))
         await asyncio.Event().wait()
     finally:
-        await asyncio.wrap_future(executor.submit(dialog.close))
-
-
-async def async_main(
-    capabilities: phile.Capabilities,
-) -> int:  # pragma: no cover
-    qt_app = capabilities[PySide2.QtWidgets.QApplication]
-    with phile.PySide2.QtCore.Executor() as executor:
-        capabilities.set(executor)
-        try:
-            tasks: set[asyncio.Task[typing.Any]] = {
-                asyncio.create_task(
-                    phile.tray.tmux.read_byte(sys.stdin)
-                ),
-                asyncio.create_task(run(capabilities)),
-            }
-            await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-        finally:
-            pending_tasks = asyncio.gather(*tasks)
-            pending_tasks.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await pending_tasks
-            await asyncio.wrap_future(executor.submit(qt_app.quit))
-    return 0
-
-
-def main(
-    argv: typing.Optional[list[str]] = None
-) -> int:  # pragma: no cover
-    del argv
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(contextlib.suppress(KeyboardInterrupt))
-        capabilities = phile.Capabilities()
-        capabilities.set(phile.Configuration())
-        capabilities.set(trigger_registry := phile.trigger.Registry())
-        print('Press <Esc> in the GUI to hide.')
-        print('Press <Return> in the terminal to exit.')
-        trigger_registry.event_callback_map.append(
-            lambda method, _registry, trigger_name:
-            print(trigger_name, method.__name__)
-        )
-        del trigger_registry
-        capabilities.set(qt_app := PySide2.QtWidgets.QApplication())
-        qt_app.setQuitOnLastWindowClosed(False)
-        threading.Thread(
-            target=functools.partial(
-                asyncio.run,
-                async_main(capabilities),
-            )
-        ).start()
-        qt_app.exec_()
-    return 0
-
-
-if __name__ == '__main__':  # pragma: no cover
-    sys.exit(main())
+        await asyncio.wrap_future(pyside2_executor.submit(dialog.close))
