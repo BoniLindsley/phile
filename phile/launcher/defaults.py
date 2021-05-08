@@ -97,6 +97,44 @@ async def add_keyring(
     )
 
 
+async def add_pynput(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def run_pynput() -> None:
+        import phile.configuration
+        import phile.hotkey.pynput
+        import phile.trigger
+        await phile.hotkey.pynput.run(
+            configuration=(
+                capability_registry[phile.configuration.Entries]
+            ),
+            trigger_registry=(
+                capability_registry[phile.trigger.Registry]
+            ),
+        )
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.hotkey.pynput',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'phile.launcher',
+                'phile.trigger',
+                'phile.trigger.launcher',
+            },
+            binds_to={
+                'phile.configuration',
+                'phile.launcher',
+                'phile.trigger',
+                'phile.trigger.launcher',
+            },
+            exec_start=[run_pynput],
+        )
+    )
+
+
 async def add_tmux(
     capability_registry: phile.capability.Registry
 ) -> None:
@@ -611,6 +649,7 @@ async def add_watchdog_observer(
 async def add(capability_registry: phile.capability.Registry) -> None:
     await add_configuration(capability_registry=capability_registry)
     await add_keyring(capability_registry=capability_registry)
+    await add_pynput(capability_registry=capability_registry)
     await add_tmux(capability_registry=capability_registry)
     await add_tray_battery(capability_registry=capability_registry)
     await add_tray_cpu(capability_registry=capability_registry)

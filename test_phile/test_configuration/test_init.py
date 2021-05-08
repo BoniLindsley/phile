@@ -9,6 +9,7 @@ Test :mod:`phile.configuration`
 import json
 import pathlib
 import tempfile
+import typing
 import unittest
 
 # Internal modules.
@@ -20,6 +21,7 @@ class PreparesEntries(unittest.TestCase):
 
     def setUp(self) -> None:
         """Do not use user configurations for testing."""
+        # pylint: disable=consider-using-with
         super().setUp()
         configuration_directory = tempfile.TemporaryDirectory()
         self.addCleanup(configuration_directory.cleanup)
@@ -40,12 +42,14 @@ class PreparesEntries(unittest.TestCase):
 class TestEntries(PreparesEntries, unittest.TestCase):
 
     def test_has_attributes(self) -> None:
-        self.configuration_entries = phile.configuration.Entries(
+        entries = phile.configuration.Entries(
             configuration_path=str(self.configuration_path),
             state_directory_path=str(self.state_directory_path),
         )
-        entries = self.configuration_entries
         self.assertIsInstance(entries.configuration_path, pathlib.Path)
+        self.assertIsInstance(entries.hotkey_global_map, dict)
+        self.assertIsInstance(entries.hotkey_map, dict)
+        self.assertIsInstance(entries.main_autostart, set)
         self.assertIsInstance(
             entries.notification_directory, pathlib.Path
         )
@@ -59,14 +63,16 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertIsInstance(entries.trigger_suffix, str)
 
     def test_defaults(self) -> None:
-        self.configuration_entries = phile.configuration.Entries(
+        entries = phile.configuration.Entries(
             configuration_path=str(self.configuration_path),
             state_directory_path=str(self.state_directory_path),
         )
-        entries = self.configuration_entries
         self.assertEqual(
             entries.configuration_path, self.configuration_path
         )
+        self.assertEqual(entries.hotkey_global_map, {})
+        self.assertEqual(entries.hotkey_map, {})
+        self.assertEqual(entries.main_autostart, set[str]())
         self.assertEqual(
             entries.notification_directory, pathlib.Path('notify')
         )
@@ -90,6 +96,9 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         state_directory_path = self.configuration_path.parent
         environ.set(
             PHILE_CONFIGURATION_PATH=str(configuration_path),
+            PHILE_HOTKEY_GLOBAL_MAP='{"a": "a"}',
+            PHILE_HOTKEY_MAP='{"b": "b"}',
+            PHILE_MAIN_AUTOSTART='["au"]',
             PHILE_NOTIFICATION_DIRECTORY='n',
             PHILE_NOTIFICATION_SUFFIX='.n',
             PHILE_PID_PATH='p',
@@ -102,6 +111,9 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         )
         entries = phile.configuration.Entries()
         self.assertEqual(entries.configuration_path, configuration_path)
+        self.assertEqual(entries.hotkey_global_map, {'a': 'a'})
+        self.assertEqual(entries.hotkey_map, {'b': 'b'})
+        self.assertEqual(entries.main_autostart, set(('au', )))
         self.assertEqual(
             entries.notification_directory, pathlib.Path('n')
         )
@@ -121,7 +133,14 @@ class TestLoad(PreparesEntries, unittest.TestCase):
 
     def test_loads_from_file(self) -> None:
         state_directory_path = self.configuration_path.parent
-        file_content: dict[str, str] = {
+        file_content: dict[str, typing.Any] = {
+            'hotkey_global_map': {
+                'g': 'g'
+            },
+            'hotkey_map': {
+                'h': 'h'
+            },
+            'main_autostart': ['as'],
             'notification_directory': 'not',
             'notification_suffix': '.not',
             'pid_path': 'pi',
@@ -137,6 +156,9 @@ class TestLoad(PreparesEntries, unittest.TestCase):
         self.assertEqual(
             entries.configuration_path, self.configuration_path
         )
+        self.assertEqual(entries.hotkey_global_map, {'g': 'g'})
+        self.assertEqual(entries.hotkey_map, {'h': 'h'})
+        self.assertEqual(entries.main_autostart, set(('as', )))
         self.assertEqual(
             entries.notification_directory, pathlib.Path('not')
         )
