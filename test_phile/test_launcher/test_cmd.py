@@ -17,20 +17,21 @@ import phile.launcher
 import phile.launcher.cmd
 import phile.pubsub_event
 
+StrSubscriber = phile.pubsub_event.Subscriber[str]
+
 
 class TestCmd(unittest.IsolatedAsyncioTestCase):
     """Tests :func:`~phile.launcher.cmd.Cmd`."""
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        Subscriber = phile.pubsub_event.Subscriber[str]
         self.cmd: phile.launcher.cmd.Cmd
-        self.database_add_events: Subscriber
-        self.database_remove_events: Subscriber
+        self.database_add_events: StrSubscriber
+        self.database_remove_events: StrSubscriber
         self.launcher_name_1: str
         self.launcher_name_2: str
         self.launcher_registry: phile.launcher.Registry
-        self.state_machine_start_events: Subscriber
-        self.state_machine_stop_events: Subscriber
+        self.state_machine_start_events: StrSubscriber
+        self.state_machine_stop_events: StrSubscriber
         self.stdin: io.StringIO
         self.stdout: io.StringIO
         super().__init__(*args, **kwargs)
@@ -51,26 +52,25 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(self.add_launchers())
 
     def add_subscribers(self) -> None:
-        Subscriber = phile.pubsub_event.Subscriber
-        self.database_add_events = Subscriber(
+        self.database_add_events = StrSubscriber(
             publisher=(
                 self.launcher_registry.database.event_publishers[
                     phile.launcher.Database.add]
             )
         )
-        self.database_remove_events = Subscriber(
+        self.database_remove_events = StrSubscriber(
             publisher=(
                 self.launcher_registry.database.event_publishers[
                     phile.launcher.Database.remove]
             )
         )
-        self.state_machine_start_events = Subscriber(
+        self.state_machine_start_events = StrSubscriber(
             publisher=(
                 self.launcher_registry.state_machine.event_publishers[
                     phile.launcher.StateMachine.start]
             )
         )
-        self.state_machine_stop_events = Subscriber(
+        self.state_machine_stop_events = StrSubscriber(
             publisher=(
                 self.launcher_registry.state_machine.event_publishers[
                     phile.launcher.StateMachine.stop]

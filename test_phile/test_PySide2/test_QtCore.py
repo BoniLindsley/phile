@@ -371,5 +371,7 @@ class UsesExecutor(UsesCapabilities, unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.executor = phile.PySide2.QtCore.Executor()
-        self.capabilities.set(self.executor)
+        self.pyside2_executor = pyside2_executor = (
+            phile.PySide2.QtCore.Executor()
+        )
+        self.capabilities.set(pyside2_executor)

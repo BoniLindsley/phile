@@ -71,8 +71,10 @@ class Caller(PySide2.QtCore.QObject):
     ) -> None:
         """Internal."""
         if event_to_handle.type() == CallRequest.event_type:
-            event_to_handle.callback()
-            self.deleteLater()
+            try:
+                event_to_handle.callback()
+            finally:
+                self.deleteLater()
         else:
             super().customEvent(event_to_handle)
 
@@ -195,4 +197,5 @@ class Executor(concurrent.futures.Executor):
         if wait:
             while self.futures:
                 self.future_done_event.wait()
+                self.future_done_event.clear()
         super().shutdown(wait=wait, cancel_futures=cancel_futures)
