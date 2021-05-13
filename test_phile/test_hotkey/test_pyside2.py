@@ -565,7 +565,7 @@ class TestHotkeyInput(
         self.addCleanup(self.trigger_registry.unbind, 'alphabet')
         self.trigger_registry.show('alphabet')
         self.input = phile.hotkey.pyside2.HotkeyInput(
-            capabilities=self.capabilities
+            trigger_registry=self.trigger_registry,
         )
         self.addCleanup(self.input.deleteLater)
         self.input.add_key_bindings({'A; B; C': 'alphabet'})
@@ -661,7 +661,8 @@ class TestTriggerControlled(
             pass
 
         self.trigger_controlled = TriggerControlledWidget(
-            capabilities=self.capabilities
+            pyside2_executor=self.pyside2_executor,
+            trigger_registry=self.trigger_registry,
         )
         self.addCleanup(self.trigger_controlled.deleteLater)
 

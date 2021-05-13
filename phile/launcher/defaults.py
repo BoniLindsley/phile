@@ -136,14 +136,12 @@ async def add_hotkey_pyside2(
         phile.launcher.Descriptor(
             after={
                 'phile.configuration',
-                'phile.launcher',
                 'phile.trigger',
                 'phile.trigger.launcher',
                 'pyside2',
             },
             binds_to={
                 'phile.configuration',
-                'phile.launcher',
                 'phile.trigger',
                 'phile.trigger.launcher',
                 'pyside2',
@@ -648,8 +646,13 @@ async def add_pyside2(
             import PySide2.QtGui
             import PySide2.QtWidgets
             import phile.PySide2.QtCore
+            import phile.launcher
+            launcher_registry = (
+                capability_registry[phile.launcher.Registry]
+            )
             provide = capability_registry.provide
             qt_app = PySide2.QtWidgets.QApplication.instance()
+            qt_app.setQuitLockEnabled(False)
             with provide(
                 qt_app,
                 PySide2.QtCore.QCoreApplication,
@@ -658,16 +661,14 @@ async def add_pyside2(
                 PySide2.QtGui.QGuiApplication,
             ), provide(
                 qt_app,
-            ), phile.PySide2.QtCore.Executor() as executor, provide(
-                executor,
+            ), phile.PySide2.QtCore.Executor(
+            ) as pyside2_executor, provide(
+                pyside2_executor,
             ):
                 ready.set_result(True)
                 try:
                     await create_future()
                 finally:
-                    launcher_registry = (
-                        capability_registry[phile.launcher.Registry]
-                    )
                     launcher_registry.state_machine.stop_soon(
                         'phile.launcher'
                     )

@@ -344,6 +344,8 @@ async def run(
     pyside2_executor: phile.PySide2.QtCore.Executor,
     trigger_registry: phile.trigger.Registry,
 ) -> None:  # pragma: no cover
+    loop = asyncio.get_running_loop()
+    dialog_closed = asyncio.Event()
     dialog = await asyncio.wrap_future(
         pyside2_executor.submit(
             HotkeyDialog,
@@ -353,7 +355,26 @@ async def run(
         )
     )
     try:
-        await asyncio.wrap_future(pyside2_executor.submit(dialog.show))
-        await asyncio.Event().wait()
-    finally:
-        await asyncio.wrap_future(pyside2_executor.submit(dialog.close))
+
+        def set_closed_event(
+            qobject: typing.Optional[PySide2.QtCore.QObject] = None,
+        ) -> None:
+            del qobject
+            loop.call_soon_threadsafe(dialog_closed.set)
+
+        def on_start() -> None:
+            dialog.destroyed.connect(set_closed_event)
+            dialog.setAttribute(PySide2.QtCore.Qt.WA_DeleteOnClose)
+            dialog.show()
+
+        phile.PySide2.QtCore.call_soon_threadsafe(on_start)
+        await dialog_closed.wait()
+    except:
+
+        def delete_dialog() -> None:
+            """Ensure close events are emitted before deleting."""
+            dialog.close()
+            dialog.deleteLater()
+
+        phile.PySide2.QtCore.call_soon_threadsafe(delete_dialog)
+        raise
