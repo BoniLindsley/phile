@@ -66,11 +66,14 @@ in an :class:`asyncio.AbstractEventLoop`.
     https://docs.python.org/3/library/asyncio-platforms.html
 """
 
-# Standard library.
+# Standard libraries.
 import asyncio
 import cmd
 import functools
 import typing
+
+# Internal modules.
+import phile.asyncio
 
 
 def process_command(processor_cmd: cmd.Cmd, command: str) -> bool:
@@ -131,7 +134,7 @@ async def async_cmdloop_with_streams(
 
 
 async def async_cmdloop_threaded_stdin(looping_cmd: cmd.Cmd) -> None:
-    stdin = looping_cmd.stdin
+    stdin = phile.asyncio.ThreadedTextIOBase(looping_cmd.stdin)
     stdout = looping_cmd.stdout
     looping_cmd.preloop()
     if looping_cmd.intro:
@@ -141,6 +144,6 @@ async def async_cmdloop_threaded_stdin(looping_cmd: cmd.Cmd) -> None:
     while not is_stopping:
         await asyncio.to_thread(stdout.write, looping_cmd.prompt)
         await asyncio.to_thread(stdout.flush)
-        next_command = await asyncio.to_thread(stdin.readline)
+        next_command = await stdin.readline()
         is_stopping = process_command(looping_cmd, next_command)
     looping_cmd.postloop()
