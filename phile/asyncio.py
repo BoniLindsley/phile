@@ -6,6 +6,7 @@ import collections.abc
 import contextlib
 import contextvars
 import datetime
+import queue
 import socket
 import threading
 import typing
@@ -110,3 +111,41 @@ class Thread(threading.Thread):
 
     async def async_join(self) -> None:
         await self.__stopped.wait()
+
+
+class ThreadedTextIOBase:
+
+    def __init__(
+        self,
+        parent_stream: typing.IO[str],
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self._io_thread = threading.Thread(target=self._run, daemon=True)
+        self._loop = asyncio.get_event_loop()
+        self._parent_stream = parent_stream
+        self._request_queue = queue.SimpleQueue[asyncio.Future[str]]()
+        self._io_thread.start()
+
+    async def readline(self) -> str:
+        next_line_future = asyncio.Future[str]()
+        self._request_queue.put(next_line_future)
+        next_line = await next_line_future
+        return next_line
+
+    def _run(self) -> None:
+        while True:
+            next_line_future = self._request_queue.get()
+            try:
+                next_line = self._parent_stream.readline()
+            # Intention catch to propagate exception.
+            except Exception as error:  # pylint: disable=broad-except
+                self._loop.call_soon_threadsafe(
+                    next_line_future.set_exception, error
+                )
+                return
+            self._loop.call_soon_threadsafe(
+                next_line_future.set_result, next_line
+            )

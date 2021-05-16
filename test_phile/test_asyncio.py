@@ -8,6 +8,7 @@ Test :mod:`phile.asyncio`
 # Standard library.
 import asyncio
 import datetime
+import io
 import socket
 import sys
 import threading
@@ -209,3 +210,29 @@ class TestThread(unittest.IsolatedAsyncioTestCase):
         thread = Thread()
         thread.start()
         await phile.asyncio.wait_for(thread.async_join())
+
+
+class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.stream = io.StringIO()
+        self.threaded_stream = phile.asyncio.ThreadedTextIOBase(
+            self.stream
+        )
+
+    async def test_reads_one_line(self) -> None:
+        expected_line = 'Single file!\n'
+        self.stream.write(expected_line)
+        self.stream.seek(0)
+        next_line = await phile.asyncio.wait_for(
+            self.threaded_stream.readline()
+        )
+        self.assertEqual(next_line, expected_line)
+
+    async def test_raises_if_closed(self) -> None:
+        self.stream.close()
+        with self.assertRaises(ValueError):
+            next_line = await phile.asyncio.wait_for(
+                self.threaded_stream.readline()
+            )
