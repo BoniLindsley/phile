@@ -15,6 +15,7 @@ import collections.abc
 import contextlib
 import enum
 import functools
+import logging
 import types
 import typing
 
@@ -28,6 +29,10 @@ NullaryAsyncCallable = collections.abc.Callable[[], Awaitable]
 NullaryCallable = collections.abc.Callable[[], typing.Any]
 Command = NullaryAsyncCallable
 CommandLines = list[Command]
+
+# TODO[mypy issue #1422]: __loader__ not defined
+_loader_name: str = __loader__.name  # type: ignore[name-defined]
+_logger = logging.getLogger(_loader_name)
 
 
 class Type(enum.IntEnum):
@@ -430,14 +435,21 @@ class StateMachine:
         entry_name: str,
         ready_event: asyncio.Event,
     ) -> None:
+        _logger.debug(
+            'Launcher %s is starting dependencies.', entry_name
+        )
         await self._start_dependencies(entry_name)
         await self._ensure_dependencies_are_started(entry_name)
         async with contextlib.AsyncExitStack() as stack:
+            stack.callback(
+                _logger.debug, 'Launcher %s has stopped.', entry_name
+            )
             # When unwinding the stack,
             # emit event only when the task is assumed to be done.
             event_stack = await stack.enter_async_context(
                 contextlib.AsyncExitStack()
             )
+            _logger.debug('Launcher %s is starting.', entry_name)
             main_task = await stack.enter_async_context(
                 self._create_main_task(entry_name)
             )
@@ -449,10 +461,19 @@ class StateMachine:
                 self._ensure_dependents_are_stopped, entry_name
             )
             stack.push_async_callback(self._stop_dependents, entry_name)
+            stack.callback(
+                _logger.debug,
+                'Launcher %s is stopping dependents.',
+                entry_name,
+            )
             # When setting up,
             # emit event only when all clean-up is set up.
             event_stack.enter_context(self._update_events(entry_name))
+            event_stack.callback(
+                _logger.debug, 'Launcher %s is stopping.', entry_name
+            )
             ready_event.set()
+            _logger.debug('Launcher %s has started.', entry_name)
             await asyncio.shield(main_task)
 
     async def _start_dependencies(self, entry_name: str) -> None:

@@ -6,6 +6,7 @@ Test :mod:`phile.launcher.defaults`
 """
 
 # Standard libraries.
+import logging
 import json
 import unittest
 
@@ -82,3 +83,83 @@ class TestAddConfiguration(
             phile.configuration.Entries,
         )
         self.assertTrue(configuration.pid_path, '.pid_file')
+
+
+class TestAddLogFile(
+    UsesLauncherRegistry,
+    PreparesConfigurationEntries,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+    """Tests :func:`~phile.launcher.defaults.add_configuration`."""
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_log_file(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(
+                'phile.log.file',
+            )
+        )
+
+    async def test_logs_to_file(self) -> None:
+        file_content: dict[str, str] = {'log_file_path': 'ph.log'}
+        self.configuration_path.write_text(json.dumps(file_content))
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_log_file(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                'phile.log.file',
+            )
+        )
+        logger = logging.getLogger('phile.log.file')
+        logger.warning('Add this to log.')
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.stop(
+                'phile.log.file',
+            )
+        )
+        log_file_path = self.state_directory_path / 'ph.log'
+        self.assertTrue(log_file_path.is_file())
+        self.assertEqual(log_file_path.read_text(), 'Add this to log.\n')
+
+    async def test_filter_by_level(self) -> None:
+        file_content: dict[str, str] = {'log_file_level': '20'}
+        self.configuration_path.write_text(json.dumps(file_content))
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_log_file(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                'phile.log.file',
+            )
+        )
+        logger = logging.getLogger('phile.log.file')
+        logger.debug('Do not add this.')
+        logger.info('But add this.')
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.stop(
+                'phile.log.file',
+            )
+        )
+        log_file_path = self.state_directory_path / 'phile.log'
+        self.assertTrue(log_file_path.is_file())
+        self.assertEqual(log_file_path.read_text(), 'But add this.\n')
