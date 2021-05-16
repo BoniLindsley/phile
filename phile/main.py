@@ -4,6 +4,7 @@
 import asyncio
 import collections.abc
 import functools
+import logging
 import threading
 import typing
 
@@ -19,6 +20,10 @@ Awaitable = collections.abc.Awaitable[_T]
 Registry = phile.capability.Registry
 AsyncTarget = collections.abc.Callable[[Registry], Awaitable[_T]]
 
+# TODO[mypy issue #1422]: __loader__ not defined
+_loader_name: str = __loader__.name  # type: ignore[name-defined]
+_logger = logging.getLogger(_loader_name)
+
 
 async def _async_run(
     async_target: AsyncTarget[_T],
@@ -26,11 +31,16 @@ async def _async_run(
 ) -> _T:  # pragma: no cover
     async with phile.launcher.provide_registry(
         capability_registry=capability_registry
-    ):
+    ) as launcher_registry:
         await phile.launcher.defaults.add(
             capability_registry=capability_registry,
         )
-        return await async_target(capability_registry)
+        _logger.debug('Target of asyncio loop is starting.')
+        return_value = await async_target(capability_registry)
+        _logger.debug('Target of asyncio loop has stopped.')
+        # Do cleanup for launchers that require it.
+        await launcher_registry.state_machine.stop('phile.launcher')
+        return return_value
 
 
 def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
