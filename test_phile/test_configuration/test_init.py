@@ -49,6 +49,8 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertIsInstance(entries.configuration_path, pathlib.Path)
         self.assertIsInstance(entries.hotkey_global_map, dict)
         self.assertIsInstance(entries.hotkey_map, dict)
+        self.assertIsInstance(entries.log_file_level, int)
+        self.assertIsInstance(entries.log_file_path, pathlib.Path)
         self.assertIsInstance(entries.main_autostart, set)
         self.assertIsInstance(
             entries.notification_directory, pathlib.Path
@@ -72,6 +74,10 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         )
         self.assertEqual(entries.hotkey_global_map, {})
         self.assertEqual(entries.hotkey_map, {})
+        self.assertEqual(entries.log_file_level, 30)
+        self.assertEqual(
+            entries.log_file_path, pathlib.Path('phile.log')
+        )
         self.assertEqual(entries.main_autostart, set[str]())
         self.assertEqual(
             entries.notification_directory, pathlib.Path('notify')
@@ -98,6 +104,8 @@ class TestEntries(PreparesEntries, unittest.TestCase):
             PHILE_CONFIGURATION_PATH=str(configuration_path),
             PHILE_HOTKEY_GLOBAL_MAP='{"a": "a"}',
             PHILE_HOTKEY_MAP='{"b": "b"}',
+            PHILE_LOG_FILE_LEVEL='2',
+            PHILE_LOG_FILE_PATH='lo',
             PHILE_MAIN_AUTOSTART='["au"]',
             PHILE_NOTIFICATION_DIRECTORY='n',
             PHILE_NOTIFICATION_SUFFIX='.n',
@@ -113,6 +121,8 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertEqual(entries.configuration_path, configuration_path)
         self.assertEqual(entries.hotkey_global_map, {'a': 'a'})
         self.assertEqual(entries.hotkey_map, {'b': 'b'})
+        self.assertEqual(entries.log_file_level, 2)
+        self.assertEqual(entries.log_file_path, pathlib.Path('lo'))
         self.assertEqual(entries.main_autostart, set(('au', )))
         self.assertEqual(
             entries.notification_directory, pathlib.Path('n')
@@ -140,6 +150,8 @@ class TestLoad(PreparesEntries, unittest.TestCase):
             'hotkey_map': {
                 'h': 'h'
             },
+            'log_file_level': 50,
+            'log_file_path': str('lg'),
             'main_autostart': ['as'],
             'notification_directory': 'not',
             'notification_suffix': '.not',
@@ -158,6 +170,8 @@ class TestLoad(PreparesEntries, unittest.TestCase):
         )
         self.assertEqual(entries.hotkey_global_map, {'g': 'g'})
         self.assertEqual(entries.hotkey_map, {'h': 'h'})
+        self.assertEqual(entries.log_file_level, 50)
+        self.assertEqual(entries.log_file_path, pathlib.Path('lg'))
         self.assertEqual(entries.main_autostart, set(('as', )))
         self.assertEqual(
             entries.notification_directory, pathlib.Path('not')

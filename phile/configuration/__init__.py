@@ -24,6 +24,8 @@ class Entries(pydantic.BaseSettings):
     ) / 'config.json'
     hotkey_global_map: dict[str, str] = {}
     hotkey_map: dict[str, str] = {}
+    log_file_level = 30
+    log_file_path = pathlib.Path('phile.log')
     main_autostart = set[str]()
     notification_directory = pathlib.Path('notify')
     notification_suffix = '.notify'
