@@ -132,7 +132,12 @@ class TestAddLogFile(
         )
         log_file_path = self.state_directory_path / 'ph.log'
         self.assertTrue(log_file_path.is_file())
-        self.assertEqual(log_file_path.read_text(), 'Add this to log.\n')
+        self.assertRegex(
+            log_file_path.read_text(),
+            '\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
+            '\[030\] phile.log.file: '
+            'Add this to log.\n'
+        )
 
     async def test_filter_by_level(self) -> None:
         file_content: dict[str, str] = {'log_file_level': '20'}
@@ -152,7 +157,7 @@ class TestAddLogFile(
                 'phile.log.file',
             )
         )
-        logger = logging.getLogger('phile.log.file')
+        logger = logging.getLogger('phile.log.phile')
         logger.debug('Do not add this.')
         logger.info('But add this.')
         await phile.asyncio.wait_for(
@@ -162,4 +167,9 @@ class TestAddLogFile(
         )
         log_file_path = self.state_directory_path / 'phile.log'
         self.assertTrue(log_file_path.is_file())
-        self.assertEqual(log_file_path.read_text(), 'But add this.\n')
+        self.assertRegex(
+            log_file_path.read_text(),
+            '\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
+            '\[020\] phile.log.phile: '
+            'But add this.\n'
+        )
