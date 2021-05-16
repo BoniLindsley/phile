@@ -198,6 +198,11 @@ async def add_log_file(
             )
             handler = logging.FileHandler(str(log_path))
             try:
+                formatter = logging.Formatter(
+                    '[%(asctime)s] [%(levelno)03d] %(name)s:'
+                    ' %(message)s',
+                )
+                handler.setFormatter(formatter)
                 package_logger = logging.getLogger('phile')
                 package_logger.addHandler(handler)
                 package_logger.setLevel(log_level)
