@@ -379,6 +379,19 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
         self.do_release_key(key)
         self.assertEqual(self.keys_widget.pressed_keys, {useful_key})
 
+    def test_hide_ignores_if_no_pressed_keys(self) -> None:
+        self.keys_widget.show()
+        self.keys_widget.hide()
+        self.assertEqual(self.keys_widget.pressed_keys, set())
+
+    def test_hide_resets_keys(self) -> None:
+        self.keys_widget.show()
+        key = PySide2.QtCore.Qt.Key.Key_A
+        self.do_press_key(key)
+        self.assertEqual(self.keys_widget.pressed_keys, {key})
+        self.keys_widget.hide()
+        self.assertEqual(self.keys_widget.pressed_keys, set())
+
 
 class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
     """Tests :class:`~phile.hotkey.pyside2.PressedKeySequence`."""
