@@ -249,6 +249,10 @@ class TestFuture(unittest.TestCase):
         self.assertTrue(self.done)
 
 
+class UserBaseException(BaseException):
+    pass
+
+
 class TestTask(unittest.TestCase):
     """Tests :class:`~phile.PySide2.QtCore.Task`."""
 
@@ -261,19 +265,16 @@ class TestTask(unittest.TestCase):
         task.run()
         self.assertEqual(task.result(), zero())
 
-    def test_run_propagates_exception(self) -> None:
-
-        class SomethingBadHappened(RuntimeError):
-            pass
+    def test_run_propagates_base_exception(self) -> None:
 
         def bad() -> int:
-            raise SomethingBadHappened()
+            raise UserBaseException()
 
         task = phile.PySide2.QtCore.Task[int](callback=bad)
         task.run()
-        with self.assertRaises(SomethingBadHappened):
+        with self.assertRaises(UserBaseException):
             task.result()
-        self.assertIsInstance(task.exception(), SomethingBadHappened)
+        self.assertIsInstance(task.exception(), UserBaseException)
 
     def test_run_respects_cancellation_before_run_call(self) -> None:
 

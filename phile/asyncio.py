@@ -141,9 +141,10 @@ class ThreadedTextIOBase:
             try:
                 next_line = self._parent_stream.readline()
             # Intention catch to propagate exception.
-            except Exception as error:  # pylint: disable=broad-except
+            # pylint: disable=broad-except
+            except BaseException as exception:
                 self._loop.call_soon_threadsafe(
-                    next_line_future.set_exception, error
+                    next_line_future.set_exception, exception
                 )
                 return
             self._loop.call_soon_threadsafe(
