@@ -203,9 +203,10 @@ async def add_log_file(
                     ' %(message)s',
                 )
                 handler.setFormatter(formatter)
+                handler.setLevel(log_level)
                 package_logger = logging.getLogger('phile')
                 package_logger.addHandler(handler)
-                package_logger.setLevel(log_level)
+                package_logger.setLevel(1)
                 try:
                     ready.set_result(True)
                     await create_future()
@@ -221,6 +222,58 @@ async def add_log_file(
     launcher_registry = capability_registry[phile.launcher.Registry]
     await launcher_registry.database.add(
         'phile.log.file',
+        phile.launcher.Descriptor(
+            after={'phile.configuration'},
+            binds_to={'phile.configuration'},
+            exec_start=[start],
+            type=phile.launcher.Type.FORKING,
+        )
+    )
+
+
+async def add_log_stderr(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def start() -> asyncio.Future[typing.Any]:
+        loop = asyncio.get_running_loop()
+        create_future = loop.create_future
+        ready = create_future()
+
+        async def run() -> None:
+            import logging
+            import sys
+            import phile.configuration
+            configuration = (
+                capability_registry[phile.configuration.Entries]
+            )
+            log_level = configuration.log_stderr_level
+            handler = logging.StreamHandler(sys.stderr)
+            try:
+                formatter = logging.Formatter(
+                    '[%(asctime)s] [%(levelno)03d] %(name)s:'
+                    ' %(message)s',
+                )
+                handler.setFormatter(formatter)
+                handler.setLevel(log_level)
+                package_logger = logging.getLogger('phile')
+                package_logger.addHandler(handler)
+                package_logger.setLevel(1)
+                try:
+                    ready.set_result(True)
+                    await create_future()
+                finally:
+                    package_logger.removeHandler(handler)
+            finally:
+                handler.close()
+
+        running_task = loop.create_task(run())
+        await ready
+        return running_task
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.log.stderr',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
             binds_to={'phile.configuration'},
@@ -798,6 +851,7 @@ async def add(capability_registry: phile.capability.Registry) -> None:
     await add_hotkey_pynput(capability_registry=capability_registry)
     await add_hotkey_pyside2(capability_registry=capability_registry)
     await add_log_file(capability_registry=capability_registry)
+    await add_log_stderr(capability_registry=capability_registry)
     await add_keyring(capability_registry=capability_registry)
     await add_launcher_cmd(capability_registry=capability_registry)
     await add_pyside2(capability_registry=capability_registry)
