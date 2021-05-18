@@ -128,6 +128,22 @@ class PressedKeys:
         assert widget.isWidgetType()  # pylint: disable=no-member
         self.pressed_keys = set[int]()
 
+    def hideEvent(self, event: PySide2.QtGui.QHideEvent) -> None:
+        widget = typing.cast(PySide2.QtWidgets.QWidget, super())
+        # Pylint is ignoring the type cast.
+        widget.hideEvent(event)  # pylint: disable=no-member
+        for key in self.pressed_keys.copy():
+            self.keyReleaseEvent(
+                PySide2.QtGui.QKeyEvent(
+                    PySide2.QtCore.QEvent.Type.KeyRelease,
+                    key,
+                    PySide2.QtCore.Qt.KeyboardModifiers(),
+                    0,
+                    0,
+                    0,
+                ),
+            )
+
     def keyPressEvent(self, event: PySide2.QtGui.QKeyEvent) -> None:
         if not self.update_pressed_key(event):
             widget = typing.cast(PySide2.QtWidgets.QWidget, super())
