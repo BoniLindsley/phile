@@ -36,11 +36,12 @@ async def _async_run(
             capability_registry=capability_registry,
         )
         _logger.debug('Target of asyncio loop is starting.')
-        return_value = await async_target(capability_registry)
-        _logger.debug('Target of asyncio loop has stopped.')
-        # Do cleanup for launchers that require it.
-        await launcher_registry.state_machine.stop('phile.launcher')
-        return return_value
+        try:
+            return await async_target(capability_registry)
+        finally:
+            _logger.debug('Target of asyncio loop has stopped.')
+            # Do cleanup for launchers that require it.
+            await launcher_registry.state_machine.stop('phile.launcher')
 
 
 def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
@@ -72,6 +73,10 @@ def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
                         launcher_registry.state_machine.stop_soon,
                         'pyside2',
                     )
+                )
+                loop.call_soon_threadsafe(
+                    main_task.add_done_callback,
+                    (lambda _task: qt_app.quit()),
                 )
                 asyncio_thread = threading.Thread(
                     target=loop.run_forever
