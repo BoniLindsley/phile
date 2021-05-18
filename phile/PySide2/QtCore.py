@@ -139,7 +139,8 @@ class Task(Future[_T]):
         try:
             result = self._callback()
         # Intentionally catching all exception to propagate.
-        except Exception as exception:  # pylint: disable=broad-except
+        # pylint: disable=broad-except
+        except BaseException as exception:
             self.set_exception(exception)
         else:
             self.set_result(result)
