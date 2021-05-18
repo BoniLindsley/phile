@@ -21,12 +21,7 @@ class UsesQGuiApplication(UsesPySide2, unittest.TestCase):
     def setUp(self) -> None:
         """Starts a ``QApplication`` that will be cleaned up."""
         super().setUp()
-        application = PySide2.QtGui.QGuiApplication()
-        self.addCleanup(application.shutdown)
-        self.addCleanup(
-            phile.PySide2.QtCore.process_deferred_delete_events,
-        )
-        self.addCleanup(phile.PySide2.QtCore.process_events)
+        self.qguiapplication = PySide2.QtGui.QGuiApplication()
 
 
 class TestQIconFromSpecifiedTheme(

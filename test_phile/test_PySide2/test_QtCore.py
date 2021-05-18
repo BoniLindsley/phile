@@ -47,6 +47,18 @@ class UsesPySide2(unittest.TestCase):
             QT_QPA_PLATFORM='offscreen',
         )
 
+        def cleanup_qapplication() -> None:
+            qapplication = PySide2.QtCore.QCoreApplication.instance()
+            if qapplication is None:
+                return
+            try:
+                phile.PySide2.QtCore.process_events()
+                phile.PySide2.QtCore.process_deferred_delete_events()
+            finally:
+                qapplication.shutdown()
+
+        self.addCleanup(cleanup_qapplication)
+
 
 class TestProcessDeferredDeleteEvents(UsesPySide2, unittest.TestCase):
     """
@@ -100,12 +112,7 @@ class UsesQCoreApplication(UsesPySide2, unittest.TestCase):
     def setUp(self) -> None:
         """Starts a ``QCoreApplication`` that will be cleaned up."""
         super().setUp()
-        application = PySide2.QtCore.QCoreApplication()
-        self.addCleanup(application.shutdown)
-        self.addCleanup(
-            phile.PySide2.QtCore.process_deferred_delete_events
-        )
-        self.addCleanup(phile.PySide2.QtCore.process_events)
+        self.qcoreapplication = PySide2.QtCore.QCoreApplication()
 
 
 class TestCallRequest(unittest.TestCase):
