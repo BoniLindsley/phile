@@ -23,12 +23,7 @@ class UsesQApplication(UsesPySide2, unittest.TestCase):
     def setUp(self) -> None:
         """Starts a ``QApplication`` that will be cleaned up."""
         super().setUp()
-        application = PySide2.QtWidgets.QApplication()
-        self.addCleanup(application.shutdown)
-        self.addCleanup(
-            phile.PySide2.QtCore.process_deferred_delete_events
-        )
-        self.addCleanup(phile.PySide2.QtCore.process_events)
+        self.qapplication = PySide2.QtWidgets.QApplication()
 
 
 class TestOffscreenSystemTrayIcon(UsesQApplication, unittest.TestCase):

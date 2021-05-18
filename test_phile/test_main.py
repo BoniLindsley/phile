@@ -23,8 +23,9 @@ class TestRun(unittest.TestCase):
     def test_runs_given_target(self) -> None:
 
         async def target(
-            _capability_registry: phile.capability.Registry,
+            capability_registry: phile.capability.Registry,
         ) -> None:
+            del capability_registry
             await asyncio.sleep(0)
 
         phile.main.run(target)
@@ -32,8 +33,9 @@ class TestRun(unittest.TestCase):
     def test_stopping_loop_forces_exit(self) -> None:
 
         async def target(
-            _capability_registry: phile.capability.Registry,
+            capability_registry: phile.capability.Registry,
         ) -> None:
+            del capability_registry
             asyncio.get_running_loop().stop()
             await asyncio.sleep(0)
 
@@ -60,14 +62,5 @@ class TestRunWithPySide2(UsesPySide2, unittest.IsolatedAsyncioTestCase):
             self.assertIn(
                 PySide2.QtWidgets.QApplication, capability_registry
             )
-
-            qapplication = (
-                capability_registry[PySide2.QtWidgets.QApplication]
-            )
-            self.addCleanup(qapplication.shutdown)
-            self.addCleanup(
-                phile.PySide2.QtCore.process_deferred_delete_events
-            )
-            self.addCleanup(phile.PySide2.QtCore.process_events)
 
         phile.main.run(target)
