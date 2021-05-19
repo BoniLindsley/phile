@@ -55,6 +55,24 @@ key_display_name: dict[str, str] = {
     'Escape': 'Esc',
 }
 
+qt_modifier_values: (
+    dict[PySide2.QtCore.Qt.KeyboardModifier, list[int]]
+) = {
+    PySide2.QtCore.Qt.AltModifier: [
+        int(Key.Key_Alt),  # type: ignore[call-overload]
+    ],
+    PySide2.QtCore.Qt.ControlModifier: [
+        int(Key.Key_Control),  # type: ignore[call-overload]
+    ],
+    PySide2.QtCore.Qt.MetaModifier: [
+        int(Key.Key_Super_L),  # type: ignore[call-overload]
+        int(Key.Key_Super_R),  # type: ignore[call-overload]
+    ],
+    PySide2.QtCore.Qt.ShiftModifier: [
+        int(Key.Key_Shift),  # type: ignore[call-overload]
+    ],
+}
+
 
 def key_value_from_string(key_name: str) -> int:
     key_name = key_name.strip().removeprefix('<').removesuffix('>')
@@ -167,9 +185,25 @@ class PressedKeys:
             if event_type == PySide2.QtCore.QEvent.Type.KeyRelease:
                 self.pressed_keys.discard(event.key())
                 is_pressed_keys_changed = True
+            self.update_pressed_modifiers(event)
         if is_pressed_keys_changed:
             self.on_pressed_keys_changed(event)
         return is_pressed_keys_changed
+
+    def update_pressed_modifiers(
+        self,
+        event: PySide2.QtGui.QKeyEvent,
+    ) -> None:
+        if event.type() != PySide2.QtCore.QEvent.Type.KeyPress:
+            return
+        pressed_keys = self.pressed_keys
+        pressed_modifiers = event.modifiers()
+        for modifier, key_values in qt_modifier_values.items():
+            if pressed_modifiers & modifier:  # type: ignore[operator]
+                if pressed_keys.isdisjoint(key_values):
+                    pressed_keys.add(key_values[0])
+            else:
+                pressed_keys.difference_update(key_values)
 
     def on_pressed_keys_changed(
         self, event: PySide2.QtGui.QKeyEvent
