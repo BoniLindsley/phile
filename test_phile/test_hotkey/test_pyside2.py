@@ -392,6 +392,85 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
         self.keys_widget.hide()
         self.assertEqual(self.keys_widget.pressed_keys, set())
 
+    def test_add_modifier_if_untracked(self) -> None:
+        event = PySide2.QtGui.QKeyEvent(
+            PySide2.QtCore.QEvent.Type.KeyPress,
+            int(  # type: ignore[call-overload]
+                PySide2.QtCore.Qt.Key.Key_A
+            ),
+            PySide2.QtCore.Qt.AltModifier,
+            0,
+            0,
+            0,
+        )
+        self.do_process_key_event(event)
+        self.assertEqual(
+            self.keys_widget.pressed_keys,
+            {
+                int(  # type: ignore[call-overload]
+                    PySide2.QtCore.Qt.Key.Key_A,
+                ),
+                int(  # type: ignore[call-overload]
+                    PySide2.QtCore.Qt.Key.Key_Alt,
+                ),
+            },
+        )
+
+    def test_remove_modifier_if_tracked(self) -> None:
+        self.keys_widget.pressed_keys = {
+            int(  # type: ignore[call-overload]
+                PySide2.QtCore.Qt.Key.Key_Alt
+            ),
+        }
+        event = PySide2.QtGui.QKeyEvent(
+            PySide2.QtCore.QEvent.Type.KeyPress,
+            int(  # type: ignore[call-overload]
+                PySide2.QtCore.Qt.Key.Key_A
+            ),
+            PySide2.QtCore.Qt.KeyboardModifiers(),
+            0,
+            0,
+            0,
+        )
+        self.do_process_key_event(event)
+        self.assertEqual(
+            self.keys_widget.pressed_keys,
+            {
+                int(  # type: ignore[call-overload]
+                    PySide2.QtCore.Qt.Key.Key_A,
+                ),
+            },
+        )
+
+    def test_modifier_not_update_for_releases(self) -> None:
+        self.keys_widget.pressed_keys = {
+            int(  # type: ignore[call-overload]
+                PySide2.QtCore.Qt.Key.Key_A
+            ),
+            int(  # type: ignore[call-overload]
+                PySide2.QtCore.Qt.Key.Key_Alt
+            ),
+        }
+        event = PySide2.QtGui.QKeyEvent(
+            PySide2.QtCore.QEvent.Type.KeyRelease,
+            int(  # type: ignore[call-overload]
+                PySide2.QtCore.Qt.Key.Key_A
+            ),
+            PySide2.QtCore.Qt.AltModifier,
+            0,
+            0,
+            0,
+        )
+        self.do_process_key_event(event)
+        self.assertEqual(
+            self.keys_widget.pressed_keys,
+            {
+                int(  # type: ignore[call-overload]
+                    PySide2.QtCore.Qt.Key.Key_Alt,
+                ),
+            },
+        )
+
 
 class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
     """Tests :class:`~phile.hotkey.pyside2.PressedKeySequence`."""
