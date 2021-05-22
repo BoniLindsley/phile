@@ -1,8 +1,11 @@
-import ctypes.wintypes
-from typing import Any
+# Standard libraries.
+from collections import abc as _collections_abc
+import ctypes as _ctypes
+from ctypes import wintypes as _ctypes_wintypes
 
-LPVOID: Any
-INVALID_HANDLE_VALUE: Any
+LPVOID = _ctypes_wintypes.LPVOID
+
+INVALID_HANDLE_VALUE: int
 FILE_NOTIFY_CHANGE_FILE_NAME: int
 FILE_NOTIFY_CHANGE_DIR_NAME: int
 FILE_NOTIFY_CHANGE_ATTRIBUTES: int
@@ -36,49 +39,146 @@ WAIT_OBJECT_0: int
 WAIT_TIMEOUT: int
 ERROR_OPERATION_ABORTED: int
 
-class OVERLAPPED(ctypes.Structure): ...
 
-kernel32: Any
-ReadDirectoryChangesW: Any
-CreateFileW: Any
-CloseHandle: Any
-CancelIoEx: Any
-CreateEvent: Any
-SetEvent: Any
-WaitForSingleObjectEx: Any
-CreateIoCompletionPort: Any
-GetQueuedCompletionStatus: Any
-PostQueuedCompletionStatus: Any
-GetFinalPathNameByHandleW: Any
+class OVERLAPPED(_ctypes.Structure):
+    ...
 
-class FILE_NOTIFY_INFORMATION(ctypes.Structure): ...
 
-LPFNI: Any
+kernel32: _ctypes.WinDLL  # type: ignore[name-defined]
+ReadDirectoryChangesW: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.LPVOID,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.BOOL,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.LPDWORD,
+    _ctypes.pointer[OVERLAPPED],
+    _ctypes_wintypes.LPVOID,
+], _ctypes_wintypes.BOOL]
+CreateFileW: _collections_abc.Callable[[
+    _ctypes_wintypes.LPCWSTR,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.LPVOID,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.HANDLE,
+], _ctypes_wintypes.HANDLE]
+CloseHandle: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+], _ctypes_wintypes.BOOL]
+CancelIoEx: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes.pointer[OVERLAPPED],
+], _ctypes_wintypes.BOOL]
+CreateEvent: _collections_abc.Callable[[
+    LPVOID,
+    _ctypes_wintypes.BOOL,
+    _ctypes_wintypes.BOOL,
+    _ctypes_wintypes.LPCWSTR,
+], _ctypes_wintypes.HANDLE]
+SetEvent: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+], _ctypes_wintypes.BOOL]
+WaitForSingleObjectEx: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.BOOL,
+], _ctypes_wintypes.DWORD]
+CreateIoCompletionPort: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.LPVOID,
+    _ctypes_wintypes.DWORD,
+], _ctypes_wintypes.HANDLE]
+GetQueuedCompletionStatus: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.LPVOID,
+    _ctypes_wintypes.LPVOID,
+    _ctypes.pointer[OVERLAPPED],
+    _ctypes_wintypes.DWORD,
+], _ctypes_wintypes.BOOL]
+PostQueuedCompletionStatus: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.DWORD,
+    _ctypes.pointer[OVERLAPPED],
+], _ctypes_wintypes.BOOL]
+GetFinalPathNameByHandleW: _collections_abc.Callable[[
+    _ctypes_wintypes.HANDLE,
+    _ctypes_wintypes.LPWSTR,
+    _ctypes_wintypes.DWORD,
+    _ctypes_wintypes.DWORD,
+], _ctypes_wintypes.DWORD]
+
+
+class FILE_NOTIFY_INFORMATION(_ctypes.Structure):
+    ...
+
+
+LPFNI = _ctypes.pointer[FILE_NOTIFY_INFORMATION]
 WATCHDOG_FILE_FLAGS = FILE_FLAG_BACKUP_SEMANTICS
-WATCHDOG_FILE_SHARE_FLAGS: Any
-WATCHDOG_FILE_NOTIFY_FLAGS: Any
+WATCHDOG_FILE_SHARE_FLAGS: int
+WATCHDOG_FILE_NOTIFY_FLAGS: int
 BUFFER_SIZE: int
 PATH_BUFFER_SIZE: int
 
-def get_directory_handle(path: Any): ...
-def close_directory_handle(handle: Any) -> None: ...
-def read_directory_changes(handle: Any, path: Any, recursive: Any): ...
+
+def get_directory_handle(path: str) -> _ctypes_wintypes.HANDLE:
+    ...
+
+
+def close_directory_handle(handle: _ctypes_wintypes.HANDLE) -> None:
+    ...
+
+
+def read_directory_changes(
+    handle: _ctypes_wintypes.HANDLE,
+    path: str,
+    recursive: bool,
+) -> tuple[list[bytes], int]:
+    ...
+
 
 class WinAPINativeEvent:
-    action: Any = ...
-    src_path: Any = ...
-    def __init__(self, action: Any, src_path: Any) -> None: ...
-    @property
-    def is_added(self): ...
-    @property
-    def is_removed(self): ...
-    @property
-    def is_modified(self): ...
-    @property
-    def is_renamed_old(self): ...
-    @property
-    def is_renamed_new(self): ...
-    @property
-    def is_removed_self(self): ...
+    action: _ctypes_wintypes.DWORD = ...
+    src_path: str = ...
 
-def read_events(handle: Any, path: Any, recursive: Any): ...
+    def __init__(
+        self,
+        action: _ctypes_wintypes.DWORD,
+        src_path: str,
+    ) -> None:
+        ...
+
+    @property
+    def is_added(self) -> bool:
+        ...
+
+    @property
+    def is_removed(self) -> bool:
+        ...
+
+    @property
+    def is_modified(self) -> bool:
+        ...
+
+    @property
+    def is_renamed_old(self) -> bool:
+        ...
+
+    @property
+    def is_renamed_new(self) -> bool:
+        ...
+
+    @property
+    def is_removed_self(self) -> bool:
+        ...
+
+
+def read_events(
+    handle: _ctypes_wintypes.HANDLE,
+    path: str,
+    recursive: bool,
+) -> list[WinAPINativeEvent]:
+    ...

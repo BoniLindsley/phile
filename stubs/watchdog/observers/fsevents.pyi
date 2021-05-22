@@ -1,14 +1,42 @@
-from typing import Any
-from watchdog.events import DirCreatedEvent as DirCreatedEvent, DirDeletedEvent as DirDeletedEvent, DirModifiedEvent as DirModifiedEvent, DirMovedEvent as DirMovedEvent, FileCreatedEvent as FileCreatedEvent, FileDeletedEvent as FileDeletedEvent, FileModifiedEvent as FileModifiedEvent, FileMovedEvent as FileMovedEvent
-from watchdog.observers.api import BaseObserver as BaseObserver, DEFAULT_EMITTER_TIMEOUT as DEFAULT_EMITTER_TIMEOUT, DEFAULT_OBSERVER_TIMEOUT as DEFAULT_OBSERVER_TIMEOUT, EventEmitter as EventEmitter
+# Standard libraries.
+import typing as _typing
 
-class FSEventsEmitter(EventEmitter):
-    def __init__(self, event_queue: Any, watch: Any, timeout: Any = ...) -> None: ...
-    def on_thread_stop(self) -> None: ...
-    def queue_events(self, timeout: Any) -> None: ...
-    pathnames: Any = ...
-    def run(self) -> None: ...
+# Internal modules.
+from .. import events as _watchdog_events
+from . import api as _watchdog_observer_api
 
-class FSEventsObserver(BaseObserver):
-    def __init__(self, timeout: Any = ...) -> None: ...
-    def schedule(self, event_handler: Any, path: Any, recursive: bool = ...): ...
+
+class FSEventsEmitter(_watchdog_observer_api.EventEmitter):
+
+    def __init__(
+        self,
+        event_queue: _watchdog_observer_api.EventQueue,
+        watch: _watchdog_observer_api.ObservedWatch,
+        timeout: float = ...,
+    ) -> None:
+        ...
+
+    def on_thread_stop(self) -> None:
+        ...
+
+    def queue_events(  # type: ignore[override]
+        self, timeout: float, events: list[_typing.Any]
+    ) -> None:
+        ...
+
+    def run(self) -> None:
+        ...
+
+
+class FSEventsObserver(_watchdog_observer_api.BaseObserver):
+
+    def __init__(self, timeout: float = ...) -> None:
+        ...
+
+    def schedule(
+        self,
+        event_handler: _watchdog_events.FileSystemEventHandler,
+        path: str,
+        recursive: bool = ...,
+    ) -> _watchdog_observer_api.ObservedWatch:
+        ...
