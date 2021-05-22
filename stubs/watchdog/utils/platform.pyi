@@ -1,16 +1,28 @@
-from typing import Any
-
 PLATFORM_WINDOWS: str
 PLATFORM_LINUX: str
 PLATFORM_BSD: str
 PLATFORM_DARWIN: str
 PLATFORM_UNKNOWN: str
 
-def get_platform_name(): ...
 
-__platform__: Any
+def get_platform_name() -> str:
+    ...
 
-def is_linux(): ...
-def is_bsd(): ...
-def is_darwin(): ...
-def is_windows(): ...
+
+__platform__: str
+
+
+def is_linux() -> None:
+    ...
+
+
+def is_bsd() -> None:
+    ...
+
+
+def is_darwin() -> None:
+    ...
+
+
+def is_windows() -> None:
+    ...
