@@ -4,6 +4,7 @@
 Convenience module for using :mod:`~watchdog`
 ---------------------------------------------
 
+.. automodule:: phile.watchdog.asyncio
 .. automodule:: phile.watchdog.observers
 """
 
