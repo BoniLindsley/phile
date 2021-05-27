@@ -243,7 +243,14 @@ async def provide_registry(
 
 
 class FullTextPublisher(phile.pubsub_event.Publisher[str]):
-    pass
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.current_value = ''
+
+    def push(self, message: str) -> None:
+        super().push(message)
+        self.current_value = message
 
 
 @contextlib.asynccontextmanager
