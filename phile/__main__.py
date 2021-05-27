@@ -45,7 +45,15 @@ def main() -> int:  # pragma: no cover
 
 if __name__ == '__main__':  # pragma: no cover
     if __debug__:
-        logging.basicConfig(
-            handlers=[logging.StreamHandler()], level=logging.DEBUG
+        log_level = logging.DEBUG
+        handler = logging.StreamHandler(sys.stderr)
+        formatter = logging.Formatter(
+            '[%(asctime)s] [%(levelno)03d] %(name)s:'
+            ' %(message)s',
         )
+        handler.setFormatter(formatter)
+        handler.setLevel(log_level)
+        package_logger = logging.getLogger('phile')
+        package_logger.addHandler(handler)
+        package_logger.setLevel(1)
     sys.exit(main())
