@@ -372,6 +372,55 @@ async def add_tmux(
     )
 
 
+async def add_tray(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def start() -> asyncio.Future[typing.Any]:
+        loop = asyncio.get_running_loop()
+        create_future = loop.create_future
+        ready = create_future()
+
+        async def run() -> None:
+            import phile.configuration
+            import phile.tray
+            import phile.watchdog.asyncio
+            configuration = (
+                capability_registry[phile.configuration.Entries]
+            )
+            observer = (
+                capability_registry[phile.watchdog.asyncio.BaseObserver]
+            )
+            async with phile.tray.provide_registry(
+                configuration=configuration,
+                observer=observer,
+            ) as tray_registry:
+                with capability_registry.provide(tray_registry):
+                    ready.set_result(True)
+                    await create_future()
+
+        running_task = loop.create_task(run())
+        await ready
+        return running_task
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.tray',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'watchdog.asyncio.observer',
+            },
+            binds_to={
+                'phile.configuration',
+                'watchdog.asyncio.observer',
+            },
+            exec_start=[start],
+            type=phile.launcher.Type.FORKING,
+        )
+    )
+
+
 async def add_tray_battery(
     capability_registry: phile.capability.Registry,
 ) -> None:
@@ -564,6 +613,71 @@ async def add_tray_notify(
                     capability_registry=capability_registry,
                 ),
             ],
+        )
+    )
+
+
+async def add_tray_pyside2_window(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def run() -> None:
+        import phile.PySide2.QtCore
+        import phile.tray
+        import phile.tray.pyside2_window
+        pyside2_executor = (
+            capability_registry[phile.PySide2.QtCore.Executor]
+        )
+        full_text_publisher = (
+            capability_registry[phile.tray.FullTextPublisher]
+        )
+        await phile.tray.pyside2_window.run(
+            pyside2_executor=pyside2_executor,
+            full_text_publisher=full_text_publisher,
+        )
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.tray.pyside2.window',
+        phile.launcher.Descriptor(
+            after={'phile.tray.text', 'pyside2'},
+            binds_to={'phile.tray.text', 'pyside2'},
+            exec_start=[run],
+        )
+    )
+
+
+async def add_tray_text(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def start() -> asyncio.Future[typing.Any]:
+        loop = asyncio.get_running_loop()
+        create_future = loop.create_future
+        ready = create_future()
+
+        async def run() -> None:
+            import phile.tray
+            tray_registry = capability_registry[phile.tray.Registry]
+            async with phile.tray.provide_full_text(
+                tray_registry=tray_registry,
+            ) as full_text_publisher:
+                with capability_registry.provide(full_text_publisher):
+                    ready.set_result(True)
+                    await create_future()
+
+        running_task = loop.create_task(run())
+        await ready
+        return running_task
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.tray.text',
+        phile.launcher.Descriptor(
+            after={'phile.tray'},
+            binds_to={'phile.tray'},
+            exec_start=[start],
+            type=phile.launcher.Type.FORKING,
         )
     )
 
@@ -804,6 +918,40 @@ async def add_pyside2(
     )
 
 
+async def add_watchdog_asyncio_observer(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def start() -> asyncio.Future[typing.Any]:
+        loop = asyncio.get_running_loop()
+        create_future = loop.create_future
+        ready = create_future()
+
+        async def run() -> None:
+            import phile.watchdog.asyncio
+            with capability_registry.provide(
+                phile.watchdog.asyncio.Observer(),
+                phile.watchdog.asyncio.BaseObserver,
+            ):
+                ready.set_result(True)
+                await create_future()
+
+        running_task = loop.create_task(run())
+        await ready
+        return running_task
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'watchdog.asyncio.observer',
+        phile.launcher.Descriptor(
+            after={'phile.launcher'},
+            binds_to={'phile.launcher'},
+            exec_start=[start],
+            type=phile.launcher.Type.FORKING,
+        )
+    )
+
+
 async def add_watchdog_observer(
     capability_registry: phile.capability.Registry,
 ) -> None:
@@ -856,6 +1004,7 @@ async def add(capability_registry: phile.capability.Registry) -> None:
     await add_launcher_cmd(capability_registry=capability_registry)
     await add_pyside2(capability_registry=capability_registry)
     await add_tmux(capability_registry=capability_registry)
+    await add_tray(capability_registry=capability_registry)
     await add_tray_battery(capability_registry=capability_registry)
     await add_tray_cpu(capability_registry=capability_registry)
     await add_tray_datetime(capability_registry=capability_registry)
@@ -863,8 +1012,15 @@ async def add(capability_registry: phile.capability.Registry) -> None:
     await add_tray_memory(capability_registry=capability_registry)
     await add_tray_network(capability_registry=capability_registry)
     await add_tray_notify(capability_registry=capability_registry)
+    await add_tray_pyside2_window(
+        capability_registry=capability_registry
+    )
+    await add_tray_text(capability_registry=capability_registry)
     await add_tray_tmux(capability_registry=capability_registry)
     await add_trigger(capability_registry=capability_registry)
     await add_trigger_launcher(capability_registry=capability_registry)
     await add_trigger_watchdog(capability_registry=capability_registry)
+    await add_watchdog_asyncio_observer(
+        capability_registry=capability_registry
+    )
     await add_watchdog_observer(capability_registry=capability_registry)
