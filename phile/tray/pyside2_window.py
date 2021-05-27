@@ -48,10 +48,11 @@ async def run(
             del qobject
             loop.call_soon_threadsafe(main_window_closed.set)
 
-        def on_start() -> None:
+        def on_start(last_message: str) -> None:
             main_window.destroyed.connect(set_closed_event)
             main_window.setAttribute(PySide2.QtCore.Qt.WA_DeleteOnClose)
             main_window.show()
+            main_window.tray_content.setText(last_message)
 
         async def propagate_text_changes() -> None:
             while current_text := await text_subscriber.pull():
@@ -61,7 +62,11 @@ async def run(
                     current_text,
                 )
 
-        await run_in_executor(pyside2_executor, on_start)
+        await run_in_executor(
+            pyside2_executor,
+            on_start,
+            full_text_publisher.current_value,
+        )
         propagating_task = asyncio.create_task(propagate_text_changes())
         try:
             await main_window_closed.wait()

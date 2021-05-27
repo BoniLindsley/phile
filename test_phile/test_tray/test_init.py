@@ -665,6 +665,20 @@ class TestProvideRegistry(
             )
 
 
+class TestFullTextPublisher(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.publisher = phile.tray.FullTextPublisher()
+
+    def test_attributes_exist(self) -> None:
+        self.assertEqual(self.publisher.current_value, '')
+
+    def test_push_records_pushed_message(self) -> None:
+        self.publisher.push('abc')
+        self.assertEqual(self.publisher.current_value, 'abc')
+
+
 class TestProvideFullText(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
