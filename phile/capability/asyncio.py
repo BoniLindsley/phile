@@ -4,11 +4,16 @@
 import asyncio
 import collections.abc
 import contextlib
+import logging
 import threading
 import typing
 
 # Internal modules.
 import phile.capability
+
+# TODO[mypy issue #1422]: __loader__ not defined
+_loader_name: str = __loader__.name  # type: ignore[name-defined]
+_logger = logging.getLogger(_loader_name)
 
 
 def _cancel_tasks(
@@ -24,6 +29,7 @@ def _cancel_tasks(
 def _check_task_exceptions(
     tasks: collections.abc.Iterable[asyncio.Task[typing.Any]]
 ) -> None:
+    _logger.debug('Checking asyncio task exceptions.')
     loop = asyncio.get_event_loop()
     possible_exceptions = (
         task.exception() for task in tasks if not task.cancelled()
@@ -41,6 +47,7 @@ def _check_task_exceptions(
 
 
 def _cancel_all_tasks() -> None:
+    _logger.debug('Cancelling existing asyncio tasks.')
     loop = asyncio.get_event_loop()
     pending_tasks = asyncio.all_tasks(loop)
     if not pending_tasks:
@@ -52,6 +59,7 @@ def _cancel_all_tasks() -> None:
 def _shutdown() -> None:
     loop = asyncio.get_event_loop()
     _cancel_all_tasks()
+    _logger.debug('Shutting down asyncio loop states.')
     loop.run_until_complete(loop.shutdown_asyncgens())
     loop.run_until_complete(loop.shutdown_default_executor())
 

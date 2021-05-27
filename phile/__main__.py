@@ -3,6 +3,7 @@
 # Standard library.
 import asyncio
 import contextlib
+import logging
 import sys
 
 # Internal packages.
@@ -43,4 +44,8 @@ def main() -> int:  # pragma: no cover
 
 
 if __name__ == '__main__':  # pragma: no cover
+    if __debug__:
+        logging.basicConfig(
+            handlers=[logging.StreamHandler()], level=logging.DEBUG
+        )
     sys.exit(main())
