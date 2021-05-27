@@ -4,11 +4,14 @@
 # so that imports are only done when the respective observers are used.
 # pylint: disable=import-outside-toplevel
 
-# pylint: disable=invalid-name
 # The functions do not conform to snake case for easier naming.
+# pylint: disable=invalid-name
 
 # Side effect is shadowing of module scope names.
 # pylint: disable=redefined-outer-name
+
+# Mimicking arguments of watchdog observer but allowing for subclassing.
+# pylint: disable=keyword-arg-before-vararg
 """
 ------------------------------------------
 Mixing :mod:`watchdog` with :mod:`asyncio`
@@ -20,7 +23,6 @@ import asyncio
 import collections
 import collections.abc
 import contextlib
-import functools
 import platform
 import typing
 import warnings
@@ -340,56 +342,53 @@ class WindowsApiObserver(BaseObserver):  # pragma: no cover
         super().__init__(Emitter, timeout, *args, **kwargs)
 
 
-@functools.cache
-def _get_DefaultEmitter() -> type[EventEmitter]:  # pragma: no cover
+# Coverage depends on operating system.
+if typing.TYPE_CHECKING:  # pragma: no cover
+    Observer = PollingObserver
+else:  # pragma: no cover
     _system = platform.system()
     if _system == 'Linux':
         try:
-            _DefaultEmitter = _get_InotifyEmitter()
+            _get_InotifyEmitter()
+            Observer = InotifyObserver
         except watchdog.utils.UnsupportedLibc:
-            _DefaultEmitter = _get_PollingEmitter()
+            _get_PollingEmitter()
+            Observer = PollingObserver
     elif _system == 'Darwin':
         try:
-            _DefaultEmitter = _get_FSEventsEmitter()
-        # Catching Exception because that is what the original library did.
+            _get_FSEventsEmitter()
+            Observer = FSEventsObserver
+        # Catching Exception as the original library does.
         # Possibly because that was what dependencies raised.
         except Exception:  # pylint: disable=broad-except
             try:
-                _DefaultEmitter = _get_KqueueEmitter()
+                _get_KqueueEmitter()
+                Observer = KqueueObserver
                 warnings.warn(
                     'Failed to import fsevents.'
                     ' Fall back to kqueue'
                 )
             except Exception:  # pylint: disable=broad-except
-                _DefaultEmitter = _get_PollingEmitter()
+                _get_PollingEmitter()
+                Observer = PollingObserver
                 warnings.warn(
                     'Failed to import fsevents and kqueue.'
                     ' Fall back to polling.'
                 )
     elif _system == 'FreeBsd':
-        _DefaultEmitter = _get_KqueueEmitter()
+        _get_KqueueEmitter()
+        Observer = KqueueObserver
     elif _system == 'Windows':
         try:
-            _DefaultEmitter = _get_WindowsApiEmitter()
+            _get_WindowsApiEmitter()
+            Observer = WindowsApiObserver
         except Exception:  # pylint: disable=broad-except
-            _DefaultEmitter = _get_PollingEmitter()
+            _get_PollingEmitter()
+            Observer = PollingObserver
             warnings.warn(
                 'Failed to import read_directory_changes.'
                 ' Fall back to polling.'
             )
     else:
-        _DefaultEmitter = _get_PollingEmitter()
-
-    return _DefaultEmitter
-
-
-class Observer(BaseObserver):
-
-    def __init__(
-        self,
-        timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
-        *args: typing.Any,
-        **kwargs: typing.Any,
-    ):
-        Emitter = _get_DefaultEmitter()
-        super().__init__(Emitter, timeout, *args, **kwargs)
+        _get_PollingEmitter()
+        Observer = PollingObserver
