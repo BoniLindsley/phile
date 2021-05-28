@@ -6,11 +6,13 @@ import collections.abc
 import contextlib
 import contextvars
 import datetime
+import functools
 import queue
 import socket
 import threading
 import typing
 
+_T = typing.TypeVar('_T')
 _T_co = typing.TypeVar('_T_co', covariant=True)
 
 wait_for_timeout: contextvars.ContextVar[datetime.timedelta] = (
@@ -59,7 +61,8 @@ async def open_task(
 
 
 async def close_subprocess(
-    subprocess: asyncio.subprocess.Process
+    # TODO[Pylint issue 1469]: Does not recognize `asyncio.subprocess`.
+    subprocess: asyncio.subprocess.Process,  # pylint: disable=no-member
 ) -> None:
     """Ensure the given subprocess is terminated."""
     # We do not know what state the process is in.
@@ -92,9 +95,12 @@ def open_reader(
 async def readable(
     file_descriptor: typing.Union[int, socket.socket]
 ) -> typing.Literal[True]:
-    readable = asyncio.Event()
-    with open_reader(file_descriptor, readable.set):
-        await readable.wait()
+    readable_future = asyncio.get_running_loop().create_future()
+    with open_reader(
+        file_descriptor,
+        functools.partial(readable_future.set_result, None),
+    ):
+        await readable_future
     return True
 
 
