@@ -17,7 +17,7 @@ import watchdog.events
 
 # Internal packages.
 import phile.asyncio
-import phile.pubsub_event
+import phile.asyncio.pubsub
 import phile.watchdog.asyncio
 import phile.watchdog.observers
 
@@ -85,14 +85,12 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
                 event_queue, phile.watchdog.asyncio.EventQueue
             )
         finally:
-            subscriber = phile.pubsub_event.Subscriber(
-                publisher=event_queue
-            )
+            view = event_queue.__aiter__()
             await phile.asyncio.wait_for(
                 self.observer.unschedule(self.watched_directory.name),
             )
-            with self.assertRaises(phile.pubsub_event.NoMoreMessages):
-                await phile.asyncio.wait_for(subscriber.pull())
+            with self.assertRaises(StopAsyncIteration):
+                await phile.asyncio.wait_for(view.__anext__())
 
     async def test_open_context_manager_starts_and_stops_emitter(
         self
@@ -109,11 +107,9 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(
                 event_queue, phile.watchdog.asyncio.EventQueue
             )
-            subscriber = phile.pubsub_event.Subscriber(
-                publisher=event_queue
-            )
-        with self.assertRaises(phile.pubsub_event.NoMoreMessages):
-            await phile.asyncio.wait_for(subscriber.pull())
+            view = event_queue.__aiter__()
+        with self.assertRaises(StopAsyncIteration):
+            await phile.asyncio.wait_for(view.__anext__())
 
     async def test_schedule_not_stopping_if_start_fails(self) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
@@ -149,7 +145,7 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
                 self.observer.schedule(self.watched_directory.name)
             )
         emitter_mock.stop.assert_not_called()
-        event_queue_class_mock.return_value.stop.assert_not_called()
+        event_queue_class_mock.return_value.put_done.assert_not_called()
 
     async def test_schedule_can_be_stacked(self) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
@@ -190,13 +186,11 @@ class TestObserver(unittest.IsolatedAsyncioTestCase):
         async with self.observer.open(
             self.watched_directory.name
         ) as event_queue:
-            subscriber = phile.pubsub_event.Subscriber(
-                publisher=event_queue,
-            )
+            view = event_queue.__aiter__()
             watched_path = pathlib.Path(self.watched_directory.name)
             file_path = watched_path / 'touched.txt'
             file_path.touch()
-            event = await phile.asyncio.wait_for(subscriber.pull())
+            event = await phile.asyncio.wait_for(view.__anext__())
             self.assertEqual(
                 event,
                 watchdog.events.FileCreatedEvent(str(file_path)),

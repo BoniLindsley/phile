@@ -14,7 +14,7 @@ import typing
 
 # Internal modules.
 import phile.launcher
-import phile.pubsub_event
+import phile.asyncio.pubsub
 import phile.trigger
 
 
@@ -86,51 +86,35 @@ class Producer:
         append(create_task(self._process_state_machine_stop_events()))
 
     async def _process_database_add_events(self) -> None:
-        pull = phile.pubsub_event.Subscriber(
-            publisher=(
-                self._launcher_registry.database.event_publishers[
-                    phile.launcher.Database.add]
-            )
-        ).pull
         bind = self._bind
-        while True:
-            launcher_name = await pull()
+        async for launcher_name in (
+            self._launcher_registry.database.event_publishers[
+                phile.launcher.Database.add]
+        ):
             bind(launcher_name)
 
     async def _process_database_remove_events(self) -> None:
-        pull = phile.pubsub_event.Subscriber(
-            publisher=(
-                self._launcher_registry.database.event_publishers[
-                    phile.launcher.Database.remove]
-            )
-        ).pull
         unbind = self._unbind
-        while True:
-            launcher_name = await pull()
+        async for launcher_name in (
+            self._launcher_registry.database.event_publishers[
+                phile.launcher.Database.remove]
+        ):
             unbind(launcher_name)
 
     async def _process_state_machine_start_events(self) -> None:
-        pull = phile.pubsub_event.Subscriber(
-            publisher=(
-                self._launcher_registry.state_machine.event_publishers[
-                    phile.launcher.StateMachine.start]
-            )
-        ).pull
         on_start = self._on_start
-        while True:
-            launcher_name = await pull()
+        async for launcher_name in (
+            self._launcher_registry.state_machine.event_publishers[
+                phile.launcher.StateMachine.start]
+        ):
             on_start(launcher_name)
 
     async def _process_state_machine_stop_events(self) -> None:
-        pull = phile.pubsub_event.Subscriber(
-            publisher=(
-                self._launcher_registry.state_machine.event_publishers[
-                    phile.launcher.StateMachine.stop]
-            )
-        ).pull
         on_stop = self._on_stop
-        while True:
-            launcher_name = await pull()
+        async for launcher_name in (
+            self._launcher_registry.state_machine.event_publishers[
+                phile.launcher.StateMachine.stop]
+        ):
             on_stop(launcher_name)
 
     def _on_start(self, launcher_name: str) -> None:

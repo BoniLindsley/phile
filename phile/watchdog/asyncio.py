@@ -35,24 +35,25 @@ import watchdog.utils
 
 # Internal modules.
 import phile.asyncio
-import phile.pubsub_event
+import phile.asyncio.pubsub
 
 
 class EventQueue(
-    phile.pubsub_event.Publisher[watchdog.events.FileSystemEvent]
+    phile.asyncio.pubsub.Queue[watchdog.events.FileSystemEvent]
 ):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self._loop = asyncio.get_event_loop()
 
-    def put(
+    def put(  # type: ignore[override]
+        # pylint: disable=arguments-differ
         self,
         event_data: tuple[watchdog.events.FileSystemEvent,
                           watchdog.observers.api.ObservedWatch],
     ) -> None:
         """Thread-safe push. Named so to satisfy EventEmitter usage."""
-        self._loop.call_soon_threadsafe(self.push, event_data[0])
+        self._loop.call_soon_threadsafe(super().put, event_data[0])
 
 
 class EventEmitter(
@@ -146,7 +147,7 @@ class BaseObserver:
             # The emitter may still emit events until it is stopped.
             # So only stop the queue when the emitter is fully stopped.
             if event_queue is not None:
-                event_queue.stop()
+                event_queue.put_done()
 
 
 def _get_InotifyFullEmitter() -> type[EventEmitter]:  # pragma: no cover

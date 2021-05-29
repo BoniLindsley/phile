@@ -16,7 +16,7 @@ import PySide2.QtWidgets
 
 # Internal modules.
 import phile.PySide2.QtCore
-import phile.pubsub_event
+import phile.asyncio.pubsub
 import phile.tray
 
 
@@ -40,9 +40,7 @@ async def run(
 ) -> None:
     loop = asyncio.get_running_loop()
     # Get the next event as soon as possible to avoid missing any.
-    text_subscriber = phile.pubsub_event.Subscriber(
-        publisher=full_text_publisher,
-    )
+    full_text_pubsub_view = full_text_publisher.__aiter__()
     main_window_closed = asyncio.Event()
     # GUI functions must be called in GUI main thread.
     run_in_executor = loop.run_in_executor
@@ -62,7 +60,7 @@ async def run(
             main_window.tray_content.setText(last_message)
 
         async def propagate_text_changes() -> None:
-            while current_text := await text_subscriber.pull():
+            async for current_text in full_text_pubsub_view:
                 await run_in_executor(
                     pyside2_executor,
                     main_window.tray_content.setText,

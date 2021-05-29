@@ -13,11 +13,11 @@ import unittest
 
 # Internal packages.
 import phile.asyncio
+import phile.asyncio.pubsub
 import phile.launcher
 import phile.launcher.cmd
-import phile.pubsub_event
 
-StrSubscriber = phile.pubsub_event.Subscriber[str]
+StrView = phile.asyncio.pubsub.View[str]
 
 
 class TestCmd(unittest.IsolatedAsyncioTestCase):
@@ -25,13 +25,9 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.cmd: phile.launcher.cmd.Cmd
-        self.database_add_events: StrSubscriber
-        self.database_remove_events: StrSubscriber
         self.launcher_name_1: str
         self.launcher_name_2: str
         self.launcher_registry: phile.launcher.Registry
-        self.state_machine_start_events: StrSubscriber
-        self.state_machine_stop_events: StrSubscriber
         self.stdin: io.StringIO
         self.stdout: io.StringIO
         super().__init__(*args, **kwargs)
@@ -48,34 +44,7 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
             stdout=self.stdout,
             launcher_registry=launcher_registry,
         )
-        self.add_subscribers()
         await phile.asyncio.wait_for(self.add_launchers())
-
-    def add_subscribers(self) -> None:
-        self.database_add_events = StrSubscriber(
-            publisher=(
-                self.launcher_registry.database.event_publishers[
-                    phile.launcher.Database.add]
-            )
-        )
-        self.database_remove_events = StrSubscriber(
-            publisher=(
-                self.launcher_registry.database.event_publishers[
-                    phile.launcher.Database.remove]
-            )
-        )
-        self.state_machine_start_events = StrSubscriber(
-            publisher=(
-                self.launcher_registry.state_machine.event_publishers[
-                    phile.launcher.StateMachine.start]
-            )
-        )
-        self.state_machine_stop_events = StrSubscriber(
-            publisher=(
-                self.launcher_registry.state_machine.event_publishers[
-                    phile.launcher.StateMachine.stop]
-            )
-        )
 
     async def add_launchers(self) -> None:
 
@@ -123,9 +92,12 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('start 0'))
 
         async def wait_for_launcher_to_start(launcher_name: str) -> None:
-            pull = self.state_machine_start_events.pull
-            while launcher_name != await pull():
-                pass
+            async for next_name in (
+                self.launcher_registry.state_machine.event_publishers[
+                    phile.launcher.StateMachine.start]
+            ):
+                if launcher_name == next_name:
+                    break
 
         await phile.asyncio.wait_for(
             wait_for_launcher_to_start(self.launcher_name_1)
@@ -177,9 +149,12 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('stop 0'))
 
         async def wait_for_launcher_to_stop(launcher_name: str) -> None:
-            pull = self.state_machine_stop_events.pull
-            while launcher_name != await pull():
-                pass
+            async for next_name in (
+                self.launcher_registry.state_machine.event_publishers[
+                    phile.launcher.StateMachine.stop]
+            ):
+                if launcher_name == next_name:
+                    break
 
         await phile.asyncio.wait_for(
             wait_for_launcher_to_stop(self.launcher_name_1)

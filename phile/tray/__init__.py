@@ -25,9 +25,9 @@ import watchdog.events
 
 # Internal packages.
 import phile
+import phile.asyncio.pubsub
 import phile.configuration
 import phile.data
-import phile.pubsub_event
 import phile.watchdog.asyncio
 
 
@@ -149,7 +149,7 @@ class Registry:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.current_entries: list[Entry] = []
-        self.event_publisher = phile.pubsub_event.Publisher[Event]()
+        self.event_publisher = phile.asyncio.pubsub.Queue[Event]()
 
     def update(self, data_path: pathlib.Path) -> None:
         index = bisect.bisect_left(self.current_entries, data_path)
@@ -176,7 +176,7 @@ class Registry:
         else:
             self.current_entries.insert(index, entry)
             event_type = EventType.INSERT
-        self.event_publisher.push(
+        self.event_publisher.put(
             Event(
                 type=event_type,
                 index=index,
@@ -203,17 +203,13 @@ async def provide_registry(
             async with observer.open(
                 tray_directory
             ) as observer_event_publisher:
-                observer_event_subscriber = (
-                    phile.pubsub_event.Subscriber(
-                        publisher=observer_event_publisher,
-                    )
-                )
+                view = observer_event_publisher.__aiter__()
                 ready.set_result(None)
                 FileMovedEvent = watchdog.events.FileMovedEvent
                 EVENT_TYPE_MOVED = (  # pylint: disable=invalid-name
                     watchdog.events.EVENT_TYPE_MOVED
                 )
-                while event := await observer_event_subscriber.pull():
+                async for event in view:
                     if event.is_directory:
                         continue
                     path = pathlib.Path(event.src_path)
@@ -239,17 +235,17 @@ async def provide_registry(
                 with contextlib.suppress(asyncio.CancelledError):
                     await publisher_task
     finally:
-        tray_registry.event_publisher.stop()
+        tray_registry.event_publisher.put_done()
 
 
-class FullTextPublisher(phile.pubsub_event.Publisher[str]):
+class FullTextPublisher(phile.asyncio.pubsub.Queue[str]):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.current_value = ''
 
-    def push(self, message: str) -> None:
-        super().push(message)
+    def put(self, message: str) -> None:
+        super().put(message)
         self.current_value = message
 
 
@@ -262,15 +258,10 @@ async def provide_full_text(
     try:
 
         async def propagate_tray_events() -> None:
-            registry_event_subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            view = tray_registry.event_publisher.__aiter__()
             ready.set_result(None)
-            while True:
-                event = await registry_event_subscriber.pull()
-                event_publisher.push(
-                    files_to_text(event.current_entries)
-                )
+            async for event in view:
+                event_publisher.put(files_to_text(event.current_entries))
 
         publisher_task = asyncio.create_task(propagate_tray_events())
         try:
@@ -284,4 +275,4 @@ async def provide_full_text(
                 with contextlib.suppress(asyncio.CancelledError):
                     await publisher_task
     finally:
-        event_publisher.stop()
+        event_publisher.put_done()

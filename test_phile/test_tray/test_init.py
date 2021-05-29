@@ -6,6 +6,7 @@ Test :mod:`phile.tray.tray_file`
 """
 
 # Standard library.
+import collections.abc
 import functools
 import pathlib
 import tempfile
@@ -15,9 +16,9 @@ import unittest
 # Internal packages.
 import phile
 import phile.asyncio
+import phile.asyncio.pubsub
 import phile.configuration
 import phile.watchdog.asyncio
-import phile.pubsub_event
 import phile.tray
 from test_phile.test_configuration.test_init import (
     PreparesEntries as PreparesConfigurationEntries
@@ -231,7 +232,7 @@ class TestEvent(unittest.TestCase):
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.subscriber: phile.pubsub_event.Subscriber[phile.tray.Event]
+        self.event_view: collections.abc.AsyncIterator[phile.tray.Event]
         self.tray_directory_path: pathlib.Path
         self.tray_entry: phile.tray.Entry
         self.tray_path: pathlib.Path
@@ -249,10 +250,8 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         self.tray_entry = phile.tray.Entry(
             self.tray_directory_path / 't.t',
         )
-        self.tray_registry = phile.tray.Registry()
-        self.subscriber = phile.pubsub_event.Subscriber(
-            publisher=self.tray_registry.event_publisher,
-        )
+        self.tray_registry = tray_registry = phile.tray.Registry()
+        self.event_view = tray_registry.event_publisher.__aiter__()
 
     def test_default_initialisable(self) -> None:
         self.assertIsInstance(self.tray_registry, phile.tray.Registry)
@@ -260,7 +259,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
     def test_has_attributes(self) -> None:
         self.assertIsInstance(
             self.tray_registry.event_publisher,
-            phile.pubsub_event.Publisher,
+            phile.asyncio.pubsub.Queue,
         )
         self.assertEqual(
             self.tray_registry.current_entries,
@@ -281,7 +280,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def test_publishes_new_entry(self) -> None:
         self.test_update_new_entry()
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -311,7 +310,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def test_publishes_extra_entry(self) -> None:
         self.test_update_extra_entry()
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -322,7 +321,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             ),
         )
         tray_entry = phile.tray.Entry(self.tray_directory_path / 't2.t')
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -348,7 +347,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def test_publishes_old_entry(self) -> None:
         self.test_update_old_entry()
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -358,7 +357,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
                 current_entries=[self.tray_entry],
             )
         )
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -381,7 +380,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def test_publishes_deleted_entry(self) -> None:
         self.test_update_deleted_entry()
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -391,7 +390,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
                 current_entries=[self.tray_entry],
             )
         )
-        event = await phile.asyncio.wait_for(self.subscriber.pull())
+        event = await phile.asyncio.wait_for(self.event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
@@ -419,8 +418,8 @@ class TestProvideRegistry(
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.configuration: phile.configuration.Entries
+        self.event_view: collections.abc.AsyncIterator[phile.tray.Event]
         self.observer: phile.watchdog.asyncio.Observer
-        self.subscriber: phile.pubsub_event.Subscriber[phile.tray.Event]
         self.tray_directory: pathlib.Path
         self.tray_entry: phile.tray.Entry
         self.tray_path: pathlib.Path
@@ -442,28 +441,23 @@ class TestProvideRegistry(
     async def wait_for_event(
         self, expected_event: phile.tray.Event
     ) -> None:
-        while True:
-            event = await phile.asyncio.wait_for(self.subscriber.pull())
+        async for event in self.event_view:
             if event == expected_event:
-                return
+                break
 
     async def test_context_exit_stops_publisher(self) -> None:
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
-        with self.assertRaises(phile.pubsub_event.NoMoreMessages):
-            await phile.asyncio.wait_for(self.subscriber.pull())
+            self.event_view = tray_registry.event_publisher.__aiter__()
+        with self.assertRaises(StopAsyncIteration):
+            await phile.asyncio.wait_for(self.event_view.__anext__())
 
     async def test_create_entry(self) -> None:
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             self.tray_path.write_text('abc')
             await self.wait_for_event(
                 phile.tray.Event(
@@ -478,9 +472,7 @@ class TestProvideRegistry(
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             self.tray_path.write_text('abc')
             await self.wait_for_event(
                 phile.tray.Event(
@@ -508,9 +500,7 @@ class TestProvideRegistry(
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             self.tray_path.write_text('abc')
             await self.wait_for_event(
                 phile.tray.Event(
@@ -534,9 +524,7 @@ class TestProvideRegistry(
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             self.tray_path.write_text('abc')
             await self.wait_for_event(
                 phile.tray.Event(
@@ -560,9 +548,7 @@ class TestProvideRegistry(
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             self.tray_path.write_text('abc')
             await self.wait_for_event(
                 phile.tray.Event(
@@ -598,9 +584,7 @@ class TestProvideRegistry(
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             wrong_tray_path = self.tray_directory / (
                 'wrong' + self.configuration.tray_suffix + '_s'
             )
@@ -611,7 +595,9 @@ class TestProvideRegistry(
             # because of race condition
             # between detecting file change and the exit.
             self.tray_path.write_text('abc')
-            event = await phile.asyncio.wait_for(self.subscriber.pull())
+            event = await phile.asyncio.wait_for(
+                self.event_view.__anext__()
+            )
             self.assertEqual(
                 event,
                 phile.tray.Event(
@@ -626,9 +612,7 @@ class TestProvideRegistry(
         async with phile.tray.provide_registry(
             configuration=self.configuration, observer=self.observer
         ) as tray_registry:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=tray_registry.event_publisher,
-            )
+            self.event_view = tray_registry.event_publisher.__aiter__()
             self.tray_path.write_text('abc')
             await self.wait_for_event(
                 phile.tray.Event(
@@ -653,7 +637,9 @@ class TestProvideRegistry(
             # Ensure the moved-to target is ignored
             # by checking for new events.
             self.tray_path.write_text('abc')
-            event = await phile.asyncio.wait_for(self.subscriber.pull())
+            event = await phile.asyncio.wait_for(
+                self.event_view.__anext__()
+            )
             self.assertEqual(
                 event,
                 phile.tray.Event(
@@ -675,14 +661,13 @@ class TestFullTextPublisher(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.publisher.current_value, '')
 
     def test_push_records_pushed_message(self) -> None:
-        self.publisher.push('abc')
+        self.publisher.put('abc')
         self.assertEqual(self.publisher.current_value, 'abc')
 
 
 class TestProvideFullText(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.subscriber: phile.pubsub_event.Subscriber[str]
         self.tray_directory_path: pathlib.Path
         self.tray_path: pathlib.Path
         self.tray_registry: phile.tray.Registry
@@ -702,23 +687,19 @@ class TestProvideFullText(unittest.IsolatedAsyncioTestCase):
         async with phile.tray.provide_full_text(
             tray_registry=self.tray_registry,
         ) as full_text_publisher:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=full_text_publisher,
-            )
-        with self.assertRaises(phile.pubsub_event.NoMoreMessages):
-            await phile.asyncio.wait_for(self.subscriber.pull())
+            event_view = full_text_publisher.__aiter__()
+        with self.assertRaises(StopAsyncIteration):
+            await phile.asyncio.wait_for(event_view.__anext__())
 
     async def test_new_file(self) -> None:
         async with phile.tray.provide_full_text(
             tray_registry=self.tray_registry
         ) as full_text_publisher:
-            self.subscriber = phile.pubsub_event.Subscriber(
-                publisher=full_text_publisher,
-            )
+            event_view = full_text_publisher.__aiter__()
             self.tray_path.write_text('abc\n{}')
             self.tray_registry.update(self.tray_path)
             new_text = await phile.asyncio.wait_for(
-                self.subscriber.pull()
+                event_view.__anext__()
             )
             self.assertTrue(new_text, 'abc')
 

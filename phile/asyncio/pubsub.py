@@ -47,9 +47,13 @@ class Node(typing.Generic[_T]):
     def set(self, new_value: _T) -> None:
         if self._value_set.is_set():
             raise self.AlreadySet()
-        self._value = new_value
-        self._value_set.set()
+        # Creating an instance creates an event
+        # which requires a current loop.
+        # If one is not set, it may throw.
+        # So create one first to check for one, in case it raises.
         self.next_node = type(self)()
+        self._value_set.set()
+        self._value = new_value
 
     def set_end(self) -> None:
         if self._value_set.is_set():

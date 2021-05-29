@@ -12,7 +12,6 @@
 .. automodule:: phile.main
 .. automodule:: phile.notify
 .. automodule:: phile.os
-.. automodule:: phile.pubsub_event
 .. automodule:: phile.tmux
 .. automodule:: phile.tray
 .. automodule:: phile.trigger

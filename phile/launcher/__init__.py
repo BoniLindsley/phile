@@ -21,8 +21,8 @@ import typing
 
 # Internal modules.
 import phile
+import phile.asyncio.pubsub
 import phile.capability
-import phile.pubsub_event
 
 Awaitable = collections.abc.Awaitable[typing.Any]
 NullaryAsyncCallable = collections.abc.Callable[[], Awaitable]
@@ -109,10 +109,10 @@ class Database:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.event_publishers: (
             dict[collections.abc.Callable[..., typing.Any],
-                 phile.pubsub_event.Publisher[str]]
+                 phile.asyncio.pubsub.Queue[str]]
         ) = {
-            Database.add: phile.pubsub_event.Publisher[str](),
-            Database.remove: phile.pubsub_event.Publisher[str](),
+            Database.add: phile.asyncio.pubsub.Queue[str](),
+            Database.remove: phile.asyncio.pubsub.Queue[str](),
         }
         """Pushes events to subscribers."""
         self.known_descriptors: dict[str, Descriptor] = {}
@@ -302,12 +302,12 @@ class Database:
         self,
         entry_name: str,
     ) -> collections.abc.Iterator[None]:
-        self.event_publishers[Database.add].push(entry_name)
+        self.event_publishers[Database.add].put(entry_name)
         try:
             yield
         finally:
             try:
-                self.event_publishers[Database.remove].push(entry_name)
+                self.event_publishers[Database.remove].put(entry_name)
             except RuntimeError:  # pragma: no cover  # Defensive.
                 # If there is no current event loop,
                 # pushing is not possible, and asyncio raises this.
@@ -331,10 +331,10 @@ class StateMachine:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.event_publishers: (
             dict[collections.abc.Callable[..., typing.Any],
-                 phile.pubsub_event.Publisher[str]]
+                 phile.asyncio.pubsub.Queue[str]]
         ) = {
-            StateMachine.start: phile.pubsub_event.Publisher[str](),
-            StateMachine.stop: phile.pubsub_event.Publisher[str](),
+            StateMachine.start: phile.asyncio.pubsub.Queue[str](),
+            StateMachine.stop: phile.asyncio.pubsub.Queue[str](),
         }
         """Pushes events to subscribers."""
         self._database = database
@@ -565,12 +565,12 @@ class StateMachine:
         self,
         entry_name: str,
     ) -> collections.abc.Iterator[None]:
-        self.event_publishers[StateMachine.start].push(entry_name)
+        self.event_publishers[StateMachine.start].put(entry_name)
         try:
             yield
         finally:
             try:
-                self.event_publishers[StateMachine.stop].push(entry_name)
+                self.event_publishers[StateMachine.stop].put(entry_name)
             except RuntimeError:  # pragma: no cover  # Defensive.
                 # If there is no current event loop,
                 # pushing is not possible, and asyncio raises this.

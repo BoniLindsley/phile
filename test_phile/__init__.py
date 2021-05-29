@@ -11,7 +11,6 @@
 .. automodule:: test_phile.test_main
 .. automodule:: test_phile.test_notify
 .. automodule:: test_phile.test_os
-.. automodule:: test_phile.test_pubsub_event
 .. automodule:: test_phile.test_tmux
 .. automodule:: test_phile.test_tray
 .. automodule:: test_phile.test_trigger

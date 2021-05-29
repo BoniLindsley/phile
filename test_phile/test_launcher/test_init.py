@@ -14,6 +14,7 @@ import unittest.mock
 
 # Internal packages.
 import phile.asyncio
+import phile.asyncio.pubsub
 import phile.capability
 import phile.launcher
 from test_phile.test_capability.test_init import (
@@ -305,18 +306,14 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
     async def test_add_emits_events(self) -> None:
         entry_name = 'add_emits_events'
-        subscriber = phile.pubsub_event.Subscriber(
-            publisher=(
-                self.launcher_database.event_publishers[
-                    phile.launcher.Database.add]
-            ),
-        )
+        view = self.launcher_database.event_publishers[
+            phile.launcher.Database.add].__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 entry_name, {'exec_start': [noop]}
             )
         )
-        message = await phile.asyncio.wait_for(subscriber.pull())
+        message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
 
     async def test_remove_emits_events(self) -> None:
@@ -326,16 +323,12 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
                 entry_name, {'exec_start': [noop]}
             )
         )
-        subscriber = phile.pubsub_event.Subscriber(
-            publisher=(
-                self.launcher_database.event_publishers[
-                    phile.launcher.Database.remove]
-            ),
-        )
+        view = self.launcher_database.event_publishers[
+            phile.launcher.Database.remove].__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_database.remove(entry_name)
         )
-        message = await phile.asyncio.wait_for(subscriber.pull())
+        message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
 
 
@@ -942,12 +935,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
 
     async def test_start_emits_events(self) -> None:
         entry_name = 'start_emits_events'
-        subscriber = phile.pubsub_event.Subscriber(
-            publisher=(
-                self.launcher_state_machine.event_publishers[
-                    phile.launcher.StateMachine.start]
-            )
-        )
+        view = self.launcher_state_machine.event_publishers[
+            phile.launcher.StateMachine.start].__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 entry_name, {'exec_start': [noop]}
@@ -956,7 +945,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_state_machine.start(entry_name)
         )
-        message = await phile.asyncio.wait_for(subscriber.pull())
+        message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
 
     async def test_stop_emits_events(self) -> None:
@@ -969,16 +958,12 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_state_machine.start(entry_name)
         )
-        subscriber = phile.pubsub_event.Subscriber(
-            publisher=(
-                self.launcher_state_machine.event_publishers[
-                    phile.launcher.StateMachine.stop]
-            )
-        )
+        view = self.launcher_state_machine.event_publishers[
+            phile.launcher.StateMachine.stop].__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_state_machine.stop(entry_name)
         )
-        message = await phile.asyncio.wait_for(subscriber.pull())
+        message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
 
 
