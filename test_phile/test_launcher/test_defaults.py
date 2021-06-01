@@ -25,23 +25,6 @@ from test_phile.test_launcher.test_init import (
 )
 
 
-class TestAddKeyring(
-    UsesLauncherRegistry,
-    unittest.IsolatedAsyncioTestCase,
-):
-    """Tests :func:`~phile.launcher.defaults.add_keyring`."""
-
-    async def test_keyring_added(self) -> None:
-        await phile.asyncio.wait_for(
-            phile.launcher.defaults.add_keyring(
-                capability_registry=self.capability_registry
-            )
-        )
-        self.assertTrue(
-            self.launcher_registry.database.contains('keyring')
-        )
-
-
 class TestAddConfiguration(
     UsesLauncherRegistry,
     PreparesConfigurationEntries,
@@ -172,4 +155,21 @@ class TestAddLogFile(
             '\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
             '\[020\] phile.log.phile: '
             'But add this.\n'
+        )
+
+
+class TestAddKeyring(
+    UsesLauncherRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+    """Tests :func:`~phile.launcher.defaults.add_keyring`."""
+
+    async def test_keyring_added(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_keyring(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains('keyring')
         )
