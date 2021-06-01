@@ -2,7 +2,6 @@
 
 # Standard libraries.
 import asyncio
-import collections.abc
 import typing
 
 _T = typing.TypeVar('_T')
@@ -73,7 +72,7 @@ class View(typing.Generic[_T]):
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._next_node = next_node
 
-    def __aiter__(self) -> collections.abc.AsyncIterator[_T]:
+    def __aiter__(self) -> 'View[_T]':
         return self
 
     async def __anext__(self) -> _T:
@@ -96,7 +95,7 @@ class Queue(typing.Generic[_T]):
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._next_node = Node[_T]()
 
-    def __aiter__(self) -> collections.abc.AsyncIterator[_T]:
+    def __aiter__(self) -> View[_T]:
         return View[_T](next_node=self._next_node)
 
     async def get(self) -> _T:
