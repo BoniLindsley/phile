@@ -6,6 +6,7 @@ Test :mod:`phile.watchdog.asyncio`
 """
 
 # Standard library.
+import collections.abc
 import pathlib
 import tempfile
 import typing
@@ -20,6 +21,8 @@ import phile.asyncio
 import phile.asyncio.pubsub
 import phile.watchdog.asyncio
 import phile.watchdog.observers
+
+_T = typing.TypeVar('_T')
 
 
 class StartFailed(Exception):
@@ -195,3 +198,149 @@ class TestObserver(unittest.IsolatedAsyncioTestCase):
                 event,
                 watchdog.events.FileCreatedEvent(str(file_path)),
             )
+
+
+async def to_async_iter(
+    source_events: collections.abc.Iterable[_T]
+) -> collections.abc.AsyncIterable[_T]:
+    for event in source_events:
+        yield event
+
+
+class PrepareFilterTest(unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.event_path: pathlib.Path
+        self.watched_directory_path: pathlib.Path
+
+    def setUp(self) -> None:
+        super().setUp()
+        watched_directory = (  # pylint: disable=consider-using-with
+            tempfile.TemporaryDirectory()
+        )
+        self.addCleanup(watched_directory.cleanup)
+        self.watched_path = pathlib.Path(watched_directory.name)
+        self.event_path = self.watched_path / 'something.file'
+
+
+class TestIgnoreDirectories(
+    PrepareFilterTest, unittest.IsolatedAsyncioTestCase
+):
+
+    async def test_forwards_non_directory_events(self) -> None:
+        expected_events = [
+            watchdog.events.FileCreatedEvent(str(self.event_path))
+        ]
+        emitted_events = [
+            event async for event in (
+                phile.watchdog.asyncio.ignore_directories(
+                    to_async_iter(expected_events),
+                )
+            )
+        ]
+        self.assertEqual(emitted_events, expected_events)
+
+    async def test_skips_directory_events(self) -> None:
+        source_events = [
+            watchdog.events.DirCreatedEvent(str(self.event_path))
+        ]
+        emitted_events = [
+            event async for event in (
+                phile.watchdog.asyncio.ignore_directories(
+                    to_async_iter(source_events),
+                )
+            )
+        ]
+        self.assertEqual(emitted_events, [])
+
+
+class TestToPaths(PrepareFilterTest, unittest.IsolatedAsyncioTestCase):
+
+    async def test_forwards_creation_events(self) -> None:
+        source_events = [
+            watchdog.events.FileCreatedEvent(str(self.event_path))
+        ]
+        emitted_paths = [
+            event async for event in (
+                phile.watchdog.asyncio.to_paths(
+                    to_async_iter(source_events),
+                )
+            )
+        ]
+        self.assertEqual(emitted_paths, [self.event_path])
+
+    async def test_splits_moved_events(self) -> None:
+        event_path_2 = self.watched_path / 'nothing.file'
+        source_events = [
+            watchdog.events.FileMovedEvent(
+                str(self.event_path),
+                str(event_path_2),
+            )
+        ]
+        emitted_paths = [
+            event async for event in (
+                phile.watchdog.asyncio.to_paths(
+                    to_async_iter(source_events),
+                )
+            )
+        ]
+        self.assertEqual(emitted_paths, [self.event_path, event_path_2])
+
+
+class TestFilterParent(
+    PrepareFilterTest, unittest.IsolatedAsyncioTestCase
+):
+
+    async def test_forwards_path_in_given_directory(self) -> None:
+        expected_paths = [self.event_path]
+        emitted_paths = [
+            event async for event in (
+                phile.watchdog.asyncio.filter_parent(
+                    self.watched_path,
+                    to_async_iter(expected_paths),
+                )
+            )
+        ]
+        self.assertEqual(emitted_paths, expected_paths)
+
+    async def test_skips_unexpected_directory(self) -> None:
+        source_paths = [self.watched_path]
+        emitted_paths = [
+            event async for event in (
+                phile.watchdog.asyncio.filter_parent(
+                    self.watched_path,
+                    to_async_iter(source_paths),
+                )
+            )
+        ]
+        self.assertEqual(emitted_paths, [])
+
+
+class TestFilterSuffix(
+    PrepareFilterTest, unittest.IsolatedAsyncioTestCase
+):
+
+    async def test_forwards_path_in_given_directory(self) -> None:
+        expected_paths = [self.event_path]
+        emitted_paths = [
+            event async for event in (
+                phile.watchdog.asyncio.filter_suffix(
+                    '.file',
+                    to_async_iter(expected_paths),
+                )
+            )
+        ]
+        self.assertEqual(emitted_paths, expected_paths)
+
+    async def test_skips_unexpected_directory(self) -> None:
+        source_paths = [self.watched_path / 'file.bad_suffix']
+        emitted_paths = [
+            event async for event in (
+                phile.watchdog.asyncio.filter_suffix(
+                    'file',
+                    to_async_iter(source_paths),
+                )
+            )
+        ]
+        self.assertEqual(emitted_paths, [])

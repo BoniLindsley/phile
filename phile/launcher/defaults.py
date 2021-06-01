@@ -806,22 +806,24 @@ async def add_trigger_watchdog(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
-    async def phile_trigger_watchdog(
-        capability_registry: phile.capability.Registry,
-    ) -> asyncio.Future[typing.Any]:
+    async def start() -> asyncio.Future[typing.Any]:
+        import phile.configuration
+        import phile.trigger
+        import phile.trigger.watchdog
+        import phile.watchdog.asyncio
+        configuration = capability_registry[phile.configuration.Entries]
+        observer = (
+            capability_registry[phile.watchdog.asyncio.BaseObserver]
+        )
+        trigger_registry = capability_registry[phile.trigger.Registry]
+        view = phile.trigger.watchdog.View(
+            configuration=configuration,
+            observer=observer,
+            trigger_registry=trigger_registry,
+        )
         loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.trigger.watchdog
-            with phile.trigger.watchdog.View(
-                capabilities=capability_registry
-            ) as view, capability_registry.provide(view):
-                ready.set_result(True)
-                await create_future()
-
-        running_task = loop.create_task(run())
+        ready = loop.create_future()
+        running_task = loop.create_task(view.run(ready=ready))
         await ready
         return running_task
 
@@ -832,21 +834,16 @@ async def add_trigger_watchdog(
             after={
                 'phile.configuration',
                 'phile.trigger',
-                'watchdog.observer',
+                'watchdog.asyncio.observer',
             },
             binds_to={
                 'phile.configuration',
                 'phile.trigger',
-                'watchdog.observer',
+                'watchdog.asyncio.observer',
             },
-            exec_start=[
-                functools.partial(
-                    phile_trigger_watchdog,
-                    capability_registry=capability_registry,
-                ),
-            ],
+            exec_start=[start],
             type=phile.launcher.Type.FORKING,
-        )
+        ),
     )
 
 

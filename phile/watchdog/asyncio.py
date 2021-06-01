@@ -23,6 +23,7 @@ import asyncio
 import collections
 import collections.abc
 import contextlib
+import pathlib
 import platform
 import typing
 import warnings
@@ -393,3 +394,44 @@ else:  # pragma: no cover
     else:
         _get_PollingEmitter()
         Observer = PollingObserver
+
+
+async def ignore_directories(
+    events: (
+        collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
+    ),
+) -> collections.abc.AsyncIterator[watchdog.events.FileSystemEvent]:
+    async for next_event in events:
+        if not next_event.is_directory:
+            yield next_event
+
+
+async def to_paths(
+    events: (
+        collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
+    ),
+) -> collections.abc.AsyncIterator[pathlib.Path]:
+    async for next_event in events:
+        yield pathlib.Path(next_event.src_path)
+        if next_event.event_type != watchdog.events.EVENT_TYPE_MOVED:
+            continue
+        assert isinstance(next_event, watchdog.events.FileMovedEvent)
+        yield pathlib.Path(next_event.dest_path)
+
+
+async def filter_parent(
+    expected_parent: pathlib.Path,
+    paths: collections.abc.AsyncIterable[pathlib.Path],
+) -> collections.abc.AsyncIterable[pathlib.Path]:
+    async for next_path in paths:
+        if next_path.parent == expected_parent:
+            yield next_path
+
+
+async def filter_suffix(
+    expected_suffix: str,
+    paths: collections.abc.AsyncIterable[pathlib.Path],
+) -> collections.abc.AsyncIterable[pathlib.Path]:
+    async for next_path in paths:
+        if next_path.suffix == expected_suffix:
+            yield next_path

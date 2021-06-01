@@ -8,12 +8,17 @@ Test :mod:`phile.launcher.defaults`
 # Standard libraries.
 import logging
 import json
+import typing
 import unittest
+
+# External dependencies.
+import watchdog.events
 
 # Internal packages.
 import phile.asyncio
 import phile.configuration
 import phile.launcher.defaults
+import phile.watchdog.asyncio
 from test_phile.test_capability.test_init import (
     UsesRegistry as UsesCapabilityRegistry
 )
@@ -173,3 +178,97 @@ class TestAddKeyring(
         self.assertTrue(
             self.launcher_registry.database.contains('keyring')
         )
+
+
+class TestAddTriggerWatchdog(
+    UsesLauncherRegistry,
+    PreparesConfigurationEntries,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+    """Tests :func:`~phile.launcher.defaults.add_trigger_watchdog`."""
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_name = 'phile.trigger.watchdog'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_watchdog_asyncio_observer(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_trigger(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_trigger_watchdog(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
+
+    async def test_showing_trigger_creates_file(self) -> None:
+        await self.test_start_launcher()
+        # Get objects created by other launcher.
+        configuration: phile.configuration.Entries = (
+            self.capability_registry[phile.configuration.Entries]
+        )
+        observer: phile.watchdog.asyncio.BaseObserver = (
+            self.capability_registry[phile.watchdog.asyncio.BaseObserver]
+        )
+        trigger_registry: phile.trigger.Registry = (
+            self.capability_registry[phile.trigger.Registry]
+        )
+        # Monitor trigger directory before showing trigger.
+        trigger_directory = (
+            configuration.state_directory_path /
+            configuration.trigger_directory
+        )
+        trigger_name = 'something'
+        trigger_file_path = trigger_directory / (
+            trigger_name + configuration.trigger_suffix
+        )
+        async with observer.open(
+            str(trigger_directory)
+        ) as observer_view:
+            # Show a trigger and a corresponding file should be created.
+            trigger_registry.bind(trigger_name, lambda: None)
+            trigger_registry.show(trigger_name)
+            expected_event = watchdog.events.FileCreatedEvent(
+                str(trigger_file_path)
+            )
+
+            async def get_event_until() -> None:
+                async for event in observer_view:
+                    if event == expected_event:
+                        break
+
+            await phile.asyncio.wait_for(get_event_until())

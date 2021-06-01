@@ -7,24 +7,27 @@ Test :mod:`phile.trigger.watchdog`
 
 # Standard library.
 import asyncio
+import contextlib
 import pathlib
 import typing
 import unittest
 
 # External dependencies.
-# TODO[portalocker issue #60]: Remove type: ignore.
-# Type hinting is not yet activated.
 import portalocker
 import watchdog.events
 
 # Internal packages.
 import phile
 import phile.asyncio
+import phile.asyncio.pubsub
 import phile.trigger
 import phile.trigger.watchdog
 import phile.watchdog.observers
 import test_phile.threaded_mock
 from test_phile.test_init import UsesCapabilities, UsesConfiguration
+from test_phile.test_configuration.test_init import (
+    PreparesEntries as PreparesConfigurationEntries
+)
 from test_phile.test_trigger.test_init import UsesRegistry
 from test_phile.test_watchdog.test_init import UsesObserver
 
@@ -172,250 +175,198 @@ class TestProducer(
 
 
 class TestView(
-    UsesRegistry, UsesObserver, UsesConfiguration, UsesCapabilities,
-    unittest.TestCase
+    PreparesConfigurationEntries,
+    unittest.IsolatedAsyncioTestCase,
 ):
     """Tests :func:`~phile.trigger.watchdog.View`."""
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.dispatch_mock: test_phile.threaded_mock.ThreadedMock
+        self.configuration: phile.configuration.Entries
+        self.observer: phile.watchdog.asyncio.BaseObserver
+        self.observer_view: (
+            phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
+        )
         self.trigger_callback: test_phile.threaded_mock.ThreadedMock
+        self.trigger_directory: pathlib.Path
         self.trigger_file_path: pathlib.Path
         self.trigger_name: str
+        self.trigger_registry: phile.trigger.Registry
         self.view: phile.trigger.watchdog.View
+        self.view_task: asyncio.Task[typing.Any]
         super().__init__(*args, **kwargs)
 
-    def setUp(self) -> None:
-        """Also tests constructor of View."""
-        super().setUp()
-        self.view = phile.trigger.watchdog.View(
-            capabilities=self.capabilities
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.configuration = phile.configuration.load()
+        self.configuration.trigger_directory.mkdir(exist_ok=True)
+        self.trigger_directory = (
+            self.configuration.state_directory_path /
+            self.configuration.trigger_directory
         )
-        self.set_up_trigger_in_registry()
-        self.set_up_trigger_file_monitoring()
-
-    def set_up_trigger_in_registry(self) -> None:
-        self.trigger_name = 'nothing'
+        self.trigger_directory.mkdir()
+        self.observer = phile.watchdog.asyncio.Observer()
+        event_queue = await self.observer.schedule(
+            str(self.trigger_directory)
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.observer.unschedule(str(self.trigger_directory)),
+        )
+        self.observer_view = event_queue.__aiter__()
         self.trigger_callback = test_phile.threaded_mock.ThreadedMock()
+        self.trigger_name = 'nothing'
+        self.trigger_file_path = (
+            self.trigger_directory /
+            (self.trigger_name + self.configuration.trigger_suffix)
+        )
+        self.trigger_registry = phile.trigger.Registry()
         self.trigger_registry.bind(
             self.trigger_name, self.trigger_callback
         )
         self.addCleanup(self.trigger_registry.unbind, self.trigger_name)
-
-    def set_up_trigger_file_monitoring(self) -> None:
-        self.trigger_file_path = self.configuration.trigger_root / (
-            self.trigger_name + self.configuration.trigger_suffix
+        self.view = phile.trigger.watchdog.View(
+            configuration=self.configuration,
+            observer=self.observer,
+            trigger_registry=self.trigger_registry,
         )
-        self.dispatch_mock = test_phile.threaded_mock.ThreadedMock()
-        self.configuration.trigger_root.mkdir(
-            parents=True, exist_ok=True
-        )
-        watchdog_watch = phile.watchdog.observers.add_handler(
-            observer=self.watchdog_observer,
-            event_handler=self.dispatch_mock,
-            path=self.configuration.trigger_root,
-        )
-        self.addCleanup(
-            phile.watchdog.observers.remove_handler,
-            observer=self.watchdog_observer,
-            event_handler=self.dispatch_mock,
-            watch=watchdog_watch,
+        self.view_task = await self.create_ready_view_task(
+            view=self.view
         )
 
-    def test_available_exceptions(self) -> None:
+    async def create_ready_view_task(
+        self,
+        view: phile.trigger.watchdog.View,
+    ) -> asyncio.Task[typing.Any]:
+        ready = asyncio.get_running_loop().create_future()
+        view_task = asyncio.create_task(view.run(ready=ready))
+
+        async def clean_up() -> None:
+            if view_task.cancel():
+                with contextlib.suppress(asyncio.CancelledError):
+                    await view_task
+
+        self.addCleanup(clean_up)
+        await ready
+        return view_task
+
+    async def wait_for_event(
+        self, expected_event: watchdog.events.FileSystemEvent
+    ) -> None:
+
+        async def get_event_until() -> None:
+            async for event in self.observer_view:
+                if event == expected_event:
+                    break
+
+        await phile.asyncio.wait_for(get_event_until())
+
+    async def test_run_raises_if_trigger_directory_in_use(self) -> None:
         with self.assertRaises(portalocker.LockException):
-            raise phile.trigger.watchdog.View.DirectoryInUse()
-
-    def test_enter_raises_if_trigger_root_already_in_use(self) -> None:
-        with self.view:
-            with self.assertRaises(
-                phile.trigger.watchdog.View.DirectoryInUse
-            ):
-                phile.trigger.watchdog.View(
-                    capabilities=self.capabilities
-                ).__enter__()
-
-    def test_showing_trigger_creates_file(self) -> None:
-        with self.view:
-            self.assertTrue(not self.trigger_file_path.is_file())
-            self.trigger_registry.show(self.trigger_name)
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
+            another_view = phile.trigger.watchdog.View(
+                configuration=self.configuration,
+                observer=self.observer,
+                trigger_registry=self.trigger_registry,
             )
+            ready = asyncio.get_running_loop().create_future()
+            await phile.asyncio.wait_for(another_view.run(ready=ready))
 
-    def test_unbinding_trigger_is_ignored(self) -> None:
-        # Cannot test that it is really ignored.
-        # But ensure that the event at least processed without problems.
-        with self.view:
-            self.assertTrue(not self.trigger_file_path.is_file())
-            self.trigger_registry.unbind(self.trigger_name)
-
-    def test_activating_trigger_deletes_file(self) -> None:
+    async def test_creates_visible_file_triggers(self) -> None:
+        # Undo some of the initialisation first.
+        self.view_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self.view_task
+        # Show a trigger before redo-ing the initialisation.
         self.trigger_registry.show(self.trigger_name)
-        with self.view:
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
+        self.view_task = await self.create_ready_view_task(
+            view=self.view
+        )
+        # It should be picked up by the initialisation.
+        await self.wait_for_event(
+            watchdog.events.FileCreatedEvent(
+                str(self.trigger_file_path)
             )
-            self.assertTrue(self.trigger_file_path.is_file())
-            self.dispatch_mock.reset_mock()
-            self.trigger_registry.activate(self.trigger_name)
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(
-                    str(self.trigger_file_path)
-                )
-            )
+        )
 
-    def test_hiding_trigger_deletes_file(self) -> None:
-        self.trigger_registry.show(self.trigger_name)
-        with self.view:
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
-            )
-            self.assertTrue(self.trigger_file_path.is_file())
-            self.dispatch_mock.reset_mock()
-            self.trigger_registry.hide(self.trigger_name)
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileDeletedEvent(
-                    str(self.trigger_file_path)
-                )
-            )
-
-    def test_enter_creates_visible_file_triggers(self) -> None:
-        self.trigger_registry.show(self.trigger_name)
+    async def test_showing_trigger_creates_file(self) -> None:
         self.assertTrue(not self.trigger_file_path.is_file())
-        with self.view:
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
-            )
-            self.assertTrue(self.trigger_file_path.is_file())
-
-    def test_deleting_file_activates_trigger(self) -> None:
         self.trigger_registry.show(self.trigger_name)
-        with self.view:
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
+        await self.wait_for_event(
+            watchdog.events.FileCreatedEvent(
+                str(self.trigger_file_path)
             )
-            self.assertTrue(self.trigger_file_path.is_file())
-            self.trigger_file_path.unlink()
-            self.trigger_callback.assert_called_with_soon()
+        )
 
-    def test_deleting_non_trigger_file_does_nothing(self) -> None:
-        # Cannot really test that there are no side effects.
-        # We test for a specific one.
-        # Trigger root and name with wrong extension.
+    async def test_activating_trigger_deletes_file(self) -> None:
         self.trigger_registry.show(self.trigger_name)
-        with self.view:
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
+        self.trigger_registry.activate(self.trigger_name)
+        await self.wait_for_event(
+            watchdog.events.FileDeletedEvent(
+                str(self.trigger_file_path)
             )
-            self.assertTrue(self.trigger_file_path.is_file())
-            wrong_file = pathlib.Path(
-                str(self.trigger_file_path) + 'wrong'
+        )
+
+    async def test_hiding_trigger_deletes_file(self) -> None:
+        self.trigger_registry.show(self.trigger_name)
+        self.trigger_registry.hide(self.trigger_name)
+        await self.wait_for_event(
+            watchdog.events.FileDeletedEvent(
+                str(self.trigger_file_path)
             )
-            wrong_file.touch()
-            wrong_file.unlink()
-
-    def test_deleting_file_of_unbound_trigger_is_ignored(self) -> None:
-        unbound_trigger_file_path = self.configuration.trigger_root / (
-            'unbound' + self.configuration.trigger_suffix
         )
-        with self.view:
-            self.assertFalse(unbound_trigger_file_path.is_file())
-            unbound_trigger_file_path.touch()
-            unbound_trigger_file_path.unlink()
-            # Cannot really test that there are no side effects.
-            # Just check that normal operations are possbile here.
-            self.assertTrue(not self.trigger_file_path.is_file())
-            self.trigger_registry.show(self.trigger_name)
-            self.dispatch_mock.dispatch.assert_called_with_soon(
-                watchdog.events.FileCreatedEvent(
-                    str(self.trigger_file_path)
-                )
+
+    async def test_unbinding_trigger_is_ignored(self) -> None:
+        new_trigger_name = 'something'
+        self.trigger_registry.bind(new_trigger_name, lambda: None)
+        self.trigger_registry.unbind(new_trigger_name)
+        # Force an action that would produce an event.
+        # If the expected event is received,
+        # there can be some certainty that un/binding was ignored.
+        await self.test_showing_trigger_creates_file()
+
+    async def test_deleting_file_activates_trigger(self) -> None:
+        self.trigger_registry.show(self.trigger_name)
+        await self.wait_for_event(
+            watchdog.events.FileCreatedEvent(
+                str(self.trigger_file_path)
             )
-
-
-class TestRun(
-    UsesRegistry, UsesObserver, UsesConfiguration, UsesCapabilities,
-    unittest.IsolatedAsyncioTestCase
-):
-    """Tests :func:`~phile.trigger.watchdog.Prompt`."""
-
-    async def asyncSetUp(self) -> None:
-        await super().asyncSetUp()
-        await self.set_up_trigger_file_monitoring()
-
-    async def set_up_trigger_file_monitoring(self) -> None:
-        loop = asyncio.get_running_loop()
-        self.dispatch_event = asyncio.Event()
-
-        def dispatch_callback(_event: typing.Any) -> typing.Any:
-            loop.call_soon_threadsafe(self.dispatch_event.set)
-            return unittest.mock.DEFAULT
-
-        self.dispatch_mock = unittest.mock.Mock()
-        self.dispatch_mock.dispatch.side_effect = dispatch_callback
-
-        self.configuration.trigger_root.mkdir(
-            parents=True, exist_ok=True
         )
-        watchdog_watch = phile.watchdog.observers.add_handler(
-            observer=self.watchdog_observer,
-            event_handler=self.dispatch_mock,
-            path=self.configuration.trigger_root,
-        )
-        self.addCleanup(
-            phile.watchdog.observers.remove_handler,
-            observer=self.watchdog_observer,
-            event_handler=self.dispatch_mock,
-            watch=watchdog_watch,
-        )
-
-    async def check_trigger_file_created(self, name: str) -> None:
-        trigger_path = self.configuration.trigger_root / (
-            name + self.configuration.trigger_suffix
-        )
-        expected_event = watchdog.events.FileCreatedEvent(
-            str(trigger_path)
-        )
-        try:
-            while unittest.mock.call(
-                expected_event
-            ) not in self.dispatch_mock.dispatch.call_args_list:
-                await self.dispatch_event.wait()
-                self.dispatch_event.clear()
-        except:
-            self.dispatch_mock.dispatch.assert_called_with(
-                expected_event
+        self.trigger_file_path.unlink()
+        await self.wait_for_event(
+            watchdog.events.FileDeletedEvent(
+                str(self.trigger_file_path)
             )
+        )
+        self.trigger_callback.assert_called_with_soon()
 
-    async def test_creates_stop_trigger_and_stops_when_activated(
+    async def test_deleting_non_trigger_file_does_nothing(self) -> None:
+        wrong_file = pathlib.Path(str(self.trigger_file_path) + 'wrong')
+        wrong_file.touch()
+        wrong_file.unlink()
+        await self.wait_for_event(
+            watchdog.events.FileDeletedEvent(str(wrong_file))
+        )
+        # Force an action that would produce an event.
+        # If the expected event is received,
+        # there can be some certainty that un/binding was ignored.
+        await self.test_showing_trigger_creates_file()
+
+    async def test_deleting_file_of_unbound_trigger_is_ignored(
         self
     ) -> None:
-        trigger_name = 'phile.trigger.watchdog.stop'
-        task = asyncio.create_task(
-            phile.trigger.watchdog.run(capabilities=self.capabilities)
+        unbound_trigger_file_path = self.trigger_directory / (
+            'unbound' + self.configuration.trigger_suffix
         )
-        self.addCleanup(task.cancel)
-        await phile.asyncio.wait_for(
-            self.check_trigger_file_created(trigger_name)
+        unbound_trigger_file_path.touch()
+        unbound_trigger_file_path.unlink()
+        await self.wait_for_event(
+            watchdog.events.FileDeletedEvent(
+                str(unbound_trigger_file_path)
+            )
         )
-        trigger_path = self.configuration.trigger_root / (
-            trigger_name + self.configuration.trigger_suffix
-        )
-        trigger_path.unlink()
-        await phile.asyncio.wait_for(task)
+        # Force an action that would produce an event.
+        # If the expected event is received,
+        # there can be some certainty that un/binding was ignored.
+        await self.test_showing_trigger_creates_file()
 
 
 if __name__ == '__main__':
