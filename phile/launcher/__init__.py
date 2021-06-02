@@ -613,4 +613,6 @@ async def provide_registry(
         )
         await launcher_registry.state_machine.start(launcher_name)
         yield launcher_registry
+        _logger.debug('Launcher clean-up starting.')
         await launcher_registry.state_machine.stop(launcher_name)
+        _logger.debug('Launcher clean-up done.')

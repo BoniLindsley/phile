@@ -40,8 +40,6 @@ async def _async_run(
             return await async_target(capability_registry)
         finally:
             _logger.debug('Target of asyncio loop has stopped.')
-            await launcher_registry.state_machine.stop('phile.launcher')
-            _logger.debug('Launcher clean-up done..')
 
 
 def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
