@@ -22,9 +22,11 @@ import typing
 # Internal modules.
 import phile
 import phile.asyncio.pubsub
+import phile.builtins
 import phile.capability
 
 _KeyT = typing.TypeVar('_KeyT')
+_T = typing.TypeVar('_T')
 _ValueT = typing.TypeVar('_ValueT')
 
 Awaitable = collections.abc.Awaitable[typing.Any]
@@ -183,9 +185,9 @@ class Database:
         Therefore, the data is parsed when adding as necessary,
         and should not be relied upon afterwards.
         """
-        self.after: dict[str, set[str]] = {}
+        self.after = OneToManyTwoWayDict[str, str]()
         """Order dependencies of launchers."""
-        self.binds_to: dict[str, set[str]] = {}
+        self.binds_to = OneToManyTwoWayDict[str, str]()
         """Dependencies of launchers."""
         self.exec_start: dict[str, CommandLines] = {}
         """Coroutines to call to start a launcher."""
@@ -195,177 +197,67 @@ class Database:
         """Callback to call to remove launchers from the database."""
         self.type: dict[str, Type] = {}
         """Initialisation and termination conditions of launchers."""
-        # The data after this are not given in descriptors,
-        # but derived from them.
-        self.bound_by: dict[str, set[str]] = {}
-        """Dependents of launchers."""
-        self.stop_after: dict[str, set[str]] = {}
-        """Order dependencies for stopping launchers."""
 
     async def add(self, entry_name: str, descriptor: Descriptor) -> None:
         """Not thread-safe."""
+        self._check_new_descriptor(entry_name, descriptor)
+        known_descriptors = self.known_descriptors
+        # Not sure why Pylint thinks phile.builtins is a dict.
+        provide_item = (
+            phile.builtins.provide_item  # pylint: disable=no-member
+        )
         with contextlib.ExitStack() as stack:
             stack.enter_context(
-                self._update_descriptor(entry_name, descriptor)
+                provide_item(known_descriptors, entry_name, descriptor)
             )
-            stack.enter_context(self._update_after(entry_name))
-            stack.enter_context(self._update_type(entry_name))
-            stack.enter_context(self._update_exec_start(entry_name))
-            stack.enter_context(self._update_exec_stop(entry_name))
-            stack.enter_context(self._update_binds_to(entry_name))
-            stack.enter_context(self._update_events(entry_name))
+
+            def provide_option(option_name: str, default: _T) -> None:
+                stack.enter_context(
+                    provide_item(
+                        getattr(self, option_name),
+                        entry_name,
+                        descriptor.get(option_name, default),
+                    )
+                )
+
+            provide_option('after', set())
+            provide_option('type', Type.SIMPLE)
+            provide_option('exec_start', None)
+            provide_option('exec_stop', [])
+            provide_option('binds_to', set[str]())
+
+            def publish_remove_event() -> None:
+                publisher = self.event_publishers[Database.remove]
+                try:
+                    publisher.put(entry_name)
+                except RuntimeError:  # pragma: no cover  # Defensive.
+                    # If there is no current event loop,
+                    # pushing is not possible, and asyncio raises this.
+                    pass
+
+            self.event_publishers[Database.add].put(entry_name)
+            stack.callback(publish_remove_event)
+
             self.remover[entry_name] = functools.partial(
                 stack.pop_all().__exit__, None, None, None
             )
 
-    @contextlib.contextmanager
-    def _update_descriptor(
+    def _check_new_descriptor(
         self, entry_name: str, descriptor: Descriptor
-    ) -> collections.abc.Iterator[None]:
-        known_descriptors = self.known_descriptors
-        if entry_name in known_descriptors:
+    ) -> None:
+        if entry_name in self.known_descriptors:
             raise NameInUse(
                 'Launchers cannot be added with the same name.'
                 ' The following given name is already in use:'
                 ' {entry_name}'.format(entry_name=entry_name)
             )
-        try:
-            known_descriptors[entry_name] = descriptor
-            yield
-        finally:
-            known_descriptors.pop(entry_name, None)
-
-    @contextlib.contextmanager
-    def _update_after(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        descriptor = self.known_descriptors[entry_name]
-        descriptor_after = descriptor.get('after', set())
-        entry_after = set[str]()
-        after = self.after
-        try:
-            after[entry_name] = entry_after
-            stop_after = self.stop_after
-            try:
-                for dependency in descriptor_after:
-                    entry_after.add(dependency)
-                    dependency_stop_after = stop_after.setdefault(
-                        dependency, set[str]()
-                    )
-                    dependency_stop_after.add(entry_name)
-                    del dependency_stop_after
-                del descriptor_after
-                yield
-            finally:
-                for dependency in entry_after:
-                    dependency_stop_after = stop_after.get(
-                        dependency, set[str]()
-                    )
-                    dependency_stop_after.discard(entry_name)
-                    if not dependency_stop_after:
-                        stop_after.pop(dependency, None)
-                    del dependency_stop_after
-        finally:
-            after.pop(entry_name, None)
-
-    @contextlib.contextmanager
-    def _update_type(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        type_dict = self.type
-        descriptor = self.known_descriptors[entry_name]
-        try:
-            type_dict[entry_name] = descriptor.get('type', Type.SIMPLE)
-            yield
-        finally:
-            type_dict.pop(entry_name, None)
-
-    @contextlib.contextmanager
-    def _update_exec_start(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        exec_start = self.exec_start
-        descriptor = self.known_descriptors[entry_name]
-        try:
-            try:
-                new_exec_start = descriptor['exec_start']
-            except KeyError as error:
-                raise MissingDescriptorData(
-                    'A launcher.Descriptor must provide'
-                    ' a exec_start coroutine to be added.'
-                    ' It is missing from the unit named'
-                    ' {entry_name}'.format(entry_name=entry_name)
-                ) from error
-            exec_start[entry_name] = new_exec_start
-            yield
-        finally:
-            exec_start.pop(entry_name, None)
-
-    @contextlib.contextmanager
-    def _update_exec_stop(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        exec_stop = self.exec_stop
-        descriptor = self.known_descriptors[entry_name]
-        try:
-            exec_stop[entry_name] = descriptor.get('exec_stop', [])
-            yield
-        finally:
-            exec_stop.pop(entry_name, None)
-
-    @contextlib.contextmanager
-    def _update_binds_to(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        descriptor = self.known_descriptors[entry_name]
-        descriptor_binds_to = descriptor.get('binds_to', set())
-        entry_binds_to = set[str]()
-        binds_to = self.binds_to
-        try:
-            binds_to[entry_name] = entry_binds_to
-            bound_by = self.bound_by
-            try:
-                for bind_target in descriptor_binds_to:
-                    entry_binds_to.add(bind_target)
-                    target_bound_by = bound_by.setdefault(
-                        bind_target, set[str]()
-                    )
-                    target_bound_by.add(entry_name)
-                    del target_bound_by
-                del descriptor_binds_to
-                yield
-            finally:
-                for bind_target in entry_binds_to:
-                    target_bound_by = bound_by.get(
-                        bind_target, set[str]()
-                    )
-                    target_bound_by.discard(entry_name)
-                    if not target_bound_by:
-                        bound_by.pop(bind_target, None)
-                    del target_bound_by
-        finally:
-            binds_to.pop(entry_name, None)
-
-    @contextlib.contextmanager
-    def _update_events(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        self.event_publishers[Database.add].put(entry_name)
-        try:
-            yield
-        finally:
-            try:
-                self.event_publishers[Database.remove].put(entry_name)
-            except RuntimeError:  # pragma: no cover  # Defensive.
-                # If there is no current event loop,
-                # pushing is not possible, and asyncio raises this.
-                pass
+        if 'exec_start' not in descriptor:
+            raise MissingDescriptorData(
+                'A launcher.Descriptor must provide'
+                ' a exec_start coroutine to be added.'
+                ' It is missing from the unit named'
+                ' {entry_name}'.format(entry_name=entry_name)
+            )
 
     async def remove(self, entry_name: str) -> None:
         entry_remover = self.remover.pop(entry_name, None)
@@ -544,9 +436,8 @@ class StateMachine:
         # So they are generated as dependencies are found.
         # In particular, there need not be a bound_by entry
         # if there are no dependencies for a particular launcher.
-        try:
-            entry_bound_by = self._database.bound_by[entry_name]
-        except KeyError:
+        entry_bound_by = self._database.binds_to.inverses.get(entry_name)
+        if entry_bound_by is None:
             return
         for dependent_name in entry_bound_by:
             self._get_stop_task(dependent_name)
@@ -568,10 +459,9 @@ class StateMachine:
     async def _ensure_dependents_are_stopped(
         self, entry_name: str
     ) -> None:
-        stop_after = self._database.stop_after
-        try:
-            entry_stop_after = stop_after[entry_name]
-        except KeyError:
+        stop_after = self._database.after.inverses
+        entry_stop_after = stop_after.get(entry_name)
+        if entry_stop_after is None:
             return
         stop_tasks = self._stop_tasks
         after_tasks = (

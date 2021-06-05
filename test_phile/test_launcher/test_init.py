@@ -160,7 +160,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependency'},
         )
         self.assertEqual(
-            self.launcher_database.stop_after['dependency'],
+            self.launcher_database.after.inverses['dependency'],
             {'dependent'},
         )
 
@@ -185,7 +185,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'bind_target'},
         )
         self.assertEqual(
-            self.launcher_database.bound_by['bind_target'],
+            self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent'},
         )
 
@@ -204,7 +204,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(
-            self.launcher_database.bound_by['bind_target'],
+            self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1'},
         )
         await phile.asyncio.wait_for(
@@ -216,7 +216,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(
-            self.launcher_database.bound_by['bind_target'],
+            self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1', 'dependent_2'},
         )
 
@@ -265,14 +265,14 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(
-            self.launcher_database.stop_after['dependency'],
+            self.launcher_database.after.inverses['dependency'],
             {'dependent_1', 'dependent_2'},
         )
         await phile.asyncio.wait_for(
             self.launcher_database.remove('dependent_1')
         )
         self.assertEqual(
-            self.launcher_database.stop_after['dependency'],
+            self.launcher_database.after.inverses['dependency'],
             {'dependent_2'},
         )
 
@@ -293,14 +293,14 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(
-            self.launcher_database.stop_after['dependency'],
+            self.launcher_database.after.inverses['dependency'],
             {'dependent'},
         )
         await phile.asyncio.wait_for(
             self.launcher_database.remove('dependent')
         )
         self.assertNotIn(
-            'bind_target', self.launcher_database.stop_after
+            'bind_target', self.launcher_database.after.inverses
         )
 
     async def test_remove_unbinds_from_bound_by(self) -> None:
@@ -326,14 +326,14 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(
-            self.launcher_database.bound_by['bind_target'],
+            self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1', 'dependent_2'},
         )
         await phile.asyncio.wait_for(
             self.launcher_database.remove('dependent_1')
         )
         self.assertEqual(
-            self.launcher_database.bound_by['bind_target'],
+            self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_2'},
         )
 
@@ -352,13 +352,15 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(
-            self.launcher_database.bound_by['bind_target'],
+            self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent'},
         )
         await phile.asyncio.wait_for(
             self.launcher_database.remove('dependent')
         )
-        self.assertNotIn('bind_target', self.launcher_database.bound_by)
+        self.assertNotIn(
+            'bind_target', self.launcher_database.binds_to.inverses
+        )
 
     async def test_add_emits_events(self) -> None:
         entry_name = 'add_emits_events'
