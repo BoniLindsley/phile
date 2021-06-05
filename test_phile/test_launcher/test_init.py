@@ -342,6 +342,12 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             database=self.launcher_database
         )
 
+    def test_available_attributes(self) -> None:
+        self.assertEqual(
+            self.launcher_state_machine.database,
+            self.launcher_database,
+        )
+
     async def test_start_simple_runs_exec_start(self) -> None:
         name = 'simple_run'
         ran = asyncio.Event()
@@ -1049,5 +1055,7 @@ class UsesRegistry(
         registry_cm = phile.launcher.provide_registry(
             capability_registry=self.capability_registry,
         )
+        # pylint: disable=no-member
+        # Not sure why Pylint thinks the cm is just an AsyncGenerator.
         self.launcher_registry = await registry_cm.__aenter__()
         self.addAsyncCleanup(registry_cm.__aexit__, None, None, None)

@@ -342,6 +342,10 @@ class StateMachine:
         self._start_tasks: dict[str, asyncio.Future[typing.Any]] = {}
         self._stop_tasks: dict[str, asyncio.Future[typing.Any]] = {}
 
+    @property
+    def database(self) -> Database:
+        return self._database
+
     async def start(self, entry_name: str) -> None:
         await self._get_start_task(entry_name)
 
@@ -595,7 +599,7 @@ class Registry:
 
     @property
     def database(self) -> Database:
-        return self._state_machine._database
+        return self._state_machine.database
 
     @property
     def state_machine(self) -> StateMachine:
