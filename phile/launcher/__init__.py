@@ -24,6 +24,9 @@ import phile
 import phile.asyncio.pubsub
 import phile.capability
 
+_KeyT = typing.TypeVar('_KeyT')
+_ValueT = typing.TypeVar('_ValueT')
+
 Awaitable = collections.abc.Awaitable[typing.Any]
 NullaryAsyncCallable = collections.abc.Callable[[], Awaitable]
 NullaryCallable = collections.abc.Callable[[], typing.Any]
@@ -100,6 +103,57 @@ class MissingDescriptorData(KeyError):
 
 class NameInUse(RuntimeError):
     pass
+
+
+class OneToManyTwoWayDict(dict[_KeyT, set[_ValueT]]):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        self._inverses = (
+            collections.defaultdict[_ValueT, set[_KeyT]](set)
+        )
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key: _KeyT, new_values: set[_ValueT]) -> None:
+        if key in self:
+            self.__delitem__(key)
+        super().__setitem__(key, new_values)
+        try:
+            inverses = self._inverses
+            for value in new_values:
+                inverses[value].add(key)
+        # Defensive. Not sure how to force this.
+        # It should not happen in normal usage.
+        except:  # pragma: no cover
+            self.__delitem__(key)
+            raise
+
+    def __delitem__(self, key: _KeyT) -> None:
+        try:
+            inverses = self._inverses
+            existing_values = self[key]
+            for value in existing_values:
+                inverse_set = inverses.get(value)
+                # Defensive. Not sure how to force this.
+                # It should not happen in normal usage.
+                if inverse_set is not None:  # pragma: no branch
+                    inverse_set.discard(key)
+                    if not inverse_set:
+                        inverses.pop(value, None)
+                del inverse_set
+        finally:
+            super().__delitem__(key)
+
+    @property
+    def inverses(self) -> types.MappingProxyType[_ValueT, set[_KeyT]]:
+        return types.MappingProxyType(self._inverses)
+
+    @property
+    def pop(self) -> None:  # type: ignore[override]
+        # pylint: disable=invalid-overridden-method
+        """Use ``del`` instead. Inverse bookeeping is done there."""
+        raise AttributeError(
+            "'OneToManyTwoWayDict' object has no attribute 'pop'"
+        )
 
 
 class Database:

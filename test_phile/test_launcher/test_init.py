@@ -8,6 +8,7 @@ Test :mod:`phile.launcher`
 # Standard libraries.
 import asyncio
 import dataclasses
+import types
 import typing
 import unittest
 import unittest.mock
@@ -47,6 +48,61 @@ def create_awaiter(limit: int) -> tuple[Counter, phile.launcher.Command]:
             await asyncio.sleep(0)
 
     return counter, awaiter
+
+
+class TestOneToManyTwoWayDict(unittest.TestCase):
+    """Tests :func:`~phile.launcher.OneToManyTwoWayDict`."""
+
+    def test_has_attribute(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        self.assertIsInstance(int_map.inverses, types.MappingProxyType)
+
+    def test_set_item_sets(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = {1}
+        self.assertEqual(int_map[0], {1})
+
+    def test_set_item_updates_inverse(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = {1}
+        self.assertEqual(int_map.inverses[1], {0})
+        int_map[1] = {1}
+        self.assertEqual(int_map.inverses[1], {0, 1})
+
+    def test_set_item_accepts_empty_set(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = set[int]()
+
+    def test_set_item_cleans_up_previous_value_if_set(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = {1}
+        int_map[0] = {2}
+        self.assertEqual(int_map[0], {2})
+
+    def test_del_item_sets(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = {1}
+        self.assertEqual(int_map[0], {1})
+
+    def test_del_item_updates_inverse(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = {1}
+        int_map[1] = {1}
+        del int_map[0]
+        self.assertEqual(int_map.inverses[1], {1})
+        del int_map[1]
+        self.assertNotIn(1, int_map.inverses)
+
+    def test_del_item_accepts_key_with_value_of_empty_set(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        int_map[0] = set[int]()
+        del int_map[0]
+
+    def test_pop_raises(self) -> None:
+        int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
+        with self.assertRaises(AttributeError):
+            # Tests attribute access.
+            int_map.pop  # pylint: disable=pointless-statement
 
 
 class TestDatabase(unittest.IsolatedAsyncioTestCase):
