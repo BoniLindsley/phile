@@ -68,7 +68,7 @@ def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
                 qt_app.aboutToQuit.connect(
                     functools.partial(
                         loop.call_soon_threadsafe,
-                        launcher_registry.state_machine.stop_soon,
+                        launcher_registry.state_machine.stop,
                         'pyside2',
                     )
                 )

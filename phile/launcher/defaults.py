@@ -887,7 +887,7 @@ async def add_pyside2(
                 try:
                     await create_future()
                 finally:
-                    launcher_registry.state_machine.stop_soon(
+                    launcher_registry.state_machine.stop(
                         'phile.launcher'
                     )
                     phile.PySide2.QtCore.call_soon_threadsafe(

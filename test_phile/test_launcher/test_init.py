@@ -164,7 +164,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent'},
         )
 
-    async def test_add_binds_to_creates_bound_by(self) -> None:
+    async def test_add_binds_to_creates_inverses(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent',
@@ -189,7 +189,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent'},
         )
 
-    async def test_add_binds_to_adds_to_existing_bound_by(self) -> None:
+    async def test_add_binds_to_adds_to_existing_inverses(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent_1', {
@@ -240,7 +240,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             self.launcher_database.remove('not_added_unit')
         )
 
-    async def test_remove_with_after_removes_from_stop_after(
+    async def test_remove_with_after_removes_from_inverses(
         self
     ) -> None:
         await phile.asyncio.wait_for(
@@ -276,7 +276,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent_2'},
         )
 
-    async def test_remove__with_after_removes_stop_after_if_it_empties(
+    async def test_remove__with_after_removes_inverse_if_it_empties(
         self
     ) -> None:
         await phile.asyncio.wait_for(
@@ -303,7 +303,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             'bind_target', self.launcher_database.after.inverses
         )
 
-    async def test_remove_unbinds_from_bound_by(self) -> None:
+    async def test_remove_unbinds_from_inverses(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent_1', {
@@ -337,7 +337,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent_2'},
         )
 
-    async def test_remove_removes_bound_by_if_it_empties(self) -> None:
+    async def test_remove_removes_inverses_if_it_empties(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent', {
@@ -510,13 +510,9 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        start_1 = asyncio.create_task(
-            self.launcher_state_machine.start(name)
-        )
+        start_1 = self.launcher_state_machine.start(name)
         await asyncio.sleep(0)
-        start_2 = asyncio.create_task(
-            self.launcher_state_machine.start(name)
-        )
+        start_2 = self.launcher_state_machine.start(name)
         await asyncio.sleep(0)
         self.assertFalse(start_1.done())
         self.assertFalse(start_2.done())
@@ -646,21 +642,6 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 self.launcher_state_machine.start(name)
             )
 
-    async def test_start_soon_returns_future(self) -> None:
-        name = 'start_soon_returns_future'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name,
-                {
-                    'exec_start':
-                        [asyncio.get_running_loop().create_future]
-                },
-            )
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start_soon(name)
-        )
-
     async def test_stop_cancel_main_task_if_not_done(self) -> None:
         name = 'simple_stop'
         task_to_cancel = asyncio.create_task(asyncio.Event().wait())
@@ -734,37 +715,15 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_state_machine.start(name)
         )
-        stop_1 = asyncio.create_task(
-            self.launcher_state_machine.stop(name)
-        )
+        stop_1 = self.launcher_state_machine.stop(name)
         await asyncio.sleep(0)
-        stop_2 = asyncio.create_task(
-            self.launcher_state_machine.stop(name)
-        )
+        stop_2 = self.launcher_state_machine.stop(name)
         await asyncio.sleep(0)
         self.assertFalse(stop_1.done())
         self.assertFalse(stop_2.done())
         continue_stopper.set()
         await phile.asyncio.wait_for(stop_2)
         await phile.asyncio.wait_for(stop_1)
-
-    async def test_stop_soon_returns_future(self) -> None:
-        name = 'stop_soon_returns_future'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name,
-                {
-                    'exec_start':
-                        [asyncio.get_running_loop().create_future]
-                },
-            )
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop_soon(name)
-        )
 
     async def test_is_not_running_after_stop(self) -> None:
         name = 'simple_stop'
@@ -809,13 +768,9 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             self.launcher_state_machine.start(name)
         )
         started.clear()
-        stop_task = asyncio.create_task(
-            self.launcher_state_machine.stop(name)
-        )
+        stop_task = self.launcher_state_machine.stop(name)
         await asyncio.sleep(0)
-        start_task = asyncio.create_task(
-            self.launcher_state_machine.start(name)
-        )
+        start_task = self.launcher_state_machine.start(name)
         await phile.asyncio.wait_for(stop_paused.wait())
         self.assertFalse(start_task.done())
         self.assertFalse(stop_task.done())
@@ -850,18 +805,14 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        start_task = asyncio.create_task(
-            self.launcher_state_machine.start(name)
-        )
+        start_task = self.launcher_state_machine.start(name)
         await asyncio.sleep(0)
-        stop_task = asyncio.create_task(
-            self.launcher_state_machine.stop(name)
-        )
+        stop_task = self.launcher_state_machine.stop(name)
         with self.assertRaises(asyncio.CancelledError):
             await phile.asyncio.wait_for(start_task)
         await phile.asyncio.wait_for(stop_task)
 
-    async def test_stop_stops_bound_by_entries(self) -> None:
+    async def test_stop_stops_bind_to_inverse_entries(self) -> None:
         dependent_started = asyncio.Event()
         dependent_stopped = asyncio.Event()
 
@@ -942,8 +893,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             self.launcher_state_machine.start('dependency')
         )
         await phile.asyncio.wait_for(dependency_started.wait())
-        dependency_stop_task = asyncio.create_task(
-            self.launcher_state_machine.stop('dependency')
+        dependency_stop_task = self.launcher_state_machine.stop(
+            'dependency'
         )
         await phile.asyncio.wait_for(dependent_stopped.wait())
         self.assertFalse(dependency_stopped.is_set())

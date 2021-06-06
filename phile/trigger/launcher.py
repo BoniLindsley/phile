@@ -144,13 +144,13 @@ class Producer:
             bind(
                 start_trigger,
                 functools.partial(
-                    call_soon, state_machine.start_soon, launcher_name
+                    call_soon, state_machine.start, launcher_name
                 ),
             )
             bind(
                 stop_trigger,
                 functools.partial(
-                    call_soon, state_machine.stop_soon, launcher_name
+                    call_soon, state_machine.stop, launcher_name
                 ),
             )
         else:  # pragma: no cover  # Defensive.

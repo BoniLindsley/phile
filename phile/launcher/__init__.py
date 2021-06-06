@@ -285,23 +285,17 @@ class StateMachine:
         """Pushes events to subscribers."""
         self._database = database
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
-        self._start_tasks: dict[str, asyncio.Future[typing.Any]] = {}
-        self._stop_tasks: dict[str, asyncio.Future[typing.Any]] = {}
+        self._start_tasks: dict[str, asyncio.Task[typing.Any]] = {}
+        self._stop_tasks: dict[str, asyncio.Task[typing.Any]] = {}
 
     @property
     def database(self) -> Database:
         return self._database
 
-    async def start(self, entry_name: str) -> None:
-        await self._get_start_task(entry_name)
-
-    def start_soon(self, entry_name: str) -> asyncio.Future[typing.Any]:
-        return self._get_start_task(entry_name)
-
-    def _get_start_task(
+    def start(
         self,
         entry_name: str,
-    ) -> asyncio.Future[typing.Any]:
+    ) -> asyncio.Task[typing.Any]:
         start_tasks = self._start_tasks
         try:
             entry_start_task = start_tasks[entry_name]
@@ -344,16 +338,10 @@ class StateMachine:
             # Propagate error by awaiting on it.
             await entry_task
 
-    async def stop(self, entry_name: str) -> None:
-        await self._get_stop_task(entry_name)
-
-    def stop_soon(self, entry_name: str) -> asyncio.Future[typing.Any]:
-        return self._get_stop_task(entry_name)
-
-    def _get_stop_task(
+    def stop(
         self,
         entry_name: str,
-    ) -> asyncio.Future[typing.Any]:
+    ) -> asyncio.Task[typing.Any]:
         stop_tasks = self._stop_tasks
         try:
             entry_stop_task = stop_tasks[entry_name]
@@ -428,7 +416,7 @@ class StateMachine:
 
     async def _start_dependencies(self, entry_name: str) -> None:
         for dependency_name in self._database.binds_to[entry_name]:
-            self._get_start_task(dependency_name)
+            self.start(dependency_name)
 
     async def _stop_dependents(self, entry_name: str) -> None:
         # Unlike bind_by entries, the bound_by entries
@@ -440,7 +428,7 @@ class StateMachine:
         if entry_bound_by is None:
             return
         for dependent_name in entry_bound_by:
-            self._get_stop_task(dependent_name)
+            self.stop(dependent_name)
 
     async def _ensure_dependencies_are_started(
         self, entry_name: str

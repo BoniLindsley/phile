@@ -65,9 +65,7 @@ class Cmd(cmd.Cmd):
                 return
         for launcher_id in launcher_ids:
             launcher_name = self.known_launchers[launcher_id]
-            self._launcher_registry.state_machine.start_soon(
-                launcher_name
-            )
+            self._launcher_registry.state_machine.start(launcher_name)
         self.stdout.write(
             'Started {count} launchers.\n'.format(
                 count=len(launcher_ids)
@@ -99,9 +97,7 @@ class Cmd(cmd.Cmd):
                 return
         for launcher_id in launcher_ids:
             launcher_name = self.known_launchers[launcher_id]
-            self._launcher_registry.state_machine.stop_soon(
-                launcher_name
-            )
+            self._launcher_registry.state_machine.stop(launcher_name)
         self.stdout.write(
             'Stopped {count} launchers.\n'.format(
                 count=len(launcher_ids)
