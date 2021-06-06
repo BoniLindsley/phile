@@ -7,7 +7,9 @@ Test :mod:`phile.launcher`
 
 # Standard libraries.
 import asyncio
+import collections.abc
 import dataclasses
+import functools
 import types
 import typing
 import unittest
@@ -21,6 +23,8 @@ import phile.launcher
 from test_phile.test_capability.test_init import (
     UsesRegistry as UsesCapabilityRegistry
 )
+
+_T = typing.TypeVar('_T')
 
 
 class TestNameInUse(unittest.TestCase):
@@ -220,6 +224,30 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent_1', 'dependent_2'},
         )
 
+    async def test_add__with_conflicts_creates_inverses(self) -> None:
+        await phile.asyncio.wait_for(
+            self.launcher_database.add(
+                'something',
+                {
+                    'exec_start': [noop],
+                    'conflicts': {'conflict'},
+                },
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_database.add(
+                'conflict', {'exec_start': [noop]}
+            )
+        )
+        self.assertEqual(
+            self.launcher_database.conflicts['something'],
+            {'conflict'},
+        )
+        self.assertEqual(
+            self.launcher_database.conflicts.inverses['conflict'],
+            {'something'},
+        )
+
     async def test_remove(self) -> None:
         name = 'to_be_removed'
         await phile.asyncio.wait_for(
@@ -240,9 +268,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             self.launcher_database.remove('not_added_unit')
         )
 
-    async def test_remove_with_after_removes_from_inverses(
-        self
-    ) -> None:
+    async def test_remove_with_after_removes_from_inverses(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent_1', {
@@ -558,6 +584,75 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             self.launcher_state_machine.start('dependent')
         )
         await phile.asyncio.wait_for(dependency_started.wait())
+
+    async def test_start__stops_conflicts_first(self) -> None:
+        loop = asyncio.get_running_loop()
+        conflict_stopped = loop.create_future()
+        conflicted_stopped = loop.create_future()
+
+        async def make_async(
+            function: collections.abc.Callable[[], _T]
+        ) -> _T:
+            return function()
+
+        await phile.asyncio.wait_for(
+            self.launcher_database.add(
+                'something', {
+                    'exec_start': [asyncio.Event().wait],
+                    'conflicts': {'conflict'},
+                }
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_database.add(
+                'conflict', {
+                    'exec_start': [loop.create_future],
+                    'exec_stop': [
+                        functools.partial(
+                            make_async,
+                            functools.partial(
+                                conflict_stopped.set_result, 0
+                            )
+                        )
+                    ],
+                }
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_database.add(
+                'conflicted', {
+                    'conflicts': {'something'},
+                    'exec_start': [loop.create_future],
+                    'exec_stop': [
+                        functools.partial(
+                            make_async,
+                            functools.partial(
+                                conflicted_stopped.set_result, 0
+                            )
+                        )
+                    ],
+                }
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('conflict')
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('conflicted')
+        )
+        self.assertTrue(
+            self.launcher_state_machine.is_running('conflict')
+        )
+        self.assertTrue(
+            self.launcher_state_machine.is_running('conflicted')
+        )
+        self.assertFalse(conflict_stopped.done())
+        self.assertFalse(conflicted_stopped.done())
+        await phile.asyncio.wait_for(
+            self.launcher_state_machine.start('something')
+        )
+        await phile.asyncio.wait_for(conflict_stopped)
+        await phile.asyncio.wait_for(conflicted_stopped)
 
     async def test_start_starts_after_dependencies(self) -> None:
         dependency_started = asyncio.Event()

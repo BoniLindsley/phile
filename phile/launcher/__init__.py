@@ -15,6 +15,7 @@ import collections.abc
 import contextlib
 import enum
 import functools
+import itertools
 import logging
 import types
 import typing
@@ -94,6 +95,7 @@ class Type(enum.IntEnum):
 class Descriptor(typing.TypedDict, total=False):
     after: set[str]
     binds_to: set[str]
+    conflicts: set[str]
     exec_start: CommandLines
     exec_stop: CommandLines
     type: Type
@@ -189,6 +191,8 @@ class Database:
         """Order dependencies of launchers."""
         self.binds_to = OneToManyTwoWayDict[str, str]()
         """Dependencies of launchers."""
+        self.conflicts = OneToManyTwoWayDict[str, str]()
+        """Conflicts between launchers."""
         self.exec_start: dict[str, CommandLines] = {}
         """Coroutines to call to start a launcher."""
         self.exec_stop: dict[str, CommandLines] = {}
@@ -221,10 +225,12 @@ class Database:
                 )
 
             provide_option('after', set())
+            provide_option('binds_to', set[str]())
+            provide_option('conflicts', set[str]())
             provide_option('type', Type.SIMPLE)
+            # exec_start uses type.
             provide_option('exec_start', None)
             provide_option('exec_stop', [])
-            provide_option('binds_to', set[str]())
 
             def publish_remove_event() -> None:
                 publisher = self.event_publishers[Database.remove]
@@ -376,6 +382,7 @@ class StateMachine:
         _logger.debug(
             'Launcher %s is starting dependencies.', entry_name
         )
+        self._stop_conflicts(entry_name)
         await self._start_dependencies(entry_name)
         await self._ensure_dependencies_are_started(entry_name)
         async with contextlib.AsyncExitStack() as stack:
@@ -429,6 +436,14 @@ class StateMachine:
             return
         for dependent_name in entry_bound_by:
             self.stop(dependent_name)
+
+    def _stop_conflicts(self, entry_name: str) -> None:
+        conflicts = itertools.chain(
+            self._database.conflicts.get(entry_name, set()),
+            self._database.conflicts.inverses.get(entry_name, set()),
+        )
+        for name in conflicts:
+            self.stop(name)
 
     async def _ensure_dependencies_are_started(
         self, entry_name: str
