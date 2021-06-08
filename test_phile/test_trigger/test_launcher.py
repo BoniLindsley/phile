@@ -156,6 +156,27 @@ class TestProducer(
             )
         await phile.asyncio.wait_for(self.wait_for_trigger_binding())
 
+    async def test_enter_context_shows_running_launchers(self) -> None:
+        # Temporarily remove triggers
+        # to create launchers outside of context.
+        await phile.asyncio.wait_for(
+            self.launcher_triggers.__aexit__(None, None, None)
+        )
+        try:
+            await phile.asyncio.wait_for(self.set_up_launcher_entry())
+            await phile.asyncio.wait_for(
+                self.launcher_registry.state_machine.start(
+                    self.entry_name
+                )
+            )
+        finally:
+            await phile.asyncio.wait_for(
+                self.launcher_triggers.__aenter__()
+            )
+        await phile.asyncio.wait_for(
+            self.wait_for_start_trigger_showing()
+        )
+
     async def test_exit_context_unbinds_bound_launchers(self) -> None:
         await self.test_add_launcher_binds_triggers()
         # Temporarily remove triggers
