@@ -98,6 +98,7 @@ class Descriptor(typing.TypedDict, total=False):
     before: set[str]
     binds_to: set[str]
     conflicts: set[str]
+    default_dependencies: bool
     exec_start: CommandLines
     exec_stop: CommandLines
     type: Type
@@ -197,6 +198,7 @@ class Database:
         """Dependencies of launchers."""
         self.conflicts = OneToManyTwoWayDict[str, str]()
         """Conflicts between launchers."""
+        self.default_dependencies: dict[str, bool] = {}
         self.exec_start: dict[str, CommandLines] = {}
         """Coroutines to call to start a launcher."""
         self.exec_stop: dict[str, CommandLines] = {}
@@ -232,10 +234,14 @@ class Database:
             provide_option('before', set())
             provide_option('binds_to', set[str]())
             provide_option('conflicts', set[str]())
-            provide_option('type', Type.SIMPLE)
-            # exec_start uses type.
+            # Default value to be changed once it is implemented.
+            provide_option('default_dependencies', False)
             provide_option('exec_start', None)
             provide_option('exec_stop', [])
+            provide_option('type', Type.SIMPLE)
+            if self.default_dependencies[entry_name]:
+                self.before[entry_name].add('phile_shutdown.target')
+                self.conflicts[entry_name].add('phile_shutdown.target')
 
             def publish_remove_event() -> None:
                 publisher = self.event_publishers[Database.remove]

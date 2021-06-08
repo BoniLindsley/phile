@@ -288,6 +288,42 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'something'},
         )
 
+    async def test_add__with_default_dependencies_adds_dependencies(
+        self
+    ) -> None:
+        database = self.launcher_database
+        await phile.asyncio.wait_for(
+            database.add(
+                'something',
+                {
+                    'exec_start': [noop],
+                    'default_dependencies': True
+                },
+            )
+        )
+        self.assertEqual(
+            database.default_dependencies['something'], True
+        )
+        self.assertEqual(
+            database.conflicts['something'], {'phile_shutdown.target'}
+        )
+        self.assertEqual(
+            database.before['something'], {'phile_shutdown.target'}
+        )
+
+        await phile.asyncio.wait_for(
+            database.add(
+                'else',
+                {
+                    'exec_start': [noop],
+                    'default_dependencies': False
+                },
+            )
+        )
+        self.assertEqual(database.default_dependencies['else'], False)
+        self.assertEqual(database.conflicts['else'], set())
+        self.assertEqual(database.before['else'], set())
+
     async def test_remove(self) -> None:
         name = 'to_be_removed'
         await phile.asyncio.wait_for(
