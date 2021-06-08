@@ -57,6 +57,54 @@ class TestWaitFor(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(self.noop_coroutine())
 
 
+class SomethingBadHappened(Exception):
+    pass
+
+
+class TestCancelAndWait(unittest.IsolatedAsyncioTestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        self.target: asyncio.Future[int]
+        super().__init__(*args, **kwargs)
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.target = asyncio.get_running_loop().create_future()
+
+    async def cancel_and_wait(self) -> typing.Optional[int]:
+        # If `coroutine` is inlined into `wait_for`,
+        # then mypy expects `self.target` to be `typing.Optional[int]`.
+        # Not sure how to fix that.
+        coroutine = phile.asyncio.cancel_and_wait(self.target)
+        result = await phile.asyncio.wait_for(coroutine)
+        return result
+
+    async def test_cancels_given_future(self) -> None:
+        result = await self.cancel_and_wait()
+        self.assertTrue(self.target.cancelled())
+        self.assertIsNone(result)
+
+    async def test_ignores_if_already_cancelled(self) -> None:
+        await self.cancel_and_wait()
+        result = await self.cancel_and_wait()
+        self.assertIsNone(result)
+
+    async def test_retrieves_result(self) -> None:
+        self.target.set_result(0)
+        result = await self.cancel_and_wait()
+        self.assertEqual(result, 0)
+
+    async def test_propagates_exception(self) -> None:
+        self.target.set_exception(SomethingBadHappened())
+        with self.assertRaises(SomethingBadHappened):
+            await self.cancel_and_wait()
+
+    async def test_propagates_cancelled_exception(self) -> None:
+        self.target.set_exception(asyncio.CancelledError())
+        with self.assertRaises(asyncio.CancelledError):
+            await self.cancel_and_wait()
+
+
 class TestOpenTask(unittest.IsolatedAsyncioTestCase):
     """Tests :func:`~phile.asyncio.open_task`."""
 

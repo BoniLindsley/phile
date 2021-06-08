@@ -35,6 +35,18 @@ async def wait_for(
     )
 
 
+async def cancel_and_wait(
+    target: asyncio.Future[_T]
+) -> typing.Optional[_T]:
+    target.cancel()
+    try:
+        return await target
+    except asyncio.CancelledError:
+        if not target.cancelled():
+            raise
+    return None
+
+
 # TODO[python/mypy#9922]: Use `asyncio.Task[_T_co]` in return value.
 @contextlib.asynccontextmanager
 async def open_task(
