@@ -93,16 +93,16 @@ async def add_hotkey_pynput(
         phile.launcher.Descriptor(
             after={
                 'phile.configuration',
-                'phile.launcher',
                 'phile.trigger',
                 'phile.trigger.launcher',
             },
+            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
-                'phile.launcher',
                 'phile.trigger',
                 'phile.trigger.launcher',
             },
+            conflicts={'phile_shutdown.target'},
             exec_start=[run_pynput],
         )
     )
@@ -169,8 +169,8 @@ async def add_launcher_cmd(
     await launcher_registry.database.add(
         'phile.launcher.cmd',
         phile.launcher.Descriptor(
-            after={'phile.launcher'},
-            binds_to={'phile.launcher'},
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -359,8 +359,8 @@ async def add_tmux(
     await launcher_registry.database.add(
         'phile.tmux.control_mode',
         phile.launcher.Descriptor(
-            after={'phile.launcher'},
-            binds_to={'phile.launcher'},
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_tmux_control_mode,
@@ -789,8 +789,10 @@ async def add_trigger_launcher(
     await launcher_registry.database.add(
         'phile.trigger.launcher',
         phile.launcher.Descriptor(
-            after={'phile.launcher', 'phile.trigger'},
-            binds_to={'phile.launcher', 'phile.trigger'},
+            after={'phile.trigger'},
+            before={'phile_shutdown.target'},
+            binds_to={'phile.trigger'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_trigger_launcher_producer,
@@ -887,8 +889,8 @@ async def add_pyside2(
                 try:
                     await create_future()
                 finally:
-                    launcher_registry.state_machine.stop(
-                        'phile.launcher'
+                    launcher_registry.state_machine.start(
+                        'phile_shutdown.target'
                     )
                     phile.PySide2.QtCore.call_soon_threadsafe(
                         qt_app.quit
@@ -902,8 +904,8 @@ async def add_pyside2(
     await launcher_registry.database.add(
         'pyside2',
         phile.launcher.Descriptor(
-            after={'phile.launcher'},
-            binds_to={'phile.launcher'},
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     pyside2,
@@ -941,8 +943,8 @@ async def add_watchdog_asyncio_observer(
     await launcher_registry.database.add(
         'watchdog.asyncio.observer',
         phile.launcher.Descriptor(
-            after={'phile.launcher'},
-            binds_to={'phile.launcher'},
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )

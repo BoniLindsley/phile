@@ -22,6 +22,7 @@ import typing
 
 # Internal modules.
 import phile
+import phile.asyncio
 import phile.asyncio.pubsub
 import phile.builtins
 import phile.capability
@@ -94,6 +95,7 @@ class Type(enum.IntEnum):
 
 class Descriptor(typing.TypedDict, total=False):
     after: set[str]
+    before: set[str]
     binds_to: set[str]
     conflicts: set[str]
     exec_start: CommandLines
@@ -189,6 +191,8 @@ class Database:
         """
         self.after = OneToManyTwoWayDict[str, str]()
         """Order dependencies of launchers."""
+        self.before = OneToManyTwoWayDict[str, str]()
+        """Order dependencies of launchers."""
         self.binds_to = OneToManyTwoWayDict[str, str]()
         """Dependencies of launchers."""
         self.conflicts = OneToManyTwoWayDict[str, str]()
@@ -225,6 +229,7 @@ class Database:
                 )
 
             provide_option('after', set())
+            provide_option('before', set())
             provide_option('binds_to', set[str]())
             provide_option('conflicts', set[str]())
             provide_option('type', Type.SIMPLE)
@@ -307,42 +312,12 @@ class StateMachine:
             entry_start_task = start_tasks[entry_name]
         except KeyError:
             entry_start_task = start_tasks[entry_name] = (
-                asyncio.create_task(self._ensure_started(entry_name))
+                asyncio.create_task(self._do_start(entry_name))
             )
             entry_start_task.add_done_callback(
                 functools.partial(start_tasks.pop, entry_name)
             )
         return entry_start_task
-
-    async def _ensure_started(self, entry_name: str) -> None:
-        # If a launcher is started while it is being stopped,
-        # assume a restart-like behaviour is desired.
-        # So wait till the launcher has stopped before starting.
-        entry_stop_task = self._stop_tasks.get(entry_name)
-        if entry_stop_task is not None:
-            await entry_stop_task
-        running_tasks = self._running_tasks
-        if entry_name in running_tasks:
-            return
-        ready_event = asyncio.Event()
-        ready_task = asyncio.create_task(ready_event.wait())
-        entry_task = running_tasks[entry_name] = asyncio.create_task(
-            self._run(entry_name, ready_event)
-        )
-        entry_task.add_done_callback(
-            functools.partial(running_tasks.pop, entry_name)
-        )
-        done, _pending = await asyncio.wait(
-            (ready_task, entry_task),
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if ready_task.cancel():
-            with contextlib.suppress(asyncio.CancelledError):
-                await ready_task
-        if ready_task not in done:
-            # Launcher did not start successfully.
-            # Propagate error by awaiting on it.
-            await entry_task
 
     def stop(
         self,
@@ -353,134 +328,130 @@ class StateMachine:
             entry_stop_task = stop_tasks[entry_name]
         except KeyError:
             entry_stop_task = stop_tasks[entry_name] = (
-                asyncio.create_task(self._ensure_stopped(entry_name))
+                asyncio.create_task(self._do_stop(entry_name))
             )
             entry_stop_task.add_done_callback(
                 functools.partial(stop_tasks.pop, entry_name)
             )
         return entry_stop_task
 
-    async def _ensure_stopped(self, entry_name: str) -> None:
-        entry_start_task = self._start_tasks.get(entry_name)
-        if entry_start_task is not None and entry_start_task.cancel():
-            with contextlib.suppress(asyncio.CancelledError):
-                await entry_start_task
+    async def _do_start(self, entry_name: str) -> None:
+        # If a launcher is started while it is being stopped,
+        # assume a restart-like behaviour is desired.
+        # So wait till the launcher has stopped before starting.
+        entry_stop_task = self._stop_tasks.get(entry_name)
+        if entry_stop_task is not None:
+            await entry_stop_task
+        running_tasks = self._running_tasks
+        if entry_name in running_tasks:
             return
-        del entry_start_task
+        running_tasks = self._running_tasks
+        await self._ensure_ready_to_start(entry_name)
+        _logger.debug('Launcher %s is starting.', entry_name)
+        main_task = await self._start_main_task(entry_name)
+        _logger.debug('Launcher %s has started.', entry_name)
+        running_tasks[entry_name] = runner_task = (
+            asyncio.create_task(
+                self._clean_up_on_stop(entry_name, main_task)
+            )
+        )
+        runner_task.add_done_callback(
+            functools.partial(running_tasks.pop, entry_name)
+        )
+        self.event_publishers[StateMachine.start].put(entry_name)
+        runner_task.add_done_callback(
+            lambda _task:
+            (self.event_publishers[StateMachine.stop].put(entry_name))
+        )
 
+    async def _do_stop(self, entry_name: str) -> None:
+        entry_start_task = self._start_tasks.get(entry_name)
+        if entry_start_task is not None:
+            await phile.asyncio.cancel_and_wait(entry_start_task)
         entry_running_task = self._running_tasks.get(entry_name)
-        if entry_running_task is not None and entry_running_task.cancel(
-        ):
-            with contextlib.suppress(asyncio.CancelledError):
-                await entry_running_task
+        if entry_running_task is not None:
+            await phile.asyncio.cancel_and_wait(entry_running_task)
 
-    async def _run(
-        self,
-        entry_name: str,
-        ready_event: asyncio.Event,
+    async def _clean_up_on_stop(
+        self, entry_name: str, main_task: asyncio.Future[typing.Any]
     ) -> None:
+        try:
+            # A forced cancellation from this function
+            # should not happen until dependents are processed
+            # and a graceful shutdown is attempted.
+            await asyncio.shield(main_task)
+        finally:
+            try:
+                await self._ensure_ready_to_stop(entry_name)
+            finally:
+                try:
+                    await self._run_command_lines(
+                        self._database.exec_stop[entry_name]
+                    )
+                finally:
+                    await phile.asyncio.cancel_and_wait(main_task)
+
+    async def _ensure_ready_to_start(self, entry_name: str) -> None:
+        database = self._database
+        stop = self.stop
+        _logger.debug('Launcher %s is stopping conflicts.', entry_name)
+        for conflict in (
+            database.conflicts.get(entry_name, set())
+            | database.conflicts.inverses.get(entry_name, set())
+        ):
+            stop(conflict)
         _logger.debug(
             'Launcher %s is starting dependencies.', entry_name
         )
-        self._stop_conflicts(entry_name)
-        await self._start_dependencies(entry_name)
-        await self._ensure_dependencies_are_started(entry_name)
-        async with contextlib.AsyncExitStack() as stack:
-            stack.callback(
-                _logger.debug, 'Launcher %s has stopped.', entry_name
-            )
-            # When unwinding the stack,
-            # emit event only when the task is assumed to be done.
-            event_stack = await stack.enter_async_context(
-                contextlib.AsyncExitStack()
-            )
-            _logger.debug('Launcher %s is starting.', entry_name)
-            main_task = await stack.enter_async_context(
-                self._create_main_task(entry_name)
-            )
-            stack.push_async_callback(
-                self._run_command_lines,
-                self._database.exec_stop[entry_name],
-            )
-            stack.push_async_callback(
-                self._ensure_dependents_are_stopped, entry_name
-            )
-            stack.push_async_callback(self._stop_dependents, entry_name)
-            stack.callback(
-                _logger.debug,
-                'Launcher %s is stopping dependents.',
-                entry_name,
-            )
-            # When setting up,
-            # emit event only when all clean-up is set up.
-            event_stack.enter_context(self._update_events(entry_name))
-            event_stack.callback(
-                _logger.debug, 'Launcher %s is stopping.', entry_name
-            )
-            ready_event.set()
-            _logger.debug('Launcher %s has started.', entry_name)
-            await asyncio.shield(main_task)
-
-    async def _start_dependencies(self, entry_name: str) -> None:
-        for dependency_name in self._database.binds_to[entry_name]:
-            self.start(dependency_name)
-
-    async def _stop_dependents(self, entry_name: str) -> None:
-        # Unlike bind_by entries, the bound_by entries
-        # are not provided by descriptors.
-        # So they are generated as dependencies are found.
-        # In particular, there need not be a bound_by entry
-        # if there are no dependencies for a particular launcher.
-        entry_bound_by = self._database.binds_to.inverses.get(entry_name)
-        if entry_bound_by is None:
-            return
-        for dependent_name in entry_bound_by:
-            self.stop(dependent_name)
-
-    def _stop_conflicts(self, entry_name: str) -> None:
-        conflicts = itertools.chain(
-            self._database.conflicts.get(entry_name, set()),
-            self._database.conflicts.inverses.get(entry_name, set()),
+        start = self.start
+        for dependency in database.binds_to[entry_name]:
+            start(dependency)
+        _logger.debug(
+            'Launcher %s is waiting on dependencies.', entry_name
         )
-        for name in conflicts:
-            self.stop(name)
+        after = (
+            database.after.get(entry_name, set())
+            | database.before.inverses.get(entry_name, set())
+        )
+        before = (
+            database.before.get(entry_name, set())
+            | database.after.inverses.get(entry_name, set())
+        )
+        pending_tasks = set(
+            filter(
+                None,
+                itertools.chain(
+                    map(self._stop_tasks.get, after | before),
+                    map(self._start_tasks.get, after),
+                )
+            )
+        )
+        if pending_tasks:
+            await asyncio.wait(pending_tasks)
 
-    async def _ensure_dependencies_are_started(
+    async def _ensure_ready_to_stop(self, entry_name: str) -> None:
+        database = self._database
+        _logger.debug('Launcher %s is stopping dependents.', entry_name)
+        for dependent in database.binds_to.inverses.get(
+            entry_name, set()
+        ):
+            self.stop(dependent)
+        _logger.debug(
+            'Launcher %s is waiting on dependents.', entry_name
+        )
+        before = (
+            database.before.get(entry_name, set())
+            | database.after.inverses.get(entry_name, set())
+        )
+        pending_tasks = set(
+            filter(None, map(self._stop_tasks.get, before))
+        )
+        if pending_tasks:
+            await asyncio.wait(pending_tasks)
+
+    async def _start_main_task(
         self, entry_name: str
-    ) -> None:
-        start_tasks = self._start_tasks
-        after_tasks = (
-            start_tasks.get(dependency_name)
-            for dependency_name in self._database.after[entry_name]
-        )
-        order_dependency_tasks = tuple(
-            tasks for tasks in after_tasks if tasks is not None
-        )
-        if order_dependency_tasks:
-            await asyncio.wait(order_dependency_tasks)
-
-    async def _ensure_dependents_are_stopped(
-        self, entry_name: str
-    ) -> None:
-        stop_after = self._database.after.inverses
-        entry_stop_after = stop_after.get(entry_name)
-        if entry_stop_after is None:
-            return
-        stop_tasks = self._stop_tasks
-        after_tasks = (
-            stop_tasks.get(dependency_name)
-            for dependency_name in entry_stop_after
-        )
-        order_dependency_tasks = tuple(
-            tasks for tasks in after_tasks if tasks is not None
-        )
-        if order_dependency_tasks:
-            await asyncio.wait(order_dependency_tasks)
-
-    @contextlib.asynccontextmanager
-    async def _create_main_task(
-        self, entry_name: str
-    ) -> collections.abc.AsyncIterator[asyncio.Future[typing.Any]]:
+    ) -> asyncio.Future[typing.Any]:
         database = self._database
         main_task: asyncio.Future[typing.Any] = asyncio.create_task(
             self._run_command_lines(database.exec_start[entry_name])
@@ -492,12 +463,10 @@ class StateMachine:
             elif unit_type is Type.FORKING:
                 main_task = await main_task
                 assert isinstance(main_task, asyncio.Future)
-            del unit_type
-            yield main_task
-        finally:
-            if main_task.cancel():
-                with contextlib.suppress(asyncio.CancelledError):
-                    await main_task
+            return main_task
+        except:
+            await phile.asyncio.cancel_and_wait(main_task)
+            raise
 
     async def _run_command_lines(
         self, command_lines: CommandLines
@@ -510,22 +479,6 @@ class StateMachine:
 
     def is_running(self, entry_name: str) -> bool:
         return entry_name in self._running_tasks
-
-    @contextlib.contextmanager
-    def _update_events(
-        self,
-        entry_name: str,
-    ) -> collections.abc.Iterator[None]:
-        self.event_publishers[StateMachine.start].put(entry_name)
-        try:
-            yield
-        finally:
-            try:
-                self.event_publishers[StateMachine.stop].put(entry_name)
-            except RuntimeError:  # pragma: no cover  # Defensive.
-                # If there is no current event loop,
-                # pushing is not possible, and asyncio raises this.
-                pass
 
 
 class Registry:
@@ -558,12 +511,14 @@ async def provide_registry(
     capability_registry: phile.capability.Registry,
 ) -> collections.abc.AsyncIterator[Registry]:
     with capability_registry.provide(launcher_registry := Registry()):
+        launcher_name = 'phile_shutdown.target'
         await launcher_registry.database.add(
-            launcher_name := 'phile.launcher',
-            phile.launcher.Descriptor(exec_start=[asyncio.Event().wait])
+            launcher_name,
+            phile.launcher.Descriptor(
+                exec_start=[asyncio.get_running_loop().create_future],
+            )
         )
-        await launcher_registry.state_machine.start(launcher_name)
         yield launcher_registry
         _logger.debug('Launcher clean-up starting.')
-        await launcher_registry.state_machine.stop(launcher_name)
+        await launcher_registry.state_machine.start(launcher_name)
         _logger.debug('Launcher clean-up done.')

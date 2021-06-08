@@ -9,7 +9,6 @@ Test :mod:`phile.launcher`
 import asyncio
 import collections.abc
 import dataclasses
-import functools
 import types
 import typing
 import unittest
@@ -32,6 +31,25 @@ class TestNameInUse(unittest.TestCase):
 
     def test_check_is_runtime_error(self) -> None:
         self.assertIsInstance(phile.launcher.NameInUse(), RuntimeError)
+
+
+def make_nullary_async(
+    function: collections.abc.Callable[..., _T],
+    /,
+    *args: typing.Any,
+    **kwargs: typing.Any,
+) -> collections.abc.Callable[[], collections.Awaitable[_T]]:
+    """
+    Returns a coroutine function that calls the given function.
+
+    Returns a nullary function. That is, it is not a coroutine object.
+    To await for it, use ``await make_async(f)()``.
+    """
+
+    async def wrapper_coroutine() -> _T:
+        return function(*args, **kwargs)
+
+    return wrapper_coroutine
 
 
 async def noop() -> None:
@@ -222,6 +240,28 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1', 'dependent_2'},
+        )
+
+    async def test_add__with_before_creates_inverses(self) -> None:
+        await phile.asyncio.wait_for(
+            self.launcher_database.add(
+                'first',
+                {
+                    'exec_start': [noop],
+                    'before': {'second'},
+                },
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_database.add('second', {'exec_start': [noop]})
+        )
+        self.assertEqual(
+            self.launcher_database.before['first'],
+            {'second'},
+        )
+        self.assertEqual(
+            self.launcher_database.before.inverses['second'],
+            {'first'},
         )
 
     async def test_add__with_conflicts_creates_inverses(self) -> None:
@@ -559,41 +599,36 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.launcher_state_machine.is_running(name))
 
     async def test_start_starts_binds_to(self) -> None:
-        dependency_started = asyncio.Event()
-
-        async def dependency_exec_start() -> None:
-            dependency_started.set()
-            await asyncio.Event().wait()
-
+        create_future = asyncio.get_running_loop().create_future
+        dependency_started = create_future()
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent', {
-                    'exec_start': [asyncio.Event().wait],
-                    'binds_to': {'dependency'}
+                    'exec_start': [create_future],
+                    'binds_to': {'dependency'},
                 }
             )
         )
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependency', {
-                    'exec_start': [dependency_exec_start],
+                    'exec_start': [
+                        make_nullary_async(
+                            dependency_started.set_result, 0
+                        ),
+                    ],
                 }
             )
         )
         await phile.asyncio.wait_for(
             self.launcher_state_machine.start('dependent')
         )
-        await phile.asyncio.wait_for(dependency_started.wait())
+        await phile.asyncio.wait_for(dependency_started)
 
     async def test_start__stops_conflicts_first(self) -> None:
         loop = asyncio.get_running_loop()
         conflict_stopped = loop.create_future()
         conflicted_stopped = loop.create_future()
-
-        async def make_async(
-            function: collections.abc.Callable[[], _T]
-        ) -> _T:
-            return function()
 
         await phile.asyncio.wait_for(
             self.launcher_database.add(
@@ -608,11 +643,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 'conflict', {
                     'exec_start': [loop.create_future],
                     'exec_stop': [
-                        functools.partial(
-                            make_async,
-                            functools.partial(
-                                conflict_stopped.set_result, 0
-                            )
+                        make_nullary_async(
+                            conflict_stopped.set_result, 0
                         )
                     ],
                 }
@@ -624,11 +656,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                     'conflicts': {'something'},
                     'exec_start': [loop.create_future],
                     'exec_stop': [
-                        functools.partial(
-                            make_async,
-                            functools.partial(
-                                conflicted_stopped.set_result, 0
-                            )
+                        make_nullary_async(
+                            conflicted_stopped.set_result, 0
                         )
                     ],
                 }
@@ -1000,32 +1029,35 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
     async def test_stop_does_not_stop_afters_without_binds_to(
         self
     ) -> None:
-        dependency_started = asyncio.Event()
-        dependency_stopped = asyncio.Event()
-        dependent_stopped = asyncio.Event()
-
-        async def dependency_exec_start() -> None:
-            dependency_started.set()
-
-        async def dependency_exec_stop() -> None:
-            dependency_stopped.set()
-
-        async def dependent_exec_stop() -> None:
-            dependent_stopped.set()
-
+        create_future = asyncio.get_running_loop().create_future
+        dependency_started = create_future()
+        dependency_stopped = create_future()
+        dependent_stopped = create_future()
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependency', {
-                    'exec_start': [dependency_exec_start],
-                    'exec_stop': [dependency_exec_stop],
+                    'exec_start': [
+                        make_nullary_async(
+                            dependency_started.set_result, None
+                        )
+                    ],
+                    'exec_stop': [
+                        make_nullary_async(
+                            dependency_stopped.set_result, None
+                        )
+                    ],
                 }
             )
         )
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 'dependent', {
-                    'exec_start': [asyncio.Event().wait],
-                    'exec_stop': [dependent_exec_stop],
+                    'exec_start': [create_future],
+                    'exec_stop': [
+                        make_nullary_async(
+                            dependent_stopped.set_result, None
+                        )
+                    ],
                     'after': {'dependency'},
                 }
             )
@@ -1036,12 +1068,12 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_state_machine.start('dependent')
         )
-        await phile.asyncio.wait_for(dependency_started.wait())
+        await phile.asyncio.wait_for(dependency_started)
         await phile.asyncio.wait_for(
             self.launcher_state_machine.stop('dependency')
         )
-        await phile.asyncio.wait_for(dependency_stopped.wait())
-        self.assertFalse(dependent_stopped.is_set())
+        await phile.asyncio.wait_for(dependency_stopped)
+        self.assertFalse(dependent_stopped.done())
 
     async def test_start_emits_events(self) -> None:
         entry_name = 'start_emits_events'
