@@ -281,6 +281,4 @@ class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
     async def test_raises_if_closed(self) -> None:
         self.stream.close()
         with self.assertRaises(ValueError):
-            next_line = await phile.asyncio.wait_for(
-                self.threaded_stream.readline()
-            )
+            await phile.asyncio.wait_for(self.threaded_stream.readline())
