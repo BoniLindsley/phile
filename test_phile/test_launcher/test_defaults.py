@@ -122,8 +122,8 @@ class TestAddLogFile(
         self.assertTrue(log_file_path.is_file())
         self.assertRegex(
             log_file_path.read_text(),
-            '\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
-            '\[030\] phile.log.file: '
+            r'\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
+            r'\[030\] phile.log.file: '
             'Add this to log.\n'
         )
 
@@ -157,8 +157,8 @@ class TestAddLogFile(
         self.assertTrue(log_file_path.is_file())
         self.assertRegex(
             log_file_path.read_text(),
-            '\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
-            '\[020\] phile.log.phile: '
+            r'\[\d{4}(-\d\d){2} \d\d(:\d\d){2},\d{3}\] '
+            r'\[020\] phile.log.phile: '
             'But add this.\n'
         )
 
@@ -178,6 +178,91 @@ class TestAddKeyring(
         self.assertTrue(
             self.launcher_registry.database.contains('keyring')
         )
+
+
+class TestAddTrayPsutil(
+    UsesLauncherRegistry,
+    PreparesConfigurationEntries,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+    """Tests :func:`~phile.launcher.defaults.add_trigger_watchdog`."""
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_name = 'phile.tray.psutil'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_psutil(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
+
+    async def test_creates_tray_file(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                'phile.configuration',
+            )
+        )
+        configuration: phile.configuration.Entries = (
+            self.capability_registry[phile.configuration.Entries]
+        )
+        observer = phile.watchdog.asyncio.Observer()
+        # Monitor tray directory before starting launcher.
+        tray_directory = (
+            configuration.state_directory_path /
+            configuration.tray_directory
+        )
+        tray_directory.mkdir()
+        tray_name = '70-phile-tray-psutil'
+        tray_file_path = tray_directory / (
+            tray_name + configuration.tray_suffix
+        )
+        async with observer.open(str(tray_directory)) as observer_view:
+            await phile.asyncio.wait_for(
+                self.launcher_registry.state_machine.start(
+                    self.launcher_name
+                )
+            )
+            # Show a trigger and a corresponding file should be created.
+            expected_event = watchdog.events.FileCreatedEvent(
+                str(tray_file_path)
+            )
+
+            async def get_event_until() -> None:
+                async for event in observer_view:
+                    if event == expected_event:
+                        break
+
+            await phile.asyncio.wait_for(get_event_until())
 
 
 class TestAddTriggerWatchdog(

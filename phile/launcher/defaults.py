@@ -421,62 +421,6 @@ async def add_tray(
     )
 
 
-async def add_tray_battery(
-    capability_registry: phile.capability.Registry,
-) -> None:
-
-    async def phile_tray_publishers_battery(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
-        import phile.tray.publishers.battery
-        await phile.tray.publishers.battery.run(
-            capabilities=capability_registry
-        )
-
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
-        'phile.tray.publisher.battery',
-        phile.launcher.Descriptor(
-            after={'phile.configuration'},
-            binds_to={'phile.configuration'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_battery,
-                    capability_registry=capability_registry,
-                ),
-            ],
-        )
-    )
-
-
-async def add_tray_cpu(
-    capability_registry: phile.capability.Registry
-) -> None:
-
-    async def phile_tray_publishers_cpu(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
-        import phile.tray.publishers.cpu
-        await phile.tray.publishers.cpu.run(
-            capabilities=capability_registry
-        )
-
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
-        'phile.tray.publisher.cpu',
-        phile.launcher.Descriptor(
-            after={'phile.configuration'},
-            binds_to={'phile.configuration'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_cpu,
-                    capability_registry=capability_registry,
-                ),
-            ],
-        )
-    )
-
-
 async def add_tray_datetime(
     capability_registry: phile.capability.Registry,
 ) -> None:
@@ -533,62 +477,6 @@ async def add_tray_imap(
     )
 
 
-async def add_tray_memory(
-    capability_registry: phile.capability.Registry,
-) -> None:
-
-    async def phile_tray_publishers_memory(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
-        import phile.tray.publishers.memory
-        await phile.tray.publishers.memory.run(
-            capabilities=capability_registry
-        )
-
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
-        'phile.tray.publisher.memory',
-        phile.launcher.Descriptor(
-            after={'phile.configuration'},
-            binds_to={'phile.configuration'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_memory,
-                    capability_registry=capability_registry,
-                ),
-            ],
-        )
-    )
-
-
-async def add_tray_network(
-    capability_registry: phile.capability.Registry,
-) -> None:
-
-    async def phile_tray_publishers_network(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
-        import phile.tray.publishers.network
-        await phile.tray.publishers.network.run(
-            capabilities=capability_registry
-        )
-
-    launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
-        'phile.tray.publisher.network',
-        phile.launcher.Descriptor(
-            after={'phile.configuration'},
-            binds_to={'phile.configuration'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_network,
-                    capability_registry=capability_registry,
-                ),
-            ],
-        )
-    )
-
-
 async def add_tray_notify(
     capability_registry: phile.capability.Registry,
 ) -> None:
@@ -613,6 +501,28 @@ async def add_tray_notify(
                     capability_registry=capability_registry,
                 ),
             ],
+        )
+    )
+
+
+async def add_tray_psutil(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def run() -> None:
+        import phile.tray.psutil
+        configuration = (
+            capability_registry[phile.configuration.Entries]
+        )
+        await phile.tray.psutil.run(configuration=configuration)
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.tray.psutil',
+        phile.launcher.Descriptor(
+            after={'phile.configuration'},
+            binds_to={'phile.configuration'},
+            exec_start=[run],
         )
     )
 
@@ -1004,13 +914,10 @@ async def add(capability_registry: phile.capability.Registry) -> None:
     await add_pyside2(capability_registry=capability_registry)
     await add_tmux(capability_registry=capability_registry)
     await add_tray(capability_registry=capability_registry)
-    await add_tray_battery(capability_registry=capability_registry)
-    await add_tray_cpu(capability_registry=capability_registry)
     await add_tray_datetime(capability_registry=capability_registry)
     await add_tray_imap(capability_registry=capability_registry)
-    await add_tray_memory(capability_registry=capability_registry)
-    await add_tray_network(capability_registry=capability_registry)
     await add_tray_notify(capability_registry=capability_registry)
+    await add_tray_psutil(capability_registry=capability_registry)
     await add_tray_pyside2_window(
         capability_registry=capability_registry
     )
