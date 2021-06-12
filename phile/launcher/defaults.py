@@ -456,8 +456,8 @@ async def add_tray_imap(
     async def run() -> None:
         import keyring
         import phile.configuration
-        import phile.tray.publishers.imap_idle
-        await phile.tray.publishers.imap_idle.run(
+        import phile.tray.imapclient
+        await phile.tray.imapclient.run(
             configuration=(
                 capability_registry[phile.configuration.Entries]
             ),
@@ -469,7 +469,7 @@ async def add_tray_imap(
 
     launcher_registry = capability_registry[phile.launcher.Registry]
     await launcher_registry.database.add(
-        'phile.tray.publisher.imap_idle',
+        'phile.tray.imapclient',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'keyring'},
             before={'phile_shutdown.target'},

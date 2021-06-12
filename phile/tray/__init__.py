@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 .. automodule:: phile.tray.gui
+.. automodule:: phile.tray.imapclient
 .. automodule:: phile.tray.psutil
 .. automodule:: phile.tray.publishers
 .. automodule:: phile.tray.tmux
