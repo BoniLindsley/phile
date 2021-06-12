@@ -9,6 +9,7 @@
 .. automodule:: phile.datetime
 .. automodule:: phile.hotkey
 .. automodule:: phile.imapclient
+.. automodule:: phile.keyring
 .. automodule:: phile.launcher
 .. automodule:: phile.main
 .. automodule:: phile.notify
