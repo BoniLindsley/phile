@@ -236,6 +236,21 @@ class TestReadable(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class EventThread(phile.asyncio.Thread):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.event = threading.Event()
+
+    def run(self) -> None:
+        self.event.set()
+        super().run()
+
+
+class SomeThreadError(Exception):
+    pass
+
+
 class TestThread(unittest.IsolatedAsyncioTestCase):
     """Tests :class:`~phile.asyncio.Thread`."""
 
@@ -247,17 +262,20 @@ class TestThread(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(thread.async_join())
 
     async def test_run_override_should_call_super_at_end(self) -> None:
-        event = threading.Event()
-
-        class Thread(phile.asyncio.Thread):
-
-            def run(self) -> None:
-                event.set()
-                super().run()
-
-        thread = Thread()
+        thread = EventThread()
         thread.start()
         await phile.asyncio.wait_for(thread.async_join())
+        self.assertTrue(thread.event.is_set())
+
+    async def test_propagates_exception(self) -> None:
+
+        def run() -> None:
+            raise SomeThreadError()
+
+        thread = phile.asyncio.Thread(target=run, daemon=True)
+        thread.start()
+        with self.assertRaises(SomeThreadError):
+            await phile.asyncio.wait_for(thread.async_join())
 
 
 class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):

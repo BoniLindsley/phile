@@ -120,15 +120,24 @@ class Thread(threading.Thread):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.__running_loop = asyncio.get_running_loop()
-        self.__stopped = asyncio.Event()
+        self.__running_loop = loop = asyncio.get_running_loop()
+        self.__stopped = loop.create_future()
 
     def run(self) -> None:
-        super().run()
-        self.__running_loop.call_soon_threadsafe(self.__stopped.set)
+        try:
+            super().run()
+        # Propagating all exceptions into asyncio loop.
+        except BaseException as error:  # pylint: disable=broad-except
+            self.__running_loop.call_soon_threadsafe(
+                self.__stopped.set_exception, error
+            )
+        else:
+            self.__running_loop.call_soon_threadsafe(
+                self.__stopped.set_result, None
+            )
 
     async def async_join(self) -> None:
-        await self.__stopped.wait()
+        await self.__stopped
 
 
 class ThreadedTextIOBase:
