@@ -453,12 +453,18 @@ async def add_tray_imap(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
-    async def phile_tray_publishers_imap_idle(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
+    async def run() -> None:
+        import keyring
+        import phile.configuration
         import phile.tray.publishers.imap_idle
         await phile.tray.publishers.imap_idle.run(
-            capabilities=capability_registry
+            configuration=(
+                capability_registry[phile.configuration.Entries]
+            ),
+            keyring_backend=capability_registry[
+                # Use of abstract type as key is intended.
+                keyring.backend.KeyringBackend  # type: ignore[misc]
+            ],
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
@@ -466,13 +472,10 @@ async def add_tray_imap(
         'phile.tray.publisher.imap_idle',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'keyring'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.configuration', 'keyring'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_imap_idle,
-                    capability_registry=capability_registry,
-                ),
-            ],
+            conflicts={'phile_shutdown.target'},
+            exec_start=[run],
         )
     )
 

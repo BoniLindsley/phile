@@ -58,7 +58,7 @@ _app_meta_data = {'appname': 'phile', 'appauthor': 'BoniLindsley'}
 default_configuration_path = pathlib.Path(
     appdirs.user_config_dir(**_app_meta_data)
 ) / 'config.json'
-default_notification_directory = pathlib.Path("notification")
+default_notification_directory = pathlib.Path("notify")
 default_notification_suffix = '.notify'
 default_pid_path = pathlib.Path('pid')
 default_tray_directory = pathlib.Path("tray")

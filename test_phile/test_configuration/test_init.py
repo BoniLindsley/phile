@@ -6,6 +6,7 @@ Test :mod:`phile.configuration`
 """
 
 # Standard library.
+import datetime
 import json
 import pathlib
 import tempfile
@@ -15,6 +16,54 @@ import unittest
 # Internal modules.
 import phile.configuration
 import phile.os
+
+
+class TestImapEntries(unittest.TestCase):
+
+    def test_has_attributes(self) -> None:
+        entries = phile.configuration.ImapEntries(
+            folder='f',
+            host='h',
+            password='p',
+            username='u',
+        )
+        self.assertIsInstance(entries.folder, str)
+        self.assertIsInstance(entries.host, str)
+        self.assertIsInstance(
+            entries.idle_refresh_timeout, datetime.timedelta
+        )
+        self.assertIsInstance(
+            entries.maximum_reconnect_delay, datetime.timedelta
+        )
+        self.assertIsInstance(
+            entries.minimum_reconnect_delay, datetime.timedelta
+        )
+        self.assertIsInstance(entries.password, str)
+        self.assertIsInstance(
+            entries.connect_timeout, datetime.timedelta
+        )
+        self.assertIsInstance(entries.username, str)
+
+    def test_defaults(self) -> None:
+        entries = phile.configuration.ImapEntries(folder='f', host='h')
+        self.assertEqual(
+            entries.idle_refresh_timeout,
+            datetime.timedelta(minutes=24),
+        )
+        self.assertEqual(
+            entries.maximum_reconnect_delay,
+            datetime.timedelta(minutes=16),
+        )
+        self.assertEqual(
+            entries.minimum_reconnect_delay,
+            datetime.timedelta(seconds=15),
+        )
+        self.assertIsNone(entries.password)
+        self.assertEqual(
+            entries.connect_timeout,
+            datetime.timedelta(minutes=1),
+        )
+        self.assertIsNone(entries.username)
 
 
 class PreparesEntries(unittest.TestCase):
@@ -45,10 +94,15 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         entries = phile.configuration.Entries(
             configuration_path=str(self.configuration_path),
             state_directory_path=str(self.state_directory_path),
+            imap=phile.configuration.ImapEntries(folder='f', host='h'),
         )
         self.assertIsInstance(entries.configuration_path, pathlib.Path)
         self.assertIsInstance(entries.hotkey_global_map, dict)
         self.assertIsInstance(entries.hotkey_map, dict)
+        self.assertIsInstance(
+            entries.imap,
+            phile.configuration.ImapEntries,
+        )
         self.assertIsInstance(entries.log_file_level, int)
         self.assertIsInstance(entries.log_file_path, pathlib.Path)
         self.assertIsInstance(entries.log_stderr_level, int)
@@ -75,6 +129,7 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         )
         self.assertEqual(entries.hotkey_global_map, {})
         self.assertEqual(entries.hotkey_map, {})
+        self.assertEqual(entries.imap, None)
         self.assertEqual(entries.log_file_level, 30)
         self.assertEqual(
             entries.log_file_path, pathlib.Path('phile.log')
@@ -106,6 +161,10 @@ class TestEntries(PreparesEntries, unittest.TestCase):
             PHILE_CONFIGURATION_PATH=str(configuration_path),
             PHILE_HOTKEY_GLOBAL_MAP='{"a": "a"}',
             PHILE_HOTKEY_MAP='{"b": "b"}',
+            PHILE_IMAP='{'
+            ' "folder": "f",'
+            ' "host": "h"'
+            '}',
             PHILE_LOG_FILE_LEVEL='2',
             PHILE_LOG_FILE_PATH='lo',
             PHILE_LOG_STDERR_LEVEL='3',
@@ -124,6 +183,10 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertEqual(entries.configuration_path, configuration_path)
         self.assertEqual(entries.hotkey_global_map, {'a': 'a'})
         self.assertEqual(entries.hotkey_map, {'b': 'b'})
+        self.assertEqual(
+            entries.imap,
+            phile.configuration.ImapEntries(folder='f', host='h'),
+        )
         self.assertEqual(entries.log_file_level, 2)
         self.assertEqual(entries.log_file_path, pathlib.Path('lo'))
         self.assertEqual(entries.log_stderr_level, 3)
@@ -154,6 +217,10 @@ class TestLoad(PreparesEntries, unittest.TestCase):
             'hotkey_map': {
                 'h': 'h'
             },
+            'imap': {
+                "folder": "fo",
+                "host": "ho",
+            },
             'log_file_level': 50,
             'log_file_path': str('lg'),
             'log_stderr_level': 13,
@@ -175,6 +242,10 @@ class TestLoad(PreparesEntries, unittest.TestCase):
         )
         self.assertEqual(entries.hotkey_global_map, {'g': 'g'})
         self.assertEqual(entries.hotkey_map, {'h': 'h'})
+        self.assertEqual(
+            entries.imap,
+            phile.configuration.ImapEntries(folder='fo', host='ho'),
+        )
         self.assertEqual(entries.log_file_level, 50)
         self.assertEqual(entries.log_file_path, pathlib.Path('lg'))
         self.assertEqual(entries.log_stderr_level, 13)

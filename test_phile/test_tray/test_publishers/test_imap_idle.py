@@ -1,14 +1,37 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
+import asyncio
+import collections
+import contextlib
+import datetime
+import functools
 import pathlib
+import socket
 import tempfile
+import typing
 import unittest
 
+# External dependencies.
+import imapclient
+import keyring.backend
+import keyring.credentials
+import watchdog.events
+
 # Internal modules.
+import phile.asyncio
+import phile.configuration
 import phile.imapclient
 import phile.tray.publishers.imap_idle
-from test_phile.test_imapclient import UsesIMAPClient
+import phile.watchdog.asyncio
+from test_phile.test_configuration.test_init import (
+    PreparesEntries as PreparesConfiguration,
+)
+import test_phile.test_imapclient
+from test_phile.test_imapclient import (
+    PreparesIMAPClient, PreparesIMAP4, UsesIMAPClient
+)
+from test_phile.test_keyring import PreparesKeyring
 
 
 class TestUnseenNotifier(unittest.TestCase):
@@ -50,18 +73,465 @@ class TestUnseenNotifier(unittest.TestCase):
         self.assertTrue(self.notify_path.exists())
 
 
-class TestCreateIdleClient(UsesIMAPClient, unittest.TestCase):
-    """
-    Test :class:`phile.tray.publishers.imap_idle.create_idle_client`.
-    """
+class TestMissingCredential(unittest.TestCase):
 
-    def test_creates_client_in_idle_mode(self) -> None:
-        imap_client, _select_response = (
-            phile.tray.publishers.imap_idle.create_idle_client(
-                folder='Inboxer',
-                host='create_idle_client://',
-                password='super-secret',
-                username='itsme',
+    def test_is_exception(self) -> None:
+        with self.assertRaises(
+            phile.tray.publishers.imap_idle.MissingCredential
+        ):
+            raise phile.tray.publishers.imap_idle.MissingCredential()
+        with self.assertRaises(Exception):
+            raise phile.tray.publishers.imap_idle.MissingCredential()
+
+
+class TestLoadConfiguration(
+    PreparesConfiguration,
+    PreparesKeyring,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.configuration: phile.configuration.Entries
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.configuration = phile.configuration.load()
+        self.configuration.imap = phile.configuration.ImapEntries(
+            folder='f',
+            host='h',
+            password='config_pass',
+            username='config_user',
+        )
+        keyring.set_password('imap', 'keyring_user', 'keyring_pass')
+        keyring.set_password('imap', 'config_user', 'pass')
+
+    async def load_configuration(
+        self
+    ) -> phile.configuration.ImapEntries:
+        return await phile.asyncio.wait_for(
+            phile.tray.publishers.imap_idle.load_configuration(
+                configuration=self.configuration,
+                keyring_backend=keyring.get_keyring()
             )
         )
-        self.assertTrue(phile.imapclient.is_idle(imap_client))
+
+    async def test_uses_given_configuration(self) -> None:
+        keyring.delete_password('imap', 'u')
+        imap_configuration = await self.load_configuration()
+        self.assertEqual(
+            imap_configuration,
+            phile.configuration.ImapEntries(
+                folder='f',
+                host='h',
+                password='config_pass',
+                username='config_user'
+            )
+        )
+
+    async def test_uses_keyring_if_password_missing(self) -> None:
+        assert self.configuration.imap is not None
+        self.configuration.imap.password = None
+        imap_configuration = await self.load_configuration()
+        self.assertEqual(
+            imap_configuration,
+            phile.configuration.ImapEntries(
+                folder='f',
+                host='h',
+                password='pass',
+                username='config_user'
+            )
+        )
+
+    async def test_uses_keyring_if_username_and_password_missing(
+        self
+    ) -> None:
+        assert self.configuration.imap is not None
+        self.configuration.imap.username = None
+        self.configuration.imap.password = None
+        imap_configuration = await self.load_configuration()
+        self.assertEqual(
+            imap_configuration,
+            phile.configuration.ImapEntries(
+                folder='f',
+                host='h',
+                password='keyring_pass',
+                username='keyring_user'
+            )
+        )
+
+    async def test_raises_if_missing_imap_configuration(self) -> None:
+        self.configuration.imap = None
+        with self.assertRaises(
+            phile.tray.publishers.imap_idle.MissingCredential
+        ):
+            await self.load_configuration()
+
+    async def test_raises_if_missing_password(self) -> None:
+        assert self.configuration.imap is not None
+        self.configuration.imap.password = None
+        keyring.delete_password('imap', 'config_user')
+        with self.assertRaises(
+            phile.tray.publishers.imap_idle.MissingCredential
+        ):
+            await self.load_configuration()
+
+    async def test_raises_if_has_password_without_username(self) -> None:
+        assert self.configuration.imap is not None
+        self.configuration.imap.username = None
+        with self.assertRaises(
+            phile.tray.publishers.imap_idle.MissingCredential
+        ):
+            await self.load_configuration()
+
+
+class TestCreateClient(PreparesIMAPClient, unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.imap_configuration: phile.configuration.ImapEntries
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.imap_configuration = phile.configuration.ImapEntries(
+            folder='f',
+            host='h',
+            idle_refresh_timeout=datetime.timedelta(),
+            password='keyring_pass',
+            username='keyring_user',
+        )
+
+    def test_creates_client_in_idle_mode(self) -> None:
+        phile.tray.publishers.imap_idle.create_client(
+            imap_configuration=self.imap_configuration,
+        )
+
+
+class TestIdle(PreparesIMAPClient, unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.imap_client: imapclient.IMAPClient
+        self.responses: (
+            collections.abc.Iterator[list[phile.imapclient.ResponseLine]]
+        )
+        self.stop_reader: socket.socket
+        self.stop_writer: socket.socket
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.imap_client = imapclient.IMAPClient(host='h')
+        self.stop_reader, self.stop_writer = socket.socketpair()
+        self.addCleanup(self.stop_reader.close)
+        self.addCleanup(self.stop_writer.close)
+        self.responses = iter(
+            phile.tray.publishers.imap_idle.idle(
+                imap_client=self.imap_client,
+                stop_socket=self.stop_reader,
+                refresh_timeout=datetime.timedelta(),
+            )
+        )
+
+    def is_idle(self) -> bool:
+        return phile.imapclient.is_idle(self.imap_client)
+
+    def test_stops_if_stop_socket_has_data(self) -> None:
+        self.stop_writer.sendall(b'\0')
+        self.assertTrue(not self.is_idle())
+
+        next(self.responses)  # Exit IDLE state.
+        self.assertTrue(not self.is_idle())
+
+        with self.assertRaises(StopIteration):
+            next(self.responses)
+
+    def test_yields_responses_until_stop(self) -> None:
+        self.imap_client._imap._server_socket.sendall(b'\0')
+
+        next(self.responses)  # IDLE check response.
+        self.assertTrue(self.is_idle())
+
+        self.stop_writer.sendall(b'\0')
+        next(self.responses)  # IDLE check response.
+        self.assertTrue(self.is_idle())
+
+        next(self.responses)  # Exit IDLE state.
+        self.assertTrue(not self.is_idle())
+
+        with self.assertRaises(StopIteration):
+            next(self.responses)
+
+    def test_refreshes_idle_state_if_timeout(self) -> None:
+        next(self.responses)  # Exit IDLE state from timeout
+        self.assertTrue(not self.is_idle())
+
+        self.stop_writer.sendall(b'\0')
+        next(self.responses)  # Exit IDLE state.
+        self.assertTrue(not self.is_idle())
+
+        with self.assertRaises(StopIteration):
+            next(self.responses)
+
+
+class TestEventType(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+
+    def test_available_attributes(self) -> None:
+        self.assertIsInstance(
+            phile.tray.publishers.imap_idle.EventType.ADD,
+            phile.tray.publishers.imap_idle.EventType,
+        )
+        self.assertIsInstance(
+            phile.tray.publishers.imap_idle.EventType.SELECT,
+            phile.tray.publishers.imap_idle.EventType,
+        )
+
+
+class TestEvent(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+
+    def test_add_event(self) -> None:
+        event = phile.tray.publishers.imap_idle.Event(
+            type=phile.tray.publishers.imap_idle.EventType.ADD,
+            add_response=[],
+        )
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.ADD,
+        )
+        self.assertEqual(event['add_response'], [])
+
+    def test_select_event(self) -> None:
+        event = phile.tray.publishers.imap_idle.Event(
+            type=phile.tray.publishers.imap_idle.EventType.SELECT,
+            select_response={},
+        )
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.SELECT,
+        )
+        self.assertEqual(event['select_response'], {})
+
+
+class TestReadFromServer(UsesIMAPClient, unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.imap_configuration: phile.configuration.ImapEntries
+        self.events: collections.abc.Iterator[
+            phile.tray.publishers.imap_idle.Event]
+        self.stop_reader: socket.socket
+        self.stop_writer: socket.socket
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.imap_configuration = phile.configuration.ImapEntries(
+            folder='f',
+            host='h',
+            idle_refresh_timeout=datetime.timedelta(),
+            maximum_reconnect_delay=datetime.timedelta(),
+            password='keyring_pass',
+            username='keyring_user',
+        )
+        self.stop_reader, self.stop_writer = socket.socketpair()
+        self.addCleanup(self.stop_reader.close)
+        self.addCleanup(self.stop_writer.close)
+        self.events = iter(
+            phile.tray.publishers.imap_idle.read_from_server(
+                imap_configuration=self.imap_configuration,
+                stop_socket=self.stop_reader,
+            )
+        )
+
+    def test_stops_if_stop_socket_has_data(self) -> None:
+        self.stop_writer.sendall(b'\0')
+        with self.assertRaises(StopIteration):
+            next(self.events)
+
+    def test_refreshes_idle_state_if_timeout(self) -> None:
+        event = next(self.events)  # SELECT event on connect.
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.SELECT,
+        )
+        event = next(self.events)  # Exit IDLE state.
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.ADD,
+        )
+        self.stop_writer.sendall(b'\0')
+        event = next(self.events)  # Exit IDLE state.
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.ADD,
+        )
+        with self.assertRaises(StopIteration):
+            next(self.events)
+
+    def test_reconnects_after_disconnect(self) -> None:
+        event = next(self.events)  # SELECT event on connect.
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.SELECT,
+        )
+        self.imap_clients[0].shutdown()
+        event = next(self.events)  # SELECT event on reconnect.
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.SELECT,
+        )
+        self.stop_writer.sendall(b'\0')
+        event = next(self.events)  # Exit IDLE state.
+        self.assertEqual(
+            event['type'],
+            phile.tray.publishers.imap_idle.EventType.ADD,
+        )
+        with self.assertRaises(StopIteration):
+            next(self.events)
+
+
+class TestRun(
+    PreparesConfiguration,
+    PreparesKeyring,
+    UsesIMAPClient,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.configuration: phile.configuration.Entries
+        self.file_event_queue: phile.watchdog.asyncio.EventQueue
+        self.notify_directory: pathlib.Path
+        self.notify_path: pathlib.Path
+        self.observer: phile.watchdog.asyncio.BaseObserver
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.configuration = phile.configuration.load()
+        self.configuration.imap = phile.configuration.ImapEntries(
+            folder='f',
+            host='h',
+            idle_refresh_timeout=datetime.timedelta(),
+            password='config_pass',
+            username='config_user',
+        )
+        self.notify_directory = (
+            self.configuration.state_directory_path /
+            self.configuration.notification_directory
+        )
+        self.notify_directory.mkdir()
+        self.notify_path = self.notify_directory / (
+            '20-imap-idle' + self.configuration.notification_suffix
+        )
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.observer = observer = phile.watchdog.asyncio.Observer()
+        self.file_event_queue = await observer.schedule(
+            str(self.notify_directory)
+        )
+        self.addAsyncCleanup(
+            observer.unschedule, str(self.notify_directory)
+        )
+
+    async def wait_for_new_imap_client(self) -> None:
+        existing_client_count = len(self.imap_clients)
+        while existing_client_count == len(self.imap_clients):
+            await asyncio.sleep(0)
+
+    async def test_creates_client(self) -> None:
+        runner = asyncio.create_task(
+            phile.tray.publishers.imap_idle.run(
+                configuration=self.configuration,
+                keyring_backend=keyring.get_keyring()
+            )
+        )
+        await phile.asyncio.wait_for(self.wait_for_new_imap_client())
+
+    async def test_creates_notify_file_when_mail_exists(self) -> None:
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock.select_folder',
+            return_value={
+                b"EXISTS": 2,
+                b"FLAGS": (),
+                b"RECENT": 0,
+                b"UNSEEN": [b"2"],
+            },
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        del patcher
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock.idle_check',
+            side_effect=[OSError],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        del patcher
+        runner = asyncio.create_task(
+            phile.tray.publishers.imap_idle.run(
+                configuration=self.configuration,
+                keyring_backend=keyring.get_keyring()
+            )
+        )
+        await phile.asyncio.wait_for(self.wait_for_new_imap_client())
+        self.imap_clients[0]._imap._server_socket.sendall(b'\0')
+        async for event in self.file_event_queue:
+            expected_event = watchdog.events.FileCreatedEvent(
+                str(self.notify_path)
+            )
+            if event == expected_event:
+                return
+
+    async def test_creates_notify_file_when_mail_arrives(self) -> None:
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock.idle_check',
+            side_effect=[[(1, b'EXISTS')], OSError],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        runner = asyncio.create_task(
+            phile.tray.publishers.imap_idle.run(
+                configuration=self.configuration,
+                keyring_backend=keyring.get_keyring()
+            )
+        )
+        await phile.asyncio.wait_for(self.wait_for_new_imap_client())
+        self.imap_clients[0]._imap._server_socket.sendall(b'\0')
+        async for event in self.file_event_queue:
+            expected_event = watchdog.events.FileCreatedEvent(
+                str(self.notify_path)
+            )
+            if event == expected_event:
+                return
+
+    async def test_exits_gracefully_on_cancel(self) -> None:
+        runner = asyncio.create_task(
+            phile.tray.publishers.imap_idle.run(
+                configuration=self.configuration,
+                keyring_backend=keyring.get_keyring()
+            )
+        )
+        await phile.asyncio.wait_for(self.wait_for_new_imap_client())
+        runner.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await runner
+
+    async def test_propagates_exception_from_connect_error(self) -> None:
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock',
+            side_effect=[OSError],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        with self.assertRaises(OSError):
+            await phile.asyncio.wait_for(
+                phile.tray.publishers.imap_idle.run(
+                    configuration=self.configuration,
+                    keyring_backend=keyring.get_keyring()
+                )
+            )

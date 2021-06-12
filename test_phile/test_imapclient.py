@@ -20,23 +20,42 @@ import phile.imapclient
 _T_co = typing.TypeVar('_T_co', covariant=True)
 
 
-class MockIMAP4(unittest.mock.MagicMock):
+class IMAP4Mock:
 
     abort = Exception
+    error = Exception
 
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        host: str,
+        port: int = 143,
+        timeout: typing.Union[  # Stop formatting moving this.
+            None, float, imapclient.SocketTimeout] = None,
+        *args: typing.Any,
+        **kwargs: typing.Any
+    ) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        del host,
+        del port
+        del timeout
         self.sock, self._server_socket = socket.socketpair()
         self.tagged_commands: (
             dict[bytes, typing.Optional[list[bytes]]]
         ) = {}
 
+    def __del__(self) -> None:
+        self.shutdown()
+        getattr(super(), "__del__", lambda _: None)(self)
+
     def shutdown(self) -> None:
-        self.sock.close()
-        self._server_socket.close()
+        try:
+            self.sock.close()
+        finally:
+            self._server_socket.close()
 
 
-class MockIMAPClient(unittest.mock.MagicMock):
+class IMAPClientMock(unittest.mock.MagicMock):
 
     def __init__(
         self,
@@ -88,9 +107,13 @@ class MockIMAPClient(unittest.mock.MagicMock):
         self.shutdown()
 
     def login(self, username: str, password: str) -> bytes:
+        del password
+        del username
         return b''
 
-    def _create_IMAP4(self) -> imaplib.IMAP4:
+    def _create_IMAP4(  # pylint: disable=invalid-name
+        self
+    ) -> imaplib.IMAP4:
         assert isinstance(self.port, int)
         return imaplib.IMAP4(
             self.host, self.port,
@@ -115,12 +138,23 @@ class MockIMAPClient(unittest.mock.MagicMock):
         self,
         timeout: typing.Optional[float] = None
     ) -> list[typing.Any]:
+        if self._sock.fileno() == -1:
+            raise OSError()
+        del timeout
         return []
 
     def idle_done(self) -> typing.Any:
+        if self._sock.fileno() == -1:
+            raise OSError()
         assert self._idle_tag is not None
         self._imap.tagged_commands.pop(self._idle_tag)
         return [None, [(0, b'')]]
+
+    def logout(self) -> bytes:
+        if self._sock.fileno() == -1:
+            raise OSError()
+        self.shutdown()
+        return b''
 
     def shutdown(self) -> None:
         self._imap.shutdown()
@@ -130,6 +164,8 @@ class MockIMAPClient(unittest.mock.MagicMock):
         folder: str,
         readonly: bool = False
     ) -> phile.imapclient.SelectResponse:
+        del folder
+        del readonly
         select_response = {
             b"EXISTS": 0,
             b"FLAGS": tuple(),
@@ -138,27 +174,54 @@ class MockIMAPClient(unittest.mock.MagicMock):
         return select_response
 
 
-class UsesIMAP4(unittest.TestCase):
+class PreparesIMAP4(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        patcher = unittest.mock.patch('imaplib.IMAP4', new=MockIMAP4)
+        patcher = unittest.mock.patch('imaplib.IMAP4', new=IMAP4Mock)
         self.addCleanup(patcher.stop)
         patcher.start()
 
 
-class UsesIMAPClient(UsesIMAP4, unittest.TestCase):
+class PreparesIMAPClient(PreparesIMAP4, unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
         patcher = unittest.mock.patch(
-            'imapclient.IMAPClient', new=MockIMAPClient
+            'imapclient.IMAPClient', new=IMAPClientMock
         )
         self.addCleanup(patcher.stop)
         patcher.start()
 
 
-class TestGetSocket(UsesIMAPClient, unittest.TestCase):
+class UsesIMAPClient(
+    PreparesIMAPClient,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.imap_clients: list[IMAPClientMock]
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.imap_clients = imap_clients = []
+
+        def create_imap_client(
+            *args: typing.Any, **kwargs: typing.Any
+        ) -> IMAPClientMock:
+            new_client = IMAPClientMock(*args, **kwargs)
+            imap_clients.append(new_client)
+            return new_client
+
+        patcher = unittest.mock.patch(
+            'imapclient.IMAPClient', new=create_imap_client
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+
+class TestGetSocket(PreparesIMAPClient, unittest.TestCase):
     """Tests :func:`phile.imapclient.get_socket`."""
 
     def test_retrieves_implementation_socket(self) -> None:
@@ -166,11 +229,11 @@ class TestGetSocket(UsesIMAPClient, unittest.TestCase):
         self.addCleanup(imap_client.shutdown)
         self.assertEqual(
             phile.imapclient.get_socket(imap_client),
-            imap_client._imap.sock
+            imap_client._imap.sock  # pylint: disable=protected-access
         )
 
 
-class TestIsIdle(UsesIMAPClient, unittest.TestCase):
+class TestIsIdle(PreparesIMAPClient, unittest.TestCase):
     """Tests :func:`phile.imapclient.is_idle`."""
 
     def test_before_and_after_idle_state(self) -> None:
@@ -182,138 +245,6 @@ class TestIsIdle(UsesIMAPClient, unittest.TestCase):
         self.assertTrue(is_idle(imap_client))
         imap_client.idle_done()
         self.assertFalse(is_idle(imap_client))
-
-
-class TestIdleResponses(
-    UsesIMAPClient, unittest.IsolatedAsyncioTestCase
-):
-    """Tests :func:`phile.imapclient.idle_responses`."""
-
-    def run(
-        self, *args: typing.Any, **kwargs: typing.Any
-    ) -> typing.Optional[unittest.TestResult]:
-        with unittest.mock.patch(
-            'asyncio.new_event_loop', asyncio.SelectorEventLoop
-        ):
-            return super().run(*args, **kwargs)
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.imap_client = imap_client = (
-            imapclient.IMAPClient('idle_responses://')
-        )
-        self.addCleanup(imap_client.shutdown)
-        self.addCleanup(self.imap_client.shutdown)
-        self.imap_client.idle()
-
-    async def get_list(
-        self,
-        timeout: datetime.timedelta = phile.imapclient.
-        default_refresh_timeout
-    ) -> None:
-        self.response_list = []
-        async for response in (
-            phile.imapclient.idle_responses(self.imap_client, timeout)
-        ):
-            self.response_list.append(response)
-
-    async def test_raises_if_not_in_idle_state(self) -> None:
-        self.imap_client.idle_done()
-        with self.assertRaises(AssertionError):
-            await phile.asyncio.wait_for(self.get_list())
-
-    async def test_iterate_responses(self) -> None:
-        expected_response_list = [[(1, b'EXISTS')], []]
-        check_patch = unittest.mock.patch.object(
-            self.imap_client,
-            'idle_check',
-            side_effect=expected_response_list
-        )
-        # Force the loop to check for responses.
-        running_loop = asyncio.get_running_loop()
-        running_loop.call_soon(
-            self.imap_client._imap._server_socket.send, b' '
-        )
-        with self.assertRaises(ConnectionResetError), check_patch:
-            await phile.asyncio.wait_for(self.get_list())
-        self.assertEqual(self.response_list, expected_response_list)
-
-    async def test_exception_from_disconnection(self) -> None:
-        self.imap_client._imap._server_socket.close()
-        with self.assertRaises(ConnectionResetError):
-            await phile.asyncio.wait_for(self.get_list())
-
-    async def test_raises_if_check_returns_empty(self) -> None:
-        running_loop = asyncio.get_running_loop()
-        running_loop.call_soon(
-            self.imap_client._imap._server_socket.send, b' '
-        )
-        with unittest.mock.patch.object(
-            self.imap_client, 'idle_check', return_value=[]
-        ) as check_mock:
-            with self.assertRaises(ConnectionResetError):
-                await phile.asyncio.wait_for(
-                    self.get_list(timeout=datetime.timedelta())
-                )
-            self.assertTrue(check_mock.call_count, 1)
-
-    async def test_refresh_does_occur(self) -> None:
-        # # Force the loop to check for responses.
-        # running_loop = asyncio.get_running_loop()
-        # running_loop.call_soon(
-        #     self.imap_client._imap._server_socket.send, b' '
-        # )
-        with unittest.mock.patch.object(
-            self.imap_client,
-            'idle_done',
-            side_effect=(
-                [None, [(0, b'')]],
-                [None, [(1, b'')]],
-                imaplib.IMAP4.abort(),
-            )
-        ) as done_mock:
-            with self.assertRaises(ConnectionResetError):
-                await phile.asyncio.wait_for(
-                    self.get_list(timeout=datetime.timedelta())
-                )
-            self.assertEqual(
-                self.response_list, [
-                    [(0, b'')],
-                    [(1, b'')],
-                ]
-            )
-            self.assertEqual(done_mock.call_count, 3)
-
-    async def test_check_and_refresh_together(self) -> None:
-        # Force the loop to check for responses.
-        running_loop = asyncio.get_running_loop()
-        running_loop.call_soon(
-            self.imap_client._imap._server_socket.send, b' '
-        )
-        with unittest.mock.patch.object(
-            self.imap_client, 'idle_check', side_effect=(
-                [0],
-                [2],
-            )
-        ), unittest.mock.patch.object(
-            self.imap_client,
-            'idle_done',
-            side_effect=(
-                [None, [(1, b'')]],
-                imaplib.IMAP4.abort(),
-            )
-        ):
-            with self.assertRaises(ConnectionResetError):
-                await phile.asyncio.wait_for(
-                    self.get_list(timeout=datetime.timedelta())
-                )
-            self.assertEqual(
-                self.response_list, [
-                    [0],
-                    [(1, b'')],
-                    [2],
-                ]
-            )
 
 
 class TestFlagTracker(unittest.TestCase):
