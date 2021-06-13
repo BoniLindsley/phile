@@ -45,6 +45,8 @@ async def add_configuration(
     await launcher_registry.database.add(
         'phile.configuration',
         phile.launcher.Descriptor(
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_configuration,
@@ -64,7 +66,9 @@ async def add_hotkey_gui(
         'phile.hotkey.gui',
         phile.launcher.Descriptor(
             after={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[asyncio.get_running_loop().create_future],
         )
     )
@@ -140,12 +144,14 @@ async def add_hotkey_pyside2(
                 'phile.trigger.launcher',
                 'pyside2',
             },
+            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.trigger',
                 'phile.trigger.launcher',
                 'pyside2',
             },
+            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -224,7 +230,9 @@ async def add_log_file(
         'phile.log.file',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.configuration'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )
@@ -276,7 +284,9 @@ async def add_log_stderr(
         'phile.log.stderr',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.configuration'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )
@@ -313,6 +323,8 @@ async def add_keyring(
     await launcher_registry.database.add(
         'keyring',
         phile.launcher.Descriptor(
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     keyring_backend,
@@ -411,10 +423,12 @@ async def add_tray(
                 'phile.configuration',
                 'watchdog.asyncio.observer',
             },
+            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'watchdog.asyncio.observer',
             },
+            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )
@@ -438,7 +452,9 @@ async def add_tray_datetime(
         'phile.tray.publisher.datetime',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.configuration'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_tray_publishers_datetime,
@@ -497,7 +513,9 @@ async def add_tray_notify(
         'phile.tray.publisher.notify_monitor',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'watchdog.observer'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.configuration', 'watchdog.observer'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_tray_publishers_notify_monitor,
@@ -524,7 +542,9 @@ async def add_tray_psutil(
         'phile.tray.psutil',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.configuration'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -554,7 +574,9 @@ async def add_tray_pyside2_window(
         'phile.tray.pyside2.window',
         phile.launcher.Descriptor(
             after={'phile.tray.text', 'pyside2'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.tray.text', 'pyside2'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -588,7 +610,9 @@ async def add_tray_text(
         'phile.tray.text',
         phile.launcher.Descriptor(
             after={'phile.tray'},
+            before={'phile_shutdown.target'},
             binds_to={'phile.tray'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )
@@ -614,11 +638,13 @@ async def add_tray_tmux(
                 'phile.tmux.control_mode',
                 'watchdog.observer',
             },
+            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.tmux.control_mode',
                 'watchdog.observer',
             },
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_tray_tmux,
@@ -654,6 +680,8 @@ async def add_trigger(
     await launcher_registry.database.add(
         'phile.trigger',
         phile.launcher.Descriptor(
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     phile_trigger_registry,
@@ -751,11 +779,13 @@ async def add_trigger_watchdog(
                 'phile.trigger',
                 'watchdog.asyncio.observer',
             },
+            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.trigger',
                 'watchdog.asyncio.observer',
             },
+            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         ),
@@ -894,6 +924,8 @@ async def add_watchdog_observer(
     await launcher_registry.database.add(
         'watchdog.observer',
         phile.launcher.Descriptor(
+            before={'phile_shutdown.target'},
+            conflicts={'phile_shutdown.target'},
             exec_start=[
                 functools.partial(
                     watchdog_observer,
