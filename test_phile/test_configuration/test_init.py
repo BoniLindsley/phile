@@ -68,6 +68,11 @@ class TestImapEntries(unittest.TestCase):
 
 class PreparesEntries(unittest.TestCase):
 
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.configuration_path: pathlib.Path
+        self.state_directory_path: pathlib.Path
+
     def setUp(self) -> None:
         """Do not use user configurations for testing."""
         # pylint: disable=consider-using-with
@@ -86,6 +91,18 @@ class PreparesEntries(unittest.TestCase):
             PHILE_CONFIGURATION_PATH=str(self.configuration_path),
             PHILE_STATE_DIRECTORY_PATH=str(self.state_directory_path),
         )
+
+
+class UsesConfiguration(PreparesEntries, unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.configuration: phile.configuration.Entries
+
+    def setUp(self) -> None:
+        """Do not use user configurations for testing."""
+        super().setUp()
+        self.configuration = phile.configuration.load()
 
 
 class TestEntries(PreparesEntries, unittest.TestCase):

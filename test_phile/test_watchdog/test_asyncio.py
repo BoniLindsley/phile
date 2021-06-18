@@ -19,6 +19,7 @@ import watchdog.events
 # Internal packages.
 import phile.asyncio
 import phile.asyncio.pubsub
+import phile.unittest
 import phile.watchdog.asyncio
 import phile.watchdog.observers
 
@@ -39,6 +40,7 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         self.watched_directory: tempfile.TemporaryDirectory[str]
 
     async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
         watched_directory = (  # pylint: disable=consider-using-with
             tempfile.TemporaryDirectory()
         )
@@ -172,6 +174,7 @@ class TestObserver(unittest.IsolatedAsyncioTestCase):
         self.watched_directory: tempfile.TemporaryDirectory[str]
 
     async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
         watched_directory = (  # pylint: disable=consider-using-with
             tempfile.TemporaryDirectory()
         )
@@ -198,6 +201,54 @@ class TestObserver(unittest.IsolatedAsyncioTestCase):
                 event,
                 watchdog.events.FileCreatedEvent(str(file_path)),
             )
+
+
+class UsesObserver(unittest.IsolatedAsyncioTestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        self.observer: phile.watchdog.asyncio.BaseObserver
+        super().__init__(*args, **kwargs)
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.observer = phile.watchdog.asyncio.Observer()
+
+    async def assert_watchdog_emits(
+        self,
+        source_view: (
+            phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
+        ),
+        expected_event: watchdog.events.FileSystemEvent,
+    ) -> None:
+        received_events: list[watchdog.events.FileSystemEvent] = []
+
+        async def run() -> None:
+            async for event in source_view:
+                if event == expected_event:
+                    return
+                received_events.append(event)
+
+        try:
+            await phile.asyncio.wait_for(run())
+        except BaseException as error:
+            message = (
+                '{expected_event} not found.\n'
+                'Received: {received_events}'.format(
+                    expected_event=expected_event,
+                    received_events=received_events,
+                )
+            )
+            raise self.failureException(message) from error
+
+    async def schedule_watchdog_observer(
+        self, path: pathlib.Path
+    ) -> phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]:
+        observer = self.observer
+        event_queue = await phile.asyncio.wait_for(
+            observer.schedule(str(path))
+        )
+        self.addAsyncCleanup(observer.unschedule, str(path))
+        return event_queue.__aiter__()
 
 
 async def to_async_iter(

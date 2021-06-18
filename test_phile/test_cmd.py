@@ -27,6 +27,12 @@ class _Cmd(cmd.Cmd):
 
 class _UsesCmd(unittest.TestCase):
 
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.stdin: io.StringIO
+        self.stdout: io.StringIO
+        self.cmd: _Cmd
+
     def setUp(self) -> None:
         super().setUp()
         self.stdin = io.StringIO()

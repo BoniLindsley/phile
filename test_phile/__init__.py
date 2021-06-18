@@ -16,6 +16,7 @@
 .. automodule:: test_phile.test_tmux
 .. automodule:: test_phile.test_tray
 .. automodule:: test_phile.test_trigger
+.. automodule:: test_phile.test_unittest
 .. automodule:: test_phile.test_watchdog
 .. automodule:: test_phile.threaded_mock
 """

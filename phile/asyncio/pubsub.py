@@ -98,6 +98,12 @@ class Queue(typing.Generic[_T]):
     def __aiter__(self) -> View[_T]:
         return View[_T](next_node=self._next_node)
 
+    def close(self) -> None:
+        try:
+            self.put_done()
+        except Node.AlreadySet:
+            pass
+
     async def get(self) -> _T:
         return await self._next_node.get()
 

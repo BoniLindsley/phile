@@ -64,5 +64,5 @@ def q_icon_from_theme(name: str) -> PySide2.QtGui.QIcon:
     for theme_name in theme_names_to_try:
         current_icon = q_icon_from_specified_theme(name, theme_name)
         if not current_icon.isNull():
-            return current_icon
+            return current_icon  # pragma: no cover
     return QIcon()

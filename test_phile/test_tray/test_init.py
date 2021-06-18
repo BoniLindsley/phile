@@ -6,180 +6,62 @@ Test :mod:`phile.tray.tray_file`
 """
 
 # Standard library.
-import collections.abc
-import functools
 import pathlib
-import tempfile
 import typing
 import unittest
 
 # Internal packages.
-import phile
 import phile.asyncio
 import phile.asyncio.pubsub
-import phile.configuration
-import phile.watchdog.asyncio
 import phile.tray
-from test_phile.test_configuration.test_init import (
-    PreparesEntries as PreparesConfigurationEntries
-)
 
 
-class TestFileCheckPath(unittest.TestCase):
-    """Tests :meth:`~phile.tray.File.check_path`."""
+class TestEntry(unittest.TestCase):
 
-    def set_up_configuration(self) -> None:
-        tray_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
-        )
-        self.addCleanup(tray_directory.cleanup)
-        self.configuration = configuration = (
-            phile.Configuration(
-                tray_directory=pathlib.Path(tray_directory.name),
-                tray_suffix='.tt'
-            )
-        )
-        self.tray_directory = (configuration.tray_directory)
-        self.tray_suffix = configuration.tray_suffix
-
-    def set_up_path_filter(self) -> None:
-        self.path_filter = functools.partial(
-            phile.tray.File.check_path, configuration=self.configuration
+    def test_construct_signatures(self) -> None:
+        phile.tray.Entry(name='n')
+        phile.tray.Entry(
+            name='n',
+            icon_name='i',
+            icon_path=pathlib.Path('p'),
+            text_icon='t',
         )
 
-    def setUp(self) -> None:
-        self.set_up_configuration()
-        self.set_up_path_filter()
-
-    def test_match(self) -> None:
-        """Check an explicit path that should pass."""
-        name = 'name' + self.tray_suffix
-        path = self.tray_directory / name
-        self.assertTrue(
-            phile.tray.File.check_path(
-                configuration=self.configuration, path=path
-            )
+    def test_available_attributes(self) -> None:
+        entry = phile.tray.Entry(
+            name='n',
+            icon_name='i',
+            icon_path=pathlib.Path('p'),
+            text_icon='t',
         )
+        self.assertEqual(entry.name, 'n')
+        self.assertEqual(entry.icon_name, 'i')
+        self.assertEqual(entry.icon_path, pathlib.Path('p'))
+        self.assertEqual(entry.text_icon, 't')
 
-    def test_partial_for_filter(self) -> None:
-        """
-        Usable as a single parameter callback
-        using :func:`~functools.partial`.
-        """
-        name = 'name' + self.tray_suffix
-        path = self.tray_directory / name
-        self.assertTrue(self.path_filter(path))
-
-    def test_make_path_result(self) -> None:
-        """Result of :meth:`~phile.tray.File.make_path` should pass."""
-        path_stem = 'stem'
-        path = phile.tray.File.make_path(
-            configuration=self.configuration, path_stem=path_stem
-        )
-        self.assertTrue(self.path_filter(path))
-
-    def test_directory_mismatch(self) -> None:
-        name = 'name' + self.tray_suffix
-        path = self.tray_directory / name / name
-        self.assertTrue(not self.path_filter(path))
-
-    def test_suffix_mismatch(self) -> None:
-        name = 'name' + self.tray_suffix + '_not'
-        path = self.tray_directory / name
-        self.assertTrue(not self.path_filter(path))
+    def test_default_attributes(self) -> None:
+        entry = phile.tray.Entry(name='n')
+        self.assertEqual(entry.name, 'n')
+        self.assertIsNone(entry.icon_name)
+        self.assertIsNone(entry.icon_path)
+        self.assertIsNone(entry.text_icon)
 
 
-class TestFile(unittest.TestCase):
-    """Tests :class:`~phile.tray.File`."""
-
-    def setUp(self) -> None:
-        """
-        Create a directory to use as a tray directory.
-
-        The directories are recreated for each test
-        to make sure no leftover files from tests
-        would interfere with each other.
-        """
-        tray_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
-        )
-        self.addCleanup(tray_directory.cleanup)
-        self.tray_directory_path = pathlib.Path(tray_directory.name)
-        self.configuration = phile.Configuration(
-            tray_directory=self.tray_directory_path
-        )
-        self.name = 'clock'
-        self.path = self.configuration.tray_directory / (
-            self.name + self.configuration.tray_suffix
-        )
-        self.tray = phile.tray.File(path=self.path)
-
-    def test_construct_with_path(self) -> None:
-        """Constructing with just path should be possible."""
-        tray = phile.tray.File(self.path)
-        self.assertEqual(tray.path, self.path)
-
-    def test_load(self) -> None:
-        """Parse a tray file for information."""
-        data = {
-            'icon_name': 'phile-tray',
-            'icon_path': self.tray_directory_path / 'phile-tray-read',
-            'text_icon': 'N',
-        }
-        content = '{text_icon}\n{{'
-        content += '"icon_name": "{icon_name}"'
-        content += ',"icon_path": "{icon_path}"'
-        content += '}}'
-        content = content.format(**data)
-        self.tray.path.write_text(content)
-        self.assertTrue(self.tray.load())
-        self.assertEqual(self.tray.icon_name, data['icon_name'])
-        self.assertEqual(self.tray.icon_path, data['icon_path'])
-        self.assertEqual(self.tray.text_icon, data['text_icon'])
-
-    def test_load_fails_decoading(self) -> None:
-        """Load returns false if JSON decoding fails.."""
-        self.tray.path.write_text('\nA\n')
-        self.assertTrue(not self.tray.load())
-
-    def test_save(self) -> None:
-        """Save a tray file with some information."""
-        data = {
-            'icon_name': 'phile-tray',
-            'text_icon': 'N',
-        }
-        expected_content = '{text_icon}\n{{'
-        expected_content += '"icon_name": "{icon_name}"'
-        expected_content += '}}'
-        expected_content = expected_content.format(**data)
-        self.tray.icon_name = data['icon_name']
-        self.tray.text_icon = data['text_icon']
-        self.tray.save()
-        content = self.tray.path.read_text()
-        self.assertEqual(content, expected_content)
-
-    def test_save_nothing(self) -> None:
-        """Savea blank tray file. It should still have a new line."""
-        self.tray.save()
-        content = self.tray.path.read_text()
-        self.assertTrue(not content)
-
-
-class TestFilesToText(unittest.TestCase):
-    """Tests :func:`~phile.tray.files_to_text`."""
+class TestEntriesToText(unittest.TestCase):
+    """Tests :func:`~phile.tray.entries_to_text`."""
 
     def test_merge(self) -> None:
-        File = phile.tray.File
+        Entry = phile.tray.Entry
         self.assertEqual(
-            phile.tray.files_to_text(
-                files=[
-                    File(path=pathlib.Path(), text_icon='Tray'),
-                    File(path=pathlib.Path(), text_icon='Files'),
-                    File(path=pathlib.Path(), text_icon='To'),
-                    File(path=pathlib.Path(), text_icon='Tray'),
-                    File(path=pathlib.Path(), text_icon='Text'),
+            phile.tray.entries_to_text(
+                entries=[
+                    Entry(name='1', text_icon='Tray'),
+                    Entry(name='2', text_icon='Entries'),
+                    Entry(name='3', text_icon='To'),
+                    Entry(name='4', text_icon='Tray'),
+                    Entry(name='5', text_icon='Text'),
                 ]
-            ), 'TrayFilesToTrayText'
+            ), 'TrayEntriesToTrayText'
         )
 
 
@@ -196,35 +78,24 @@ class TestEventType(unittest.TestCase):
 
 class TestEvent(unittest.TestCase):
 
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.tray_directory_path: pathlib.Path
-        super().__init__(*args, **kwargs)
-
-    def setUp(self) -> None:
-        tray_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
-        )
-        self.addCleanup(tray_directory.cleanup)
-        self.tray_directory_path = pathlib.Path(tray_directory.name)
-
     def test_initialisation(self) -> None:
         phile.tray.Event(
-            type=phile.tray.EventType.INSERT,
+            type=phile.tray.EventType.POP,
             index=0,
-            changed_entry=phile.tray.Entry(self.tray_directory_path),
+            changed_entry=phile.tray.Entry(name='n'),
             current_entries=[],
         )
 
     def test_members(self) -> None:
-        entry = phile.tray.Entry(self.tray_directory_path / 'x')
+        entry = phile.tray.Entry(name='x')
         event = phile.tray.Event(
-            type=phile.tray.EventType.POP,
-            index=1,
+            type=phile.tray.EventType.SET,
+            index=0,
             changed_entry=entry,
             current_entries=[entry],
         )
-        self.assertEqual(event.type, phile.tray.EventType.POP)
-        self.assertEqual(event.index, 1)
+        self.assertEqual(event.type, phile.tray.EventType.SET)
+        self.assertEqual(event.index, 0)
         self.assertEqual(event.changed_entry, entry)
         self.assertEqual(event.current_entries, [entry])
 
@@ -232,477 +103,283 @@ class TestEvent(unittest.TestCase):
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.event_view: collections.abc.AsyncIterator[phile.tray.Event]
-        self.tray_directory_path: pathlib.Path
-        self.tray_entry: phile.tray.Entry
-        self.tray_path: pathlib.Path
         self.tray_registry: phile.tray.Registry
         super().__init__(*args, **kwargs)
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        tray_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
-        )
-        self.addCleanup(tray_directory.cleanup)
-        self.tray_directory_path = pathlib.Path(tray_directory.name)
-        self.tray_path = self.tray_directory_path / 't.t'
-        self.tray_entry = phile.tray.Entry(
-            self.tray_directory_path / 't.t',
-        )
-        self.tray_registry = tray_registry = phile.tray.Registry()
-        self.event_view = tray_registry.event_publisher.__aiter__()
+        self.tray_registry = phile.tray.Registry()
 
     def test_default_initialisable(self) -> None:
         self.assertIsInstance(self.tray_registry, phile.tray.Registry)
 
     def test_has_attributes(self) -> None:
         self.assertIsInstance(
-            self.tray_registry.event_publisher,
+            self.tray_registry.event_queue,
             phile.asyncio.pubsub.Queue,
         )
         self.assertEqual(
             self.tray_registry.current_entries,
             list[phile.tray.Entry](),
         )
-
-    def test_update_new_entry(self) -> None:
-        self.tray_path.write_text('abc')
-        self.tray_registry.update(self.tray_path)
         self.assertEqual(
-            self.tray_registry.current_entries,
-            [self.tray_entry],
-        )
-        self.assertEqual(
-            phile.tray.files_to_text(self.tray_registry.current_entries),
-            'abc',
+            self.tray_registry.current_names,
+            list[phile.tray.Entry](),
         )
 
-    async def test_publishes_new_entry(self) -> None:
-        self.test_update_new_entry()
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
+    def test_current_names_is_cache_of_current_entry_names(self) -> None:
+        self.assertEqual(
+            self.tray_registry.current_names,
+            [entry.name for entry in self.tray_registry.current_entries],
+        )
+
+    def test_current_names_is_sorted_and_so_is_current_entries(
+        self
+    ) -> None:
+        self.assertEqual(
+            self.tray_registry.current_names,
+            sorted(self.tray_registry.current_names),
+        )
+
+    def test_current_names_invariants(self) -> None:
+        self.test_current_names_is_cache_of_current_entry_names()
+        self.test_current_names_is_sorted_and_so_is_current_entries()
+
+    def test_set_new_entry_inserts(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        self.assertEqual(
+            self.tray_registry.current_entries, [tray_entry]
+        )
+        self.test_current_names_invariants()
+
+    async def test_set_new_entry_emits_events(self) -> None:
+        event_view = self.tray_registry.event_queue.__aiter__()
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        event = await phile.asyncio.wait_for(event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
                 type=phile.tray.EventType.INSERT,
                 index=0,
-                changed_entry=self.tray_entry,
-                current_entries=[self.tray_entry],
+                changed_entry=tray_entry,
+                current_entries=[tray_entry],
             )
         )
 
-    def test_update_extra_entry(self) -> None:
-        self.test_update_new_entry()
-        tray_path = self.tray_directory_path / 't2.t'
-        tray_path.write_text('def')
-        self.tray_registry.update(tray_path)
+    def test_set_another_entry_inserts(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        another_entry = phile.tray.Entry(name='def')
+        self.tray_registry.set(another_entry)
         self.assertEqual(
             self.tray_registry.current_entries,
-            [
-                self.tray_entry,
-                phile.tray.Entry(tray_path),
-            ],
+            [tray_entry, another_entry]
         )
-        self.assertEqual(
-            phile.tray.files_to_text(self.tray_registry.current_entries),
-            'abcdef',
-        )
+        self.test_current_names_invariants()
 
-    async def test_publishes_extra_entry(self) -> None:
-        self.test_update_extra_entry()
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
+    def test_set_another_entry_with_smaller_name_inserts(self) -> None:
+        tray_entry = phile.tray.Entry(name='def')
+        self.tray_registry.set(tray_entry)
+        another_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(another_entry)
         self.assertEqual(
-            event,
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
-                index=0,
-                changed_entry=self.tray_entry,
-                current_entries=[self.tray_entry],
-            ),
+            self.tray_registry.current_entries,
+            [another_entry, tray_entry]
         )
-        tray_entry = phile.tray.Entry(self.tray_directory_path / 't2.t')
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
+        self.test_current_names_invariants()
+
+    async def test_set_another_entry_emits_with_correct_index(
+        self
+    ) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        event_view = self.tray_registry.event_queue.__aiter__()
+        another_entry = phile.tray.Entry(name='def')
+        self.tray_registry.set(another_entry)
+        self.assertEqual(
+            self.tray_registry.current_entries,
+            [tray_entry, another_entry]
+        )
+        event = await phile.asyncio.wait_for(event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
                 type=phile.tray.EventType.INSERT,
                 index=1,
-                changed_entry=tray_entry,
-                current_entries=[self.tray_entry, tray_entry],
-            ),
-        )
-
-    def test_update_old_entry(self) -> None:
-        self.test_update_new_entry()
-        self.tray_path.write_text('def')
-        self.tray_registry.update(self.tray_path)
-        self.assertEqual(
-            self.tray_registry.current_entries,
-            [self.tray_entry],
-        )
-        self.assertEqual(
-            phile.tray.files_to_text(self.tray_registry.current_entries),
-            'def',
-        )
-
-    async def test_publishes_old_entry(self) -> None:
-        self.test_update_old_entry()
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
-        self.assertEqual(
-            event,
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
-                index=0,
-                changed_entry=self.tray_entry,
-                current_entries=[self.tray_entry],
+                changed_entry=another_entry,
+                current_entries=[tray_entry, another_entry],
             )
         )
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
+
+    def test_set_existing_entry_updates(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        tray_entry.text_icon = 'n'
+        self.tray_registry.set(tray_entry)
+        self.assertEqual(
+            self.tray_registry.current_entries, [tray_entry]
+        )
+        self.test_current_names_invariants()
+
+    async def test_set_existing_entry_emits_event(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        event_view = self.tray_registry.event_queue.__aiter__()
+        tray_entry.text_icon = 'n'
+        self.tray_registry.set(tray_entry)
+        event = await phile.asyncio.wait_for(event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
                 type=phile.tray.EventType.SET,
                 index=0,
-                changed_entry=self.tray_entry,
-                current_entries=[self.tray_entry],
+                changed_entry=tray_entry,
+                current_entries=[tray_entry],
             )
         )
 
-    def test_update_deleted_entry(self) -> None:
-        self.test_update_new_entry()
-        self.tray_path.unlink()
-        self.tray_registry.update(self.tray_path)
-        self.assertEqual(self.tray_registry.current_entries, [])
-        self.assertEqual(
-            phile.tray.files_to_text(self.tray_registry.current_entries),
-            '',
-        )
-
-    async def test_publishes_deleted_entry(self) -> None:
-        self.test_update_deleted_entry()
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
+    async def test_set_same_entry_does_not_emit_event(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        event_view = self.tray_registry.event_queue.__aiter__()
+        self.tray_registry.set(tray_entry)
+        # Test that no event was emitted by doing something
+        # that would emit another event.
+        another_entry = phile.tray.Entry(name=tray_entry.name + 'd')
+        self.tray_registry.set(another_entry)
+        event = await phile.asyncio.wait_for(event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
                 type=phile.tray.EventType.INSERT,
-                index=0,
-                changed_entry=self.tray_entry,
-                current_entries=[self.tray_entry],
+                index=1,
+                changed_entry=another_entry,
+                current_entries=[tray_entry, another_entry],
             )
         )
-        event = await phile.asyncio.wait_for(self.event_view.__anext__())
+
+    def test_pop_entry_removes(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        another_entry = phile.tray.Entry(name='def')
+        self.tray_registry.set(another_entry)
+        self.tray_registry.pop(tray_entry.name)
+        self.assertEqual(
+            self.tray_registry.current_entries, [another_entry]
+        )
+        self.test_current_names_invariants()
+
+    def test_pop_last_entry_clears(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        self.tray_registry.pop(tray_entry.name)
+        self.assertEqual(self.tray_registry.current_entries, [])
+        self.test_current_names_invariants()
+
+    def test_pop_unknown_entry_ignored(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        another_entry = phile.tray.Entry(name='def')
+        self.tray_registry.pop(another_entry.name)
+        self.assertEqual(
+            self.tray_registry.current_entries, [tray_entry]
+        )
+        self.test_current_names_invariants()
+
+    def test_pop_unknown_entry_ignored_even_if_name_is_not_at_end(
+        self
+    ) -> None:
+        tray_entry = phile.tray.Entry(name='def')
+        self.tray_registry.set(tray_entry)
+        another_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.pop(another_entry.name)
+        self.assertEqual(
+            self.tray_registry.current_entries, [tray_entry]
+        )
+        self.test_current_names_invariants()
+
+    async def test_pop_entry_emits_event(self) -> None:
+        tray_entry = phile.tray.Entry(name='abc')
+        self.tray_registry.set(tray_entry)
+        event_view = self.tray_registry.event_queue.__aiter__()
+        self.tray_registry.pop(tray_entry.name)
+        event = await phile.asyncio.wait_for(event_view.__anext__())
         self.assertEqual(
             event,
             phile.tray.Event(
                 type=phile.tray.EventType.POP,
                 index=0,
-                changed_entry=self.tray_entry,
+                changed_entry=tray_entry,
                 current_entries=[],
             )
         )
 
-    def test_update_ignores_missing_entry(self) -> None:
-        self.tray_registry.update(self.tray_path)
-        self.assertEqual(self.tray_registry.current_entries, [])
-        self.assertEqual(
-            phile.tray.files_to_text(self.tray_registry.current_entries),
-            '',
-        )
-
-
-class TestProvideRegistry(
-    PreparesConfigurationEntries,
-    unittest.IsolatedAsyncioTestCase,
-):
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.configuration: phile.configuration.Entries
-        self.event_view: collections.abc.AsyncIterator[phile.tray.Event]
-        self.observer: phile.watchdog.asyncio.Observer
-        self.tray_directory: pathlib.Path
-        self.tray_entry: phile.tray.Entry
-        self.tray_path: pathlib.Path
-
-    async def asyncSetUp(self) -> None:
-        await super().asyncSetUp()
-        self.configuration = phile.configuration.load()
-        self.observer = phile.watchdog.asyncio.Observer()
-        self.tray_directory = (
-            self.configuration.state_directory_path /
-            self.configuration.tray_directory
-        )
-        self.tray_directory.mkdir()
-        self.tray_path = self.tray_directory / (
-            't' + self.configuration.tray_suffix
-        )
-        self.tray_entry = phile.tray.Entry(self.tray_path)
-
-    async def wait_for_event(
-        self, expected_event: phile.tray.Event
-    ) -> None:
-        async for event in self.event_view:
-            if event == expected_event:
-                break
-
-    async def test_context_exit_stops_publisher(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
+    async def test_close_ends_event_queue(self) -> None:
+        self.tray_registry.close()
+        event_view = self.tray_registry.event_queue.__aiter__()
         with self.assertRaises(StopAsyncIteration):
-            await phile.asyncio.wait_for(self.event_view.__anext__())
+            await phile.asyncio.wait_for(event_view.__anext__())
 
-    async def test_create_entry(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            self.tray_path.write_text('abc')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-
-    async def test_create_two_entries(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            self.tray_path.write_text('abc')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.SET,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-            tray_path_2 = self.tray_directory / (
-                't2' + self.configuration.tray_suffix
-            )
-            tray_path_2.write_text('def')
-            tray_entry_2 = phile.tray.Entry(tray_path_2)
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=1,
-                    changed_entry=tray_entry_2,
-                    current_entries=[self.tray_entry, tray_entry_2],
-                )
-            )
-
-    async def test_modify_entry(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            self.tray_path.write_text('abc')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-            self.tray_path.write_text('def')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.SET,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-
-    async def test_delete_entry(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            self.tray_path.write_text('abc')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-            self.tray_path.unlink()
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.POP,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[],
-                )
-            )
-
-    async def test_move_entry(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            self.tray_path.write_text('abc')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-            tray_path_2 = self.tray_directory / (
-                't2' + self.configuration.tray_suffix
-            )
-            self.tray_path.rename(tray_path_2)
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.POP,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[],
-                )
-            )
-            tray_entry_2 = phile.tray.Entry(tray_path_2)
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=tray_entry_2,
-                    current_entries=[tray_entry_2],
-                )
-            )
-
-    async def test_ignores_wrong_suffix(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            wrong_tray_path = self.tray_directory / (
-                'wrong' + self.configuration.tray_suffix + '_s'
-            )
-            wrong_tray_path.write_text('abc')
-            # We test this by trying to get an event
-            # that shoudl nto be ignored.
-            # Cannot test with exiting context manager
-            # because of race condition
-            # between detecting file change and the exit.
-            self.tray_path.write_text('abc')
-            event = await phile.asyncio.wait_for(
-                self.event_view.__anext__()
-            )
-            self.assertEqual(
-                event,
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-
-    async def test_ignore_wrong_moved_to_entry(self) -> None:
-        async with phile.tray.provide_registry(
-            configuration=self.configuration, observer=self.observer
-        ) as tray_registry:
-            self.event_view = tray_registry.event_publisher.__aiter__()
-            self.tray_path.write_text('abc')
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
-            tray_path_2 = self.tray_directory / (
-                't2' + self.configuration.tray_suffix + '_wrong'
-            )
-            self.tray_path.rename(tray_path_2)
-            await self.wait_for_event(
-                phile.tray.Event(
-                    type=phile.tray.EventType.POP,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[],
-                )
-            )
-            # Ensure the moved-to target is ignored
-            # by checking for new events.
-            self.tray_path.write_text('abc')
-            event = await phile.asyncio.wait_for(
-                self.event_view.__anext__()
-            )
-            self.assertEqual(
-                event,
-                phile.tray.Event(
-                    type=phile.tray.EventType.INSERT,
-                    index=0,
-                    changed_entry=self.tray_entry,
-                    current_entries=[self.tray_entry],
-                )
-            )
+    async def test_warns_if_setting_after_close(self) -> None:
+        self.tray_registry.close()
+        with self.assertWarns(UserWarning):
+            self.tray_registry.set(phile.tray.Entry(name='n'))
 
 
-class TestFullTextPublisher(unittest.IsolatedAsyncioTestCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.publisher = phile.tray.FullTextPublisher()
-
-    def test_attributes_exist(self) -> None:
-        self.assertEqual(self.publisher.current_value, '')
-
-    def test_push_records_pushed_message(self) -> None:
-        self.publisher.put('abc')
-        self.assertEqual(self.publisher.current_value, 'abc')
-
-
-class TestProvideFullText(unittest.IsolatedAsyncioTestCase):
+class TestTextIcons(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.tray_directory_path: pathlib.Path
-        self.tray_path: pathlib.Path
+        self.text_icons: phile.tray.TextIcons
         self.tray_registry: phile.tray.Registry
         super().__init__(*args, **kwargs)
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        tray_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
+        self.tray_registry = tray_registry = phile.tray.Registry()
+        self.text_icons = phile.tray.TextIcons(
+            tray_registry=tray_registry
         )
-        self.addCleanup(tray_directory.cleanup)
-        self.tray_directory_path = pathlib.Path(tray_directory.name)
-        self.tray_path = self.tray_directory_path / 't.t'
-        self.tray_registry = phile.tray.Registry()
 
-    async def test_context_exit_stops_publisher(self) -> None:
-        async with phile.tray.provide_full_text(
-            tray_registry=self.tray_registry,
-        ) as full_text_publisher:
-            event_view = full_text_publisher.__aiter__()
+    def test_available_attributes(self) -> None:
+        self.assertIsInstance(self.text_icons.current_value, str)
+        self.assertIsInstance(
+            self.text_icons.event_queue, phile.asyncio.pubsub.Queue
+        )
+
+    async def test_set_entry_emits_event(self) -> None:
+        event_view = self.text_icons.event_queue.__aiter__()
+        self.tray_registry.set(
+            phile.tray.Entry(name='n', text_icon='abc')
+        )
+        full_text = await phile.asyncio.wait_for(event_view.__anext__())
+        self.assertEqual(full_text, 'abc')
+
+    async def test_set_entry_updates_current_value(self) -> None:
+        event_view = self.text_icons.event_queue.__aiter__()
+        self.tray_registry.set(
+            phile.tray.Entry(name='n', text_icon='abc')
+        )
+        full_text = await phile.asyncio.wait_for(event_view.__anext__())
+        self.assertEqual(self.text_icons.current_value, full_text)
+
+    async def test_set_entry_text_to_same_value_is_ignored(self) -> None:
+        event_view = self.text_icons.event_queue.__aiter__()
+        self.tray_registry.set(
+            phile.tray.Entry(name='n', text_icon='abc')
+        )
+        full_text = await phile.asyncio.wait_for(event_view.__anext__())
+        self.assertEqual(full_text, 'abc')
+        self.tray_registry.set(
+            phile.tray.Entry(name='n', icon_name='i', text_icon='abc')
+        )
+        await phile.asyncio.wait_for(self.text_icons.aclose())
         with self.assertRaises(StopAsyncIteration):
             await phile.asyncio.wait_for(event_view.__anext__())
 
-    async def test_new_file(self) -> None:
-        async with phile.tray.provide_full_text(
-            tray_registry=self.tray_registry
-        ) as full_text_publisher:
-            event_view = full_text_publisher.__aiter__()
-            self.tray_path.write_text('abc\n{}')
-            self.tray_registry.update(self.tray_path)
-            new_text = await phile.asyncio.wait_for(
-                event_view.__anext__()
-            )
-            self.assertTrue(new_text, 'abc')
-
-
-if __name__ == '__main__':
-    unittest.main()
+    async def test_aclose_ends_event_queue(self) -> None:
+        await phile.asyncio.wait_for(self.text_icons.aclose())
+        event_view = self.text_icons.event_queue.__aiter__()
+        with self.assertRaises(StopAsyncIteration):
+            await phile.asyncio.wait_for(event_view.__anext__())

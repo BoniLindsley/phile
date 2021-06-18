@@ -1,134 +1,43 @@
 #!/usr/bin/env python3
 """
-.. automodule:: phile.tray.gui
+.. automodule:: phile.tray.datetime
 .. automodule:: phile.tray.imapclient
+.. automodule:: phile.tray.notify
 .. automodule:: phile.tray.psutil
-.. automodule:: phile.tray.publishers
+.. automodule:: phile.tray.pyside2_window
 .. automodule:: phile.tray.tmux
+.. automodule:: phile.tray.watchdog
 """
 
 # Standard library.
 import asyncio
 import bisect
-import collections.abc
-import contextlib
 import dataclasses
 import enum
-import functools
-import io
-import json
 import pathlib
-import shutil
 import typing
 import warnings
 
 # External dependencies.
-import watchdog.events
+import pydantic
 
 # Internal packages.
-import phile
+import phile.asyncio
 import phile.asyncio.pubsub
-import phile.configuration
-import phile.data
-import phile.watchdog.asyncio
 
 
-@dataclasses.dataclass(eq=False)
-class File(phile.data.File):
+class Entry(pydantic.BaseModel):  # pylint: disable=no-member
+    name: str
     icon_name: typing.Optional[str] = None
     icon_path: typing.Optional[pathlib.Path] = None
     text_icon: typing.Optional[str] = None
 
-    @staticmethod
-    def make_path(
-        path_stem: str,
-        *args: typing.Any,
-        configuration: phile.Configuration,
-        **kwargs: typing.Any,
-    ) -> pathlib.Path:
-        return configuration.tray_directory / (
-            path_stem + configuration.tray_suffix
-        )
 
-    def load(self) -> bool:
-        """
-        Parse tray file for a tray icon to be displayed.
-
-        The input file should start with a single line
-        that can be displayed in a text tray environment such as `tmux`.
-
-        The remaining lines should describe the request in json format.
-        It should contain the following keys:
-
-        * `icon_path` or `icon_name`: The latter is searched for
-          from the underlying theme setup.
-
-        It should not contan any other keys,
-        and may be ignored, subject to implementation details.
-        """
-
-        # Buffer the file content to reduce the chance of file changes
-        # introducing a race condition.
-        try:
-            content_stream = io.StringIO(self.path.read_text())
-        except (FileNotFoundError, IsADirectoryError):
-            return False
-        # First line is the text icon.
-        # Do not write content yet in case JSON decoding fails.
-        text_icon = content_stream.readline().rstrip('\r\n')
-        # Make sure there are content to read by reading one byte
-        # and then resetting the offset before decoding.
-        current_offset = content_stream.tell()
-        if content_stream.read(1):
-            content_stream.seek(current_offset)
-            try:
-                json_content = json.load(content_stream)
-            except json.decoder.JSONDecodeError:
-                return False
-        else:
-            json_content = {}
-        # Get properties from the decoded structure.
-        self.text_icon = text_icon
-        self.icon_name = json_content.get('icon_name')
-        icon_path = json_content.get('icon_path')
-        if icon_path is not None:
-            self.icon_path = pathlib.Path(icon_path)
-        else:
-            self.icon_path = None
-        return True
-
-    def save(self) -> None:
-        # Buffer for data to be written.
-        content_stream = io.StringIO()
-        # First line is the text icon.
-        if self.text_icon is not None:
-            content_stream.write(self.text_icon)
-        # Only copy over values that are filled in.
-        json_content: typing.Dict[str, str] = {}
-        for key in ['icon_name', 'icon_path']:
-            value = getattr(self, key, None)
-            if value is not None:
-                json_content[key] = str(value)
-        # If there is content to write, end the text icon line
-        # before writing the JSON string.
-        if json_content:
-            content_stream.write('\n')
-            json.dump(json_content, content_stream)
-        # Copy over the buffer.
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open('w+') as file_stream:
-            content_stream.seek(0)
-            shutil.copyfileobj(content_stream, file_stream)
-
-
-def files_to_text(files: typing.List[File]) -> str:
+def entries_to_text(entries: typing.List[Entry]) -> str:
     return ''.join(
-        tray_file.text_icon for tray_file in files
-        if tray_file.text_icon is not None
+        tray_entry.text_icon for tray_entry in entries
+        if tray_entry.text_icon is not None
     )
-
-
-Entry = File
 
 
 class EventType(enum.Enum):
@@ -151,130 +60,108 @@ class Registry:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.current_entries: list[Entry] = []
-        self.event_publisher = phile.asyncio.pubsub.Queue[Event]()
+        self.current_names: list[str] = []
+        """Sorted cache, tracking names of entries."""
+        self.event_queue = phile.asyncio.pubsub.Queue[Event]()
 
-    def update(self, data_path: pathlib.Path) -> None:
-        index = bisect.bisect_left(self.current_entries, data_path)
-        is_tracked = False
-        entry: Entry
-        event_type: EventType
+    def close(self) -> None:
+        self.event_queue.close()
+
+    def pop(self, name: str) -> None:
+        index = bisect.bisect_left(self.current_names, name)
         try:
-            entry = self.current_entries[index]
-        except IndexError:
-            pass
-        else:
-            is_tracked = (entry.path == data_path)
-        if not is_tracked:
-            entry = Entry(data_path)
-        if not entry.load():
-            if is_tracked:
-                entry = self.current_entries.pop(index)
-                event_type = EventType.POP
-            else:
+            if self.current_names[index] != name:
                 return
-        elif is_tracked:
-            self.current_entries[index] = entry
-            event_type = EventType.SET
-        else:
-            self.current_entries.insert(index, entry)
-            event_type = EventType.INSERT
-        self.event_publisher.put(
+        except IndexError:
+            return
+        old_entry = self.current_entries.pop(index)
+        self.current_names.pop(index)
+        self._put_event(
             Event(
-                type=event_type,
+                type=EventType.POP,
                 index=index,
-                changed_entry=entry,
+                changed_entry=old_entry,
                 current_entries=self.current_entries.copy(),
             ),
         )
 
-
-@contextlib.asynccontextmanager
-async def provide_registry(
-    configuration: phile.configuration.Entries,
-    observer: phile.watchdog.asyncio.BaseObserver,
-) -> collections.abc.AsyncIterator[Registry]:
-    tray_directory = (
-        configuration.state_directory_path / configuration.tray_directory
-    )
-    tray_suffix = configuration.tray_suffix
-    tray_registry = Registry()
-    ready = asyncio.get_running_loop().create_future()
-    try:
-
-        async def propagate_tray_events() -> None:
-            async with observer.open(
-                tray_directory
-            ) as observer_event_publisher:
-                view = observer_event_publisher.__aiter__()
-                ready.set_result(None)
-                FileMovedEvent = watchdog.events.FileMovedEvent
-                EVENT_TYPE_MOVED = (  # pylint: disable=invalid-name
-                    watchdog.events.EVENT_TYPE_MOVED
-                )
-                async for event in view:
-                    if event.is_directory:
-                        continue
-                    path = pathlib.Path(event.src_path)
-                    if path.suffix == tray_suffix:
-                        tray_registry.update(path)
-                    if event.event_type != EVENT_TYPE_MOVED:
-                        continue
-                    # Let type checker know `dest_path` is an attribute.
-                    assert isinstance(event, FileMovedEvent)
-                    path = pathlib.Path(event.dest_path)
-                    if path.suffix == tray_suffix:
-                        tray_registry.update(path)
-
-        publisher_task = asyncio.create_task(propagate_tray_events())
+    def set(self, new_entry: Entry) -> None:
+        new_entry = new_entry.copy()
+        index = bisect.bisect_left(self.current_names, new_entry.name)
         try:
-            # Ensure the task is ready to not miss events.
-            await ready
-            yield tray_registry
-        finally:
-            # Defensive.
-            # It should always cancel because no one else has the task.
-            if publisher_task.cancel():  # pragma: no branch
-                with contextlib.suppress(asyncio.CancelledError):
-                    await publisher_task
-    finally:
-        tray_registry.event_publisher.put_done()
+            old_entry = self.current_entries[index]
+        except IndexError:
+            self._insert(index, new_entry)
+            return
+        if old_entry.name != new_entry.name:
+            self._insert(index, new_entry)
+            return
+        if new_entry == old_entry:
+            return
+        del old_entry
+        self.current_entries[index] = new_entry
+        self._put_event(
+            Event(
+                type=EventType.SET,
+                index=index,
+                changed_entry=new_entry,
+                current_entries=self.current_entries.copy(),
+            ),
+        )
 
+    def _insert(self, index: int, new_entry: Entry) -> None:
+        self.current_entries.insert(index, new_entry)
+        self.current_names.insert(index, new_entry.name)
+        self._put_event(
+            Event(
+                type=EventType.INSERT,
+                index=index,
+                changed_entry=new_entry,
+                current_entries=self.current_entries.copy(),
+            ),
+        )
 
-class FullTextPublisher(phile.asyncio.pubsub.Queue[str]):
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.current_value = ''
-
-    def put(self, message: str) -> None:
-        super().put(message)
-        self.current_value = message
-
-
-@contextlib.asynccontextmanager
-async def provide_full_text(
-    tray_registry: Registry,
-) -> collections.abc.AsyncIterator[FullTextPublisher]:
-    event_publisher = FullTextPublisher()
-    ready = asyncio.get_running_loop().create_future()
-    try:
-
-        async def propagate_tray_events() -> None:
-            view = tray_registry.event_publisher.__aiter__()
-            ready.set_result(None)
-            async for event in view:
-                event_publisher.put(files_to_text(event.current_entries))
-
-        publisher_task = asyncio.create_task(propagate_tray_events())
+    def _put_event(self, event: Event) -> None:
         try:
-            # Ensure the task is ready to not miss events.
-            await ready
-            yield event_publisher
+            self.event_queue.put(event)
+        except phile.asyncio.pubsub.Node.AlreadySet:
+            warnings.warn(
+                'Registry should not be changed after closing.'
+            )
+
+
+class TextIcons:
+
+    def __init__(
+        self,
+        *args: typing.Any,
+        tray_registry: Registry,
+        **kwargs: typing.Any,
+    ) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.current_value = entries_to_text(
+            tray_registry.current_entries
+        )
+        self.event_queue = phile.asyncio.pubsub.Queue[str]()
+        self._worker_task = asyncio.create_task(
+            self._run_tray_event_loop(
+                tray_registry.event_queue.__aiter__()
+            )
+        )
+
+    async def aclose(self) -> None:
+        try:
+            await phile.asyncio.cancel_and_wait(self._worker_task)
         finally:
-            # Defensive.
-            # It should always cancel because no one else has the task.
-            if publisher_task.cancel():  # pragma: no branch
-                with contextlib.suppress(asyncio.CancelledError):
-                    await publisher_task
-    finally:
-        event_publisher.put_done()
+            self.event_queue.close()
+
+    async def _run_tray_event_loop(
+        self,
+        tray_event_view: phile.asyncio.pubsub.View[Event],
+    ) -> None:
+        async for event in tray_event_view:
+            current_value = entries_to_text(event.current_entries)
+            if self.current_value != current_value:
+                self.current_value = current_value
+                self.event_queue.put(current_value)

@@ -20,12 +20,10 @@ import watchdog.events
 
 # Internal modules.
 import phile.asyncio
-import phile.configuration
 import phile.watchdog.asyncio
 import phile.tray.psutil
-from test_phile.test_configuration.test_init import (
-    PreparesEntries as PreparesConfiguration
-)
+from test_phile.test_configuration.test_init import UsesConfiguration
+from test_phile.test_watchdog.test_asyncio import UsesObserver
 
 
 class TestVirtualMemory(unittest.TestCase):
@@ -287,13 +285,13 @@ class TestHistory(UsesPsutilMock, unittest.TestCase):
 
 class TestRun(
     UsesPsutilMock,
-    PreparesConfiguration,
+    UsesObserver,
+    UsesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.configuration: phile.configuration.Entries
-        self.observer: phile.watchdog.asyncio.Observer
+        super().__init__(*args, **kwargs)
         self.observer_event_queue: phile.watchdog.asyncio.EventQueue
         self.observer_events: (
             phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
@@ -301,31 +299,28 @@ class TestRun(
         self.refresh_interval: datetime.timedelta
         self.tray_directory: pathlib.Path
         self.tray_name: str
-        super().__init__(*args, **kwargs)
+        self.tray_target: phile.tray.watchdog.Target
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        self.configuration = configuration = phile.configuration.load()
-        self.observer = observer = phile.watchdog.asyncio.Observer()
         self.refresh_interval = datetime.timedelta(microseconds=10)
-        self.tray_directory = tray_directory = (
-            configuration.state_directory_path /
-            configuration.tray_directory
+        self.tray_directory = (
+            self.configuration.state_directory_path /
+            self.configuration.tray_directory
         )
-        tray_directory.mkdir()
+        self.tray_directory.mkdir()
+        self.observer_events = await self.schedule_watchdog_observer(
+            path=self.tray_directory
+        )
         self.tray_name = 'psps'
-        observer_event_cm = observer.open(tray_directory)
-        # pylint: disable=no-member
-        self.observer_event_queue = await observer_event_cm.__aenter__()
-        self.addAsyncCleanup(
-            observer_event_cm.__aexit__, None, None, None
+        self.tray_target = phile.tray.watchdog.Target(
+            configuration=self.configuration
         )
-        self.observer_events = self.observer_event_queue.__aiter__()
         runner = asyncio.create_task(
             phile.tray.psutil.run(
-                configuration=self.configuration,
                 refresh_interval=self.refresh_interval,
                 tray_name=self.tray_name,
+                tray_target=self.tray_target,
             )
         )
         self.addCleanup(runner.cancel)
@@ -350,6 +345,7 @@ class TestRun(
 
     async def test_updates_file_after_refresh_interval(self) -> None:
         await phile.asyncio.wait_for(
-            self.
-            wait_for_tray_file_content(' B:42%=0h00 C57 M2 W:---0/---0')
+            self.wait_for_tray_file_content(
+                ' B:42%=0h00 C57 M2 W:---0/---0',
+            )
         )

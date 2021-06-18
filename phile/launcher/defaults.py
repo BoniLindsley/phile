@@ -394,22 +394,14 @@ async def add_tray(
         ready = create_future()
 
         async def run() -> None:
-            import phile.configuration
             import phile.tray
-            import phile.watchdog.asyncio
-            configuration = (
-                capability_registry[phile.configuration.Entries]
-            )
-            observer = (
-                capability_registry[phile.watchdog.asyncio.BaseObserver]
-            )
-            async with phile.tray.provide_registry(
-                configuration=configuration,
-                observer=observer,
-            ) as tray_registry:
+            tray_registry = phile.tray.Registry()
+            try:
                 with capability_registry.provide(tray_registry):
                     ready.set_result(True)
                     await create_future()
+            finally:
+                tray_registry.close()
 
         running_task = loop.create_task(run())
         await ready
@@ -419,15 +411,7 @@ async def add_tray(
     await launcher_registry.database.add(
         'phile.tray',
         phile.launcher.Descriptor(
-            after={
-                'phile.configuration',
-                'watchdog.asyncio.observer',
-            },
             before={'phile_shutdown.target'},
-            binds_to={
-                'phile.configuration',
-                'watchdog.asyncio.observer',
-            },
             conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
@@ -439,28 +423,23 @@ async def add_tray_datetime(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
-    async def phile_tray_publishers_datetime(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
-        import phile.tray.publishers.datetime
-        await phile.tray.publishers.datetime.run(
-            capabilities=capability_registry
+    async def run() -> None:
+        import datetime
+        import phile.tray.datetime
+        import phile.tray.watchdog
+        await phile.tray.datetime.run(
+            tray_target=capability_registry[phile.tray.watchdog.Target],
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
     await launcher_registry.database.add(
-        'phile.tray.publisher.datetime',
+        'phile.tray.datetime',
         phile.launcher.Descriptor(
-            after={'phile.configuration'},
+            after={'phile.tray.watchdog'},
             before={'phile_shutdown.target'},
-            binds_to={'phile.configuration'},
+            binds_to={'phile.tray.watchdog'},
             conflicts={'phile_shutdown.target'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_datetime,
-                    capability_registry=capability_registry,
-                ),
-            ],
+            exec_start=[run],
         )
     )
 
@@ -500,28 +479,40 @@ async def add_tray_notify(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
-    async def phile_tray_publishers_notify_monitor(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
-        import phile.tray.publishers.notify_monitor
-        await phile.tray.publishers.notify_monitor.run(
-            capabilities=capability_registry
+    async def run() -> None:
+        import phile.configuration
+        import phile.tray.notify
+        import phile.tray.watchdog
+        import phile.watchdog.asyncio
+        await phile.tray.notify.run(
+            configuration=(
+                capability_registry[phile.configuration.Entries]
+            ),
+            observer=(
+                capability_registry[phile.watchdog.asyncio.BaseObserver]
+            ),
+            tray_target=(
+                capability_registry[phile.tray.watchdog.Target]
+            ),
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
     await launcher_registry.database.add(
-        'phile.tray.publisher.notify_monitor',
+        'phile.tray.notify',
         phile.launcher.Descriptor(
-            after={'phile.configuration', 'watchdog.observer'},
+            after={
+                'phile.configuration',
+                'phile.tray.watchdog',
+                'watchdog.asyncio.observer',
+            },
             before={'phile_shutdown.target'},
-            binds_to={'phile.configuration', 'watchdog.observer'},
+            binds_to={
+                'phile.configuration',
+                'phile.tray.watchdog',
+                'watchdog.asyncio.observer',
+            },
             conflicts={'phile_shutdown.target'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_publishers_notify_monitor,
-                    capability_registry=capability_registry,
-                ),
-            ],
+            exec_start=[run],
         )
     )
 
@@ -532,18 +523,18 @@ async def add_tray_psutil(
 
     async def run() -> None:
         import phile.tray.psutil
-        configuration = (
-            capability_registry[phile.configuration.Entries]
+        import phile.tray.watchdog
+        await phile.tray.psutil.run(
+            tray_target=capability_registry[phile.tray.watchdog.Target],
         )
-        await phile.tray.psutil.run(configuration=configuration)
 
     launcher_registry = capability_registry[phile.launcher.Registry]
     await launcher_registry.database.add(
         'phile.tray.psutil',
         phile.launcher.Descriptor(
-            after={'phile.configuration'},
+            after={'phile.tray.watchdog'},
             before={'phile_shutdown.target'},
-            binds_to={'phile.configuration'},
+            binds_to={'phile.tray.watchdog'},
             conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
@@ -561,12 +552,10 @@ async def add_tray_pyside2_window(
         pyside2_executor = (
             capability_registry[phile.PySide2.QtCore.Executor]
         )
-        full_text_publisher = (
-            capability_registry[phile.tray.FullTextPublisher]
-        )
+        text_icons = capability_registry[phile.tray.TextIcons]
         await phile.tray.pyside2_window.run(
             pyside2_executor=pyside2_executor,
-            full_text_publisher=full_text_publisher,
+            text_icons=text_icons,
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
@@ -594,12 +583,15 @@ async def add_tray_text(
         async def run() -> None:
             import phile.tray
             tray_registry = capability_registry[phile.tray.Registry]
-            async with phile.tray.provide_full_text(
-                tray_registry=tray_registry,
-            ) as full_text_publisher:
-                with capability_registry.provide(full_text_publisher):
+            text_icons = phile.tray.TextIcons(
+                tray_registry=tray_registry
+            )
+            try:
+                with capability_registry.provide(text_icons):
                     ready.set_result(True)
                     await create_future()
+            finally:
+                await text_icons.aclose()
 
         running_task = loop.create_task(run())
         await ready
@@ -623,34 +615,94 @@ async def add_tray_tmux(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
-    async def phile_tray_tmux(
-        capability_registry: phile.capability.Registry,
-    ) -> None:
+    async def run() -> None:
+        import phile.tmux.control_mode
+        import phile.tray
         import phile.tray.tmux
-        await phile.tray.tmux.run(capabilities=capability_registry)
+        control_mode = (
+            capability_registry[phile.tmux.control_mode.Client]
+        )
+        text_icons = capability_registry[phile.tray.TextIcons]
+        await phile.tray.tmux.run(
+            control_mode=control_mode,
+            text_icons=text_icons,
+        )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
     await launcher_registry.database.add(
         'phile.tray.tmux',
         phile.launcher.Descriptor(
             after={
-                'phile.configuration',
                 'phile.tmux.control_mode',
-                'watchdog.observer',
+                'phile.tray.text',
+            },
+            before={'phile_shutdown.target'},
+            binds_to={
+                'phile.tmux.control_mode',
+                'phile.tray.text',
+            },
+            conflicts={'phile_shutdown.target'},
+            exec_start=[run]
+        )
+    )
+
+
+async def add_tray_watchdog(
+    capability_registry: phile.capability.Registry,
+) -> None:
+
+    async def start() -> asyncio.Future[typing.Any]:
+        loop = asyncio.get_running_loop()
+        create_future = loop.create_future
+        ready = create_future()
+
+        async def run() -> None:
+            import phile.configuration
+            import phile.tray.watchdog
+            import phile.watchdog.asyncio
+            configuration = (
+                capability_registry[phile.configuration.Entries]
+            )
+            observer = (
+                capability_registry[phile.watchdog.asyncio.BaseObserver]
+            )
+            tray_registry = capability_registry[phile.tray.Registry]
+            tray_target = phile.tray.watchdog.Target(
+                configuration=configuration
+            )
+            async with phile.tray.watchdog.async_open(
+                configuration=configuration,
+                observer=observer,
+                tray_registry=tray_registry,
+            ) as tray_source:
+                with capability_registry.provide(
+                    tray_source
+                ), capability_registry.provide(tray_target):
+                    ready.set_result(True)
+                    await create_future()
+
+        running_task = loop.create_task(run())
+        await ready
+        return running_task
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.tray.watchdog',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'phile.tray',
+                'watchdog.asyncio.observer',
             },
             before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
-                'phile.tmux.control_mode',
-                'watchdog.observer',
+                'phile.tray',
+                'watchdog.asyncio.observer',
             },
             conflicts={'phile_shutdown.target'},
-            exec_start=[
-                functools.partial(
-                    phile_tray_tmux,
-                    capability_registry=capability_registry,
-                ),
-            ],
+            exec_start=[start],
+            type=phile.launcher.Type.FORKING,
         )
     )
 
@@ -958,6 +1010,7 @@ async def add(capability_registry: phile.capability.Registry) -> None:
     )
     await add_tray_text(capability_registry=capability_registry)
     await add_tray_tmux(capability_registry=capability_registry)
+    await add_tray_watchdog(capability_registry=capability_registry)
     await add_trigger(capability_registry=capability_registry)
     await add_trigger_launcher(capability_registry=capability_registry)
     await add_trigger_watchdog(capability_registry=capability_registry)

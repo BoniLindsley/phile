@@ -36,11 +36,11 @@ class TrayDialog(PySide2.QtWidgets.QDialog):
 
 async def run(
     pyside2_executor: phile.PySide2.QtCore.Executor,
-    full_text_publisher: phile.tray.FullTextPublisher,
+    text_icons: phile.tray.TextIcons,
 ) -> None:
     loop = asyncio.get_running_loop()
     # Get the next event as soon as possible to avoid missing any.
-    full_text_pubsub_view = full_text_publisher.__aiter__()
+    text_view = text_icons.event_queue.__aiter__()
     main_window_closed = asyncio.Event()
     # GUI functions must be called in GUI main thread.
     run_in_executor = loop.run_in_executor
@@ -60,7 +60,7 @@ async def run(
             main_window.tray_content.setText(last_message)
 
         async def propagate_text_changes() -> None:
-            async for current_text in full_text_pubsub_view:
+            async for current_text in text_view:
                 await run_in_executor(
                     pyside2_executor,
                     main_window.tray_content.setText,
@@ -70,8 +70,9 @@ async def run(
         await run_in_executor(
             pyside2_executor,
             on_start,
-            full_text_publisher.current_value,
+            text_icons.current_value,
         )
+        del text_icons
         propagating_task = asyncio.create_task(propagate_text_changes())
         try:
             await main_window_closed.wait()

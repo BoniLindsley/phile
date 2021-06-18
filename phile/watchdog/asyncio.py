@@ -104,6 +104,11 @@ class BaseObserver:
         finally:
             await self.unschedule(path, recursive)
 
+    # TODO(BoniLindsley): Consider returning a view instead.
+    # Need to change open as well.
+    # Add EventView class if this change is used.
+    # TODO(BoniLindsley): Accept pathlib.Path instead.
+    # Need to change open and unschedule as well.
     async def schedule(
         self,
         path: str,

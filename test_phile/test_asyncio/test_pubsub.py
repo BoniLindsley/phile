@@ -175,3 +175,14 @@ class TestQueue(unittest.IsolatedAsyncioTestCase):
         self.queue.put_done()
         fetched_values = await phile.asyncio.wait_for(fetcher)
         self.assertEqual(fetched_values, [0, 1])
+
+    async def test_close_stops_queue(self) -> None:
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.pubsub.Node.EndReached):
+            await phile.asyncio.wait_for(self.queue.get())
+
+    async def test_close_ignores_if_already_stopped(self) -> None:
+        self.queue.put_done()
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.pubsub.Node.EndReached):
+            await phile.asyncio.wait_for(self.queue.get())

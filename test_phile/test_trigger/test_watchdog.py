@@ -26,7 +26,7 @@ import phile.watchdog.observers
 import test_phile.threaded_mock
 from test_phile.test_init import UsesCapabilities, UsesConfiguration
 from test_phile.test_configuration.test_init import (
-    PreparesEntries as PreparesConfigurationEntries
+    UsesConfiguration as UsesConfigurationEntries
 )
 from test_phile.test_trigger.test_init import UsesRegistry
 from test_phile.test_watchdog.test_init import UsesObserver
@@ -175,13 +175,13 @@ class TestProducer(
 
 
 class TestView(
-    PreparesConfigurationEntries,
+    UsesConfigurationEntries,
     unittest.IsolatedAsyncioTestCase,
 ):
     """Tests :func:`~phile.trigger.watchdog.View`."""
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.configuration: phile.configuration.Entries
+        super().__init__(*args, **kwargs)
         self.observer: phile.watchdog.asyncio.BaseObserver
         self.observer_view: (
             phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
@@ -193,12 +193,9 @@ class TestView(
         self.trigger_registry: phile.trigger.Registry
         self.view: phile.trigger.watchdog.View
         self.view_task: asyncio.Task[typing.Any]
-        super().__init__(*args, **kwargs)
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        self.configuration = phile.configuration.load()
-        self.configuration.trigger_directory.mkdir(exist_ok=True)
         self.trigger_directory = (
             self.configuration.state_directory_path /
             self.configuration.trigger_directory

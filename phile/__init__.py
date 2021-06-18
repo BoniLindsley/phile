@@ -17,6 +17,7 @@
 .. automodule:: phile.tmux
 .. automodule:: phile.tray
 .. automodule:: phile.trigger
+.. automodule:: phile.unittest
 .. automodule:: phile.watchdog
 
 --------------------

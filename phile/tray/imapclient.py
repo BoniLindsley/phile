@@ -193,6 +193,7 @@ def read_from_server(
             stop_socket
         ], [], [], reconnect_delay.total_seconds())
         if rlist:
+            _logger.info("Received stop request. Not connecting.")
             break
         del rlist
         del wlist
@@ -314,6 +315,7 @@ async def run(
                 else:  # pragma: no cover  # Defensive.
                     assert False, 'Unreadable.'
         finally:
+            _logger.info("Sending stop request. To not connect.")
             stop_writer.sendall(b'\0')
             await worker_thread.async_join()
     finally:

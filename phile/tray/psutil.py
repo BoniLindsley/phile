@@ -14,8 +14,8 @@ from psutil import (
 )
 
 # Internal packages.
-import phile.capability
 import phile.tray
+import phile.tray.watchdog
 
 default_refresh_interval = datetime.timedelta(seconds=5)
 
@@ -144,21 +144,18 @@ class History:
 
 async def run(
     *,
-    configuration: phile.configuration.Entries,
     refresh_interval: datetime.timedelta = default_refresh_interval,
     tray_name: str = '70-phile-tray-psutil',
+    tray_target: phile.tray.watchdog.Target,
 ) -> None:
-    file = phile.tray.File(
-        path=configuration.state_directory_path /
-        configuration.tray_directory /
-        (tray_name + configuration.tray_suffix),
-    )
+    tray_entry = phile.tray.Entry(name=tray_name)
+    tray_target.set(entry=tray_entry)
     try:
         snapshot_strings = History().to_strings().__iter__()
 
         def update_file() -> None:
-            file.text_icon = snapshot_strings.__next__()
-            file.save()
+            tray_entry.text_icon = snapshot_strings.__next__()
+            tray_target.set(entry=tray_entry)
 
         loop = asyncio.get_running_loop()
         wait_seconds = refresh_interval.total_seconds()
@@ -166,4 +163,4 @@ async def run(
             await loop.run_in_executor(None, update_file)
             await asyncio.sleep(wait_seconds)
     finally:
-        file.path.unlink(missing_ok=True)
+        tray_target.pop(name=tray_name)

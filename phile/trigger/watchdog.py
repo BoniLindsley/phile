@@ -191,7 +191,7 @@ class View:
         await asyncio.to_thread(pid_lock.acquire)
         try:
             async with self._observer.open(
-                self._trigger_directory
+                str(self._trigger_directory)
             ) as event_queue:
                 yield event_queue
         finally:

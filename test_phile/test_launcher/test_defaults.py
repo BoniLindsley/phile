@@ -6,6 +6,7 @@ Test :mod:`phile.launcher.defaults`
 """
 
 # Standard libraries.
+import asyncio
 import logging
 import json
 import typing
@@ -18,16 +19,19 @@ import watchdog.events
 import phile.asyncio
 import phile.configuration
 import phile.launcher.defaults
+import phile.tray
 import phile.watchdog.asyncio
 from test_phile.test_capability.test_init import (
     UsesRegistry as UsesCapabilityRegistry
 )
 from test_phile.test_configuration.test_init import (
-    PreparesEntries as PreparesConfigurationEntries
+    PreparesEntries as PreparesConfigurationEntries,
 )
 from test_phile.test_launcher.test_init import (
     UsesRegistry as UsesLauncherRegistry
 )
+from test_phile.test_tmux.test_init import UsesRunningTmuxServer
+from test_phile.test_watchdog.test_asyncio import UsesObserver
 
 
 class TestAddConfiguration(
@@ -180,8 +184,154 @@ class TestAddKeyring(
         )
 
 
+class TestAddTray(
+    UsesLauncherRegistry,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_name = 'phile.tray'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
+
+    async def test_provides_tray_registry(self) -> None:
+        await self.test_start_launcher()
+        capability_type = phile.tray.Registry
+        self.assertIsInstance(
+            self.capability_registry.get(capability_type),
+            capability_type,
+        )
+
+
+class TestAddTrayDatetime(
+    UsesObserver,
+    UsesLauncherRegistry,
+    PreparesConfigurationEntries,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_name = 'phile.tray.datetime'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_watchdog(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_watchdog_asyncio_observer(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_datetime(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
+
+    async def test_creates_tray_file(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                'phile.configuration',
+            )
+        )
+        configuration: phile.configuration.Entries = (
+            self.capability_registry[phile.configuration.Entries]
+        )
+        # Monitor tray directory before starting launcher.
+        tray_directory = (
+            configuration.state_directory_path /
+            configuration.tray_directory
+        )
+        tray_directory.mkdir(exist_ok=True)
+        watchdog_view = await self.schedule_watchdog_observer(
+            tray_directory
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        # Show a trigger and a corresponding file should be created.
+        await self.assert_watchdog_emits(
+            source_view=watchdog_view,
+            expected_event=watchdog.events.FileModifiedEvent(
+                str(
+                    tray_directory / (
+                        '90-phile-tray-datetime' +
+                        configuration.tray_suffix
+                    )
+                )
+            ),
+        )
+
+
 class TestAddTrayPsutil(
     UsesLauncherRegistry,
+    UsesObserver,
     PreparesConfigurationEntries,
     UsesCapabilityRegistry,
     unittest.IsolatedAsyncioTestCase,
@@ -199,6 +349,21 @@ class TestAddTrayPsutil(
     async def test_add_launcher(self) -> None:
         await phile.asyncio.wait_for(
             phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_watchdog(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_watchdog_asyncio_observer(
                 capability_registry=self.capability_registry
             )
         )
@@ -235,34 +400,197 @@ class TestAddTrayPsutil(
         configuration: phile.configuration.Entries = (
             self.capability_registry[phile.configuration.Entries]
         )
-        observer = phile.watchdog.asyncio.Observer()
         # Monitor tray directory before starting launcher.
         tray_directory = (
             configuration.state_directory_path /
             configuration.tray_directory
         )
-        tray_directory.mkdir()
-        tray_name = '70-phile-tray-psutil'
-        tray_file_path = tray_directory / (
-            tray_name + configuration.tray_suffix
+        tray_directory.mkdir(exist_ok=True)
+        watchdog_view = await self.schedule_watchdog_observer(
+            tray_directory
         )
-        async with observer.open(str(tray_directory)) as observer_view:
-            await phile.asyncio.wait_for(
-                self.launcher_registry.state_machine.start(
-                    self.launcher_name
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        # Show a trigger and a corresponding file should be created.
+        await self.assert_watchdog_emits(
+            source_view=watchdog_view,
+            expected_event=watchdog.events.FileModifiedEvent(
+                str(
+                    tray_directory /
+                    ('70-phile-tray-psutil' + configuration.tray_suffix)
                 )
             )
-            # Show a trigger and a corresponding file should be created.
-            expected_event = watchdog.events.FileCreatedEvent(
-                str(tray_file_path)
+        )
+
+
+class TestAddTrayText(
+    UsesLauncherRegistry,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_name = 'phile.tray.text'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_text(
+                capability_registry=self.capability_registry
             )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
 
-            async def get_event_until() -> None:
-                async for event in observer_view:
-                    if event == expected_event:
-                        break
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
 
-            await phile.asyncio.wait_for(get_event_until())
+    async def test_provides_tray_text_icons(self) -> None:
+        await self.test_start_launcher()
+        capability_type = phile.tray.TextIcons
+        self.assertIsInstance(
+            self.capability_registry.get(capability_type),
+            capability_type,
+        )
+
+
+class TestAddTrayNotify(
+    PreparesConfigurationEntries,
+    UsesLauncherRegistry,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.launcher_name = 'phile.tray.notify'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_notify(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_configuration(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_watchdog(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_watchdog_asyncio_observer(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
+
+
+class TestAddTrayTmux(
+    UsesRunningTmuxServer,
+    UsesLauncherRegistry,
+    UsesCapabilityRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.launcher_name = 'phile.tray.tmux'
+
+    async def test_add_launcher(self) -> None:
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_tmux(
+                capability_registry=self.capability_registry
+            )
+        )
+        self.assertTrue(
+            self.launcher_registry.database.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        await self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tray_text(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            phile.launcher.defaults.add_tmux(
+                capability_registry=self.capability_registry
+            )
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
 
 
 class TestAddTriggerWatchdog(

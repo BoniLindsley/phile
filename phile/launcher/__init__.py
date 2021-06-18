@@ -391,11 +391,14 @@ class StateMachine:
                 await self._ensure_ready_to_stop(entry_name)
             finally:
                 try:
+                    _logger.debug('Launcher %s is stopping.', entry_name)
                     await self._run_command_lines(
                         self._database.exec_stop[entry_name]
                     )
                 finally:
+                    # TODO(BoniLindsley): What to do with exceptions?
                     await phile.asyncio.cancel_and_wait(main_task)
+                    _logger.debug('Launcher %s has stopped.', entry_name)
 
     async def _ensure_ready_to_start(self, entry_name: str) -> None:
         database = self._database
@@ -442,9 +445,6 @@ class StateMachine:
             entry_name, set()
         ):
             self.stop(dependent)
-        _logger.debug(
-            'Launcher %s is waiting on dependents.', entry_name
-        )
         before = (
             database.before.get(entry_name, set())
             | database.after.inverses.get(entry_name, set())
@@ -453,6 +453,11 @@ class StateMachine:
             filter(None, map(self._stop_tasks.get, before))
         )
         if pending_tasks:
+            _logger.debug(
+                'Launcher %s is waiting on %s dependent(s).',
+                entry_name,
+                len(pending_tasks),
+            )
             await asyncio.wait(pending_tasks)
 
     async def _start_main_task(
@@ -524,7 +529,9 @@ async def provide_registry(
                 exec_start=[asyncio.get_running_loop().create_future],
             )
         )
-        yield launcher_registry
-        _logger.debug('Launcher clean-up starting.')
-        await launcher_registry.state_machine.start(launcher_name)
-        _logger.debug('Launcher clean-up done.')
+        try:
+            yield launcher_registry
+        finally:
+            _logger.debug('Launcher clean-up starting.')
+            await launcher_registry.state_machine.start(launcher_name)
+            _logger.debug('Launcher clean-up done.')
