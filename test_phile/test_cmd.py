@@ -77,6 +77,17 @@ class TestAsyncCmdloopThreadedStdin(
             )
         )
 
+    # TODO(BoniLindsley): Fix unclosed loop.
+    # Possibly from waiting on stdin in another thread.
+    # ```
+    # /usr/lib/python3.9/asyncio/base_events.py:681: ResourceWarning: unc
+    # losed event loop <_UnixSelectorEventLoop running=False closed=False
+    # debug=False>
+    #   _warn(f"unclosed event loop {self!r}", ResourceWarning, source=se
+    # lf)
+    # ResourceWarning: Enable tracemalloc to get the object allocation tr
+    # aceback
+    # ```
     async def test_respects_intro(self) -> None:
         self.cmd.intro = 'Hello\n'
         self.stdin.write('EOF\n')

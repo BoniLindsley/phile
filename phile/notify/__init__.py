@@ -67,3 +67,6 @@ class File(phile.data.File):
     @title.setter
     def title(self, new_title: str) -> None:
         self.path = self.path.with_name(new_title + self.path.suffix)
+
+
+# TODO(BoniLindsley): Manage notifications in a new `Registry` class.

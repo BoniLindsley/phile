@@ -26,6 +26,11 @@ import phile.notify.gui
 import test_phile.threaded_mock
 from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
 
+# TODO(BoniLindsley): Refactor to remove PySide2 warnings.
+# ```
+# This plugin does not support propagateSizeHints()
+# ```
+
 
 class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
     """Tests :class:`~phile.notify.gui.NotificationMdiSubWindow`."""
