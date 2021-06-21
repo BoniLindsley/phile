@@ -87,52 +87,6 @@ def process_command(processor_cmd: cmd.Cmd, command: str) -> bool:
     return is_stopping
 
 
-# TODO(BoniLindsley): Add unit test.
-# I am not sure how to test this.
-# This API only works with pipes and sockets,
-# but creating socket and pipes seem somehow block
-# when there is an async loop,
-# even if `asyncio.to_thread` is used to open them.
-async def stdio_streams(
-    stdin: typing.IO[str],
-    stdout: typing.IO[str],
-) -> tuple[asyncio.StreamReader,
-           asyncio.StreamWriter]:  # pragma: no cover
-    loop = asyncio.get_running_loop()
-    reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(
-        functools.partial(asyncio.StreamReaderProtocol, reader), stdin
-    )
-    writer = asyncio.StreamWriter(
-        *(
-            await loop.connect_write_pipe(
-                asyncio.streams.FlowControlMixin, stdout
-            )
-        ), reader, loop
-    )
-    return reader, writer
-
-
-# TODO(BoniLindsley): Add unit test.
-# This will require `stdio_streams` to be testable,
-# since they suffer the same problem of creating resource for testing.
-async def async_cmdloop_with_streams(
-    looping_cmd: cmd.Cmd,
-) -> None:  # pragma: no cover
-    reader, writer = await stdio_streams(
-        looping_cmd.stdin, looping_cmd.stdout
-    )
-    looping_cmd.preloop()
-    if looping_cmd.intro:
-        writer.write(looping_cmd.intro)
-    is_stopping = False
-    while not is_stopping:
-        writer.write(looping_cmd.prompt.encode())
-        next_command = (await reader.readline()).decode()
-        is_stopping = process_command(looping_cmd, next_command)
-    looping_cmd.postloop()
-
-
 async def async_cmdloop_threaded_stdin(looping_cmd: cmd.Cmd) -> None:
     stdin = phile.asyncio.ThreadedTextIOBase(looping_cmd.stdin)
     stdout = looping_cmd.stdout
