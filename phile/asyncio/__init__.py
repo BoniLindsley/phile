@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+.. automodule:: phile.asyncio.pubsub
+
+---------------------------------------
+Extra :mod:`asyncio`-related operations
+---------------------------------------
+"""
 
 # Standard libraries.
 import asyncio
@@ -138,7 +145,63 @@ class Thread(threading.Thread):
             raise self.__raised_exception
 
 
+class QueueClosed(Exception):
+    pass
+
+
+# Pylint does not think it is a type anymore when [_T] is appended.
+class Queue(asyncio.Queue[_T]):  # pylint: disable=inherit-non-class
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._closed = asyncio.Event()
+
+    def close(self) -> None:
+        self._closed.set()
+
+    async def get(self) -> _T:
+        try:
+            return self.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+        close_checker = asyncio.create_task(self._closed.wait())
+        getter = asyncio.create_task(super().get())
+        tasks_to_wait_for: set[asyncio.Task[typing.Any]
+                               ] = {close_checker, getter}
+        try:
+            done, _pending = await asyncio.wait(
+                tasks_to_wait_for,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            for task in tasks_to_wait_for:
+                await cancel_and_wait(task)
+        if getter in done:
+            return await getter
+        raise QueueClosed()
+
+    def get_nowait(self) -> _T:
+        try:
+            return super().get_nowait()
+        except asyncio.QueueEmpty as error:
+            if self._closed.is_set():
+                raise QueueClosed() from error
+            raise
+
+    async def put(self, item: _T) -> None:
+        if self._closed.is_set():
+            raise QueueClosed('Cannot put items into a closed queue.')
+        await super().put(item)
+
+    def put_nowait(self, item: _T) -> None:
+        if self._closed.is_set():
+            raise QueueClosed('Cannot put items into a closed queue.')
+        super().put_nowait(item)
+
+
 class ThreadedTextIOBase:
+    # Only implementing readline as reading line by line
+    # is the only reliable platform-independent read operation on stdin.
 
     def __init__(
         self,
@@ -148,30 +211,44 @@ class ThreadedTextIOBase:
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self._io_thread = threading.Thread(target=self._run, daemon=True)
+        self._buffered_lines: Queue[str] = Queue()
         self._loop = asyncio.get_event_loop()
         self._parent_stream = parent_stream
-        self._request_queue = queue.SimpleQueue[asyncio.Future[str]]()
-        self._io_thread.start()
+        self._request_queue: queue.SimpleQueue[bool] = queue.SimpleQueue(
+        )
+        self._worker_thread = Thread(target=self._run, daemon=True)
+        self._worker_thread.start()
+
+    def close(self) -> None:
+        # Does not deterministically close the stream.
+        # The worker thread is likely to be stuck waiting for a new line.
+        # But this stops it from reading again if that ever returns.
+        self._request_queue.put_nowait(False)
+        # Try to return from all readline calls.
+        self._loop.call_soon_threadsafe(self._buffered_lines.close)
 
     async def readline(self) -> str:
-        next_line_future = asyncio.Future[str]()
-        self._request_queue.put(next_line_future)
-        next_line = await next_line_future
-        return next_line
+        try:
+            try:
+                return self._buffered_lines.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            self._request_queue.put_nowait(True)
+            return await self._buffered_lines.get()
+        except QueueClosed as error:
+            raise ValueError('No more data available.') from error
 
     def _run(self) -> None:
-        while True:
-            next_line_future = self._request_queue.get()
-            try:
+        try:
+            while self._request_queue.get():
                 next_line = self._parent_stream.readline()
-            # Intention catch to propagate exception.
-            # pylint: disable=broad-except
-            except BaseException as exception:
+                # Intention catch to propagate exception.
+                # pylint: disable=broad-except
+                if not next_line:
+                    break
                 self._loop.call_soon_threadsafe(
-                    next_line_future.set_exception, exception
+                    self._buffered_lines.put_nowait, next_line
                 )
-                return
-            self._loop.call_soon_threadsafe(
-                next_line_future.set_result, next_line
-            )
+        finally:
+            self._parent_stream.close()
+            self._loop.call_soon_threadsafe(self._buffered_lines.close)

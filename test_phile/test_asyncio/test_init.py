@@ -8,7 +8,7 @@ Test :mod:`phile.asyncio`
 # Standard library.
 import asyncio
 import datetime
-import io
+import os
 import socket
 import sys
 import threading
@@ -278,25 +278,166 @@ class TestThread(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(thread.async_join())
 
 
-class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
+class TestQueue(unittest.IsolatedAsyncioTestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.queue: phile.asyncio.Queue[int]
 
     def setUp(self) -> None:
         super().setUp()
-        self.stream = io.StringIO()
+        self.queue = phile.asyncio.Queue()
+
+    def test_close__can_be_called_on_new_instance(self) -> None:
+        self.queue.close()
+
+    def test_put_nowait__enqueues_item(self) -> None:
+        self.queue.put_nowait(1)
+        self.assertFalse(self.queue.empty())
+
+    def test_put_nowait__raises_if_closed(self) -> None:
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            self.queue.put_nowait(1)
+
+    async def test_put__enqueues_item(self) -> None:
+        await self.queue.put(1)
+        self.assertFalse(self.queue.empty())
+
+    async def test_put__raises_if_closed(self) -> None:
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            await self.queue.put(1)
+
+    def test_get_nowait__returns_put_nowait_value(self) -> None:
+        self.queue.put_nowait(1)
+        value = self.queue.get_nowait()
+        self.assertEqual(value, 1)
+
+    def test_get_nowait__raises_if_empty(self) -> None:
+        with self.assertRaises(asyncio.QueueEmpty):
+            self.queue.get_nowait()
+
+    def test_get_nowait__raises_if_closed(self) -> None:
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            self.queue.get_nowait()
+
+    def test_get_nowait__returns_remaining_value_if_closed(self) -> None:
+        self.queue.put_nowait(1)
+        self.queue.close()
+        value = self.queue.get_nowait()
+        self.assertEqual(value, 1)
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            self.queue.get_nowait()
+
+    async def test_get__returns_put_value(self) -> None:
+        await self.queue.put(1)
+        value = await self.queue.get()
+        self.assertEqual(value, 1)
+
+    async def test_get__waits_if_empty(self) -> None:
+        getter = asyncio.create_task(self.queue.get())
+        await asyncio.sleep(0)
+        self.assertFalse(getter.done())
+        await self.queue.put(1)
+        value = await self.queue.get()
+        self.assertEqual(value, 1)
+
+    async def test_get__raises_if_closed(self) -> None:
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            await self.queue.get()
+
+    async def test_get__returns_remaining_value_if_closed(self) -> None:
+        await self.queue.put(1)
+        self.queue.close()
+        value = await self.queue.get()
+        self.assertEqual(value, 1)
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            await self.queue.get()
+
+    async def test_get__raises_if_closed_while_waiting(self) -> None:
+        getter = asyncio.create_task(self.queue.get())
+        await asyncio.sleep(0)
+        self.queue.close()
+        with self.assertRaises(phile.asyncio.QueueClosed):
+            await getter
+
+
+class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.stream_reader: typing.IO[str]
+        self.stream_writer: typing.IO[str]
+        self.threaded_stream: phile.asyncio.ThreadedTextIOBase
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        reader_fd, writer_fd = os.pipe()
+
+        def close(file_descriptor: int) -> None:
+            try:
+                os.close(file_descriptor)
+            except OSError:
+                pass
+
+        self.addCleanup(close, reader_fd)
+        self.addCleanup(close, writer_fd)
+        self.stream_reader = open(  # pylint: disable=consider-using-with
+            reader_fd, buffering=1
+        )
+        self.addCleanup(self.stream_reader.close)
+        self.stream_writer = open(  # pylint: disable=consider-using-with
+            writer_fd, mode='w', buffering=1
+        )
+        self.addCleanup(self.stream_writer.close)
         self.threaded_stream = phile.asyncio.ThreadedTextIOBase(
-            self.stream
+            self.stream_reader
         )
 
-    async def test_reads_one_line(self) -> None:
-        expected_line = 'Single file!\n'
-        self.stream.write(expected_line)
-        self.stream.seek(0)
+    async def test_readline__reads_one_line(self) -> None:
+        expected_line = 'One line.\n'
+        self.stream_writer.write(expected_line)
         next_line = await phile.asyncio.wait_for(
             self.threaded_stream.readline()
         )
         self.assertEqual(next_line, expected_line)
 
-    async def test_raises_if_closed(self) -> None:
-        self.stream.close()
+    async def test_readline__raises_if_closed(self) -> None:
+        self.stream_writer.close()
+        with self.assertRaises(ValueError):
+            await phile.asyncio.wait_for(self.threaded_stream.readline())
+
+    async def test_readline__raises_if_closed_while_waiting(
+        self
+    ) -> None:
+        # Send two tasks to wait for more lines.
+        # But only give one of them a line.
+        reading_tasks = {
+            asyncio.create_task(self.threaded_stream.readline()),
+            asyncio.create_task(self.threaded_stream.readline()),
+        }
+        self.stream_writer.write('Line before closing.\n')
+        done, pending = await asyncio.wait(
+            reading_tasks,
+            timeout=phile.asyncio.wait_for_timeout.get().total_seconds(),
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        del done
+        self.assertEqual(len(pending), 1)
+        # Since the two tasks run in parallel,
+        # we can be somewhat sure the other task is now waiting.
+        # Give it one more chance to catch up.
+        await asyncio.sleep(0)
+        # Now we can test what happens if the stream closes
+        # while waiting for another line.
+        self.stream_writer.close()
+        with self.assertRaises(ValueError):
+            await phile.asyncio.wait_for(pending.pop())
+
+    async def test_close__forces_readline_to_raise(self) -> None:
+        self.threaded_stream.close()
         with self.assertRaises(ValueError):
             await phile.asyncio.wait_for(self.threaded_stream.readline())

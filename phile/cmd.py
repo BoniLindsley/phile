@@ -144,6 +144,9 @@ async def async_cmdloop_threaded_stdin(looping_cmd: cmd.Cmd) -> None:
     while not is_stopping:
         await asyncio.to_thread(stdout.write, looping_cmd.prompt)
         await asyncio.to_thread(stdout.flush)
-        next_command = await stdin.readline()
+        try:
+            next_command = await stdin.readline()
+        except (EOFError, ValueError):
+            next_command = 'EOF\n'
         is_stopping = process_command(looping_cmd, next_command)
     looping_cmd.postloop()
