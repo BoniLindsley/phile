@@ -18,7 +18,6 @@ import watchdog.observers
 # Internal packages.
 import phile.watchdog
 import phile.watchdog.observers
-from test_phile.test_init import UsesCapabilities
 
 IntCallback = (phile.watchdog.SingleParameterCallback[int, None])
 
@@ -311,13 +310,3 @@ class TestScheduler(unittest.TestCase):
                 for call_args in self.path_handler.call_args_list
             ), {source_path, dest_path}
         )
-
-
-class UsesObserver(UsesCapabilities, unittest.TestCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.watchdog_observer = observer = watchdog.observers.Observer()
-        observer.start()
-        self.addCleanup(observer.stop)
-        self.capabilities[watchdog.observers.api.BaseObserver] = observer

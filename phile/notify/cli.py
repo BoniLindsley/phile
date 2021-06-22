@@ -6,7 +6,7 @@ import sys
 import typing
 
 # Internal packages.
-import phile
+import phile.configuration
 import phile.notify
 
 
@@ -29,15 +29,17 @@ def create_argument_parser() -> argparse.ArgumentParser:
 
 def process_arguments(
     argument_namespace: argparse.Namespace,
-    configuration: typing.Optional[phile.Configuration] = None,
+    configuration: typing.Optional[phile.configuration.Entries] = None,
     output_stream: typing.TextIO = sys.stdout
 ) -> int:
     if configuration is None:
-        configuration = phile.Configuration()
+        configuration = phile.configuration.load()
     command = argument_namespace.command
-    configuration.notification_directory.mkdir(
-        parents=True, exist_ok=True
+    notification_directory = (
+        configuration.state_directory_path /
+        configuration.notification_directory
     )
+    notification_directory.mkdir(parents=True, exist_ok=True)
     if command == 'append':
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
@@ -46,7 +48,6 @@ def process_arguments(
         notification.text += argument_namespace.content + '\n'
         notification.save()
     elif command == 'list':
-        notification_directory = configuration.notification_directory
         notification_suffix = configuration.notification_suffix
         for notificaton_file in notification_directory.iterdir():
             if notificaton_file.suffix == notification_suffix:
@@ -80,7 +81,11 @@ def process_arguments(
     return 0
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+def main(
+    argv: typing.Optional[list[str]] = None,
+) -> int:  # pragma: no cover
+    if argv is None:
+        argv = sys.argv
     argument_parser = create_argument_parser()
     argument_namespace = argument_parser.parse_args(argv[1:])
     if argument_namespace.command is None:

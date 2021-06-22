@@ -30,8 +30,6 @@ async def add_configuration(
             import phile
             import phile.configuration
             with capability_registry.provide(
-                phile.Configuration()
-            ), capability_registry.provide(
                 await asyncio.to_thread(phile.configuration.load)
             ):
                 ready.set_result(True)

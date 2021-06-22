@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-----------------------------------
-Test :mod:`phile.trigger.launcher`
-----------------------------------
-"""
 
 # Standard library.
 import asyncio
@@ -11,34 +6,30 @@ import typing
 import unittest
 
 # Internal packages.
-import phile
 import phile.asyncio
 import phile.trigger
 import phile.trigger.launcher
-from test_phile.test_capability.test_init import (
-    UsesRegistry as UsesCapabilityRegistry
-)
 from test_phile.test_launcher.test_init import (
     UsesRegistry as UsesLauncherRegistry
 )
-from test_phile.test_trigger.test_init import (
-    UsesRegistry as UsesTriggerRegistry
-)
 
 
-class UsesProducer(
-    UsesTriggerRegistry,
+class TestProducer(
     UsesLauncherRegistry,
-    UsesCapabilityRegistry,
     unittest.IsolatedAsyncioTestCase,
 ):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.launcher_triggers: phile.trigger.launcher.Producer
         super().__init__(*args, **kwargs)
+        self.entry_name: str
+        self.launcher_triggers: phile.trigger.launcher.Producer
+        self.start_trigger_name: str
+        self.stop_trigger_name: str
+        self.trigger_registry: phile.trigger.Registry
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
+        self.trigger_registry = phile.trigger.Registry()
         self.launcher_triggers = producer = (
             phile.trigger.launcher.Producer(
                 launcher_registry=self.launcher_registry,
@@ -47,24 +38,6 @@ class UsesProducer(
         )
         await producer.__aenter__()
         self.addAsyncCleanup(producer.__aexit__, None, None, None)
-        provide_cm = self.capability_registry.provide(producer)
-        provide_cm.__enter__()
-        self.addCleanup(provide_cm.__exit__, None, None, None)
-
-
-class TestProducer(
-    UsesProducer,
-    UsesTriggerRegistry,
-    UsesLauncherRegistry,
-    unittest.IsolatedAsyncioTestCase,
-):
-    """Tests :func:`~phile.trigger.launcher.Producer`."""
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.entry_name: str
-        self.start_trigger_name: str
-        self.stop_trigger_name: str
-        super().__init__(*args, **kwargs)
 
     def test_initialisation_was_successful(self) -> None:
         self.assertIsInstance(

@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
-"""
-----------------------------
-Test :mod:`phile.notify.cli`
-----------------------------
-"""
 
 # Standard library.
 import argparse
 import io
 import pathlib
 import tempfile
+import typing
 import unittest
 
 # Internal packages.
 import phile
 import phile.notify
 from phile.notify.cli import create_argument_parser, process_arguments
+from test_phile.test_configuration.test_init import UsesConfiguration
 
 
 class TestCreateArgumentParser(unittest.TestCase):
@@ -69,41 +66,31 @@ class TestCreateArgumentParser(unittest.TestCase):
         self.assertEqual(argument_namespace.content, content)
 
 
-class TestProcessArguments(unittest.TestCase):
-    """Tests :func:`~phile.notify.cli.process_arguments`."""
+class TestProcessArguments(UsesConfiguration, unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.notification_directory_path: pathlib.Path
 
     def setUp(self) -> None:
-        """
-        Create a directory to use as a notification directory.
-
-        The directories are recreated for each test
-        to make sure no leftover files from tests
-        would interfere with each other.
-        """
-        notification_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(notification_directory.cleanup)
-        self.notification_directory_path = pathlib.Path(
-            notification_directory.name
+        super().setUp()
+        self.notification_directory_path = (
+            self.configuration.state_directory_path /
+            self.configuration.notification_directory
         )
+        self.notification_directory_path.mkdir()
 
-    def test_default(self) -> None:
-        """Fail if no arguments are given."""
+    def test_fails_if_no_arguments_are_given(self) -> None:
         argument_namespace = argparse.Namespace(command=None)
         with self.assertRaises(ValueError):
             process_arguments(argument_namespace=argument_namespace)
 
-    def test_unknown_command(self) -> None:
-        """Fail if an unknown command is given."""
+    def test_fails_if_an_unknown_command_is_given(self) -> None:
         argument_namespace = argparse.Namespace(command='gobbledygook')
         with self.assertRaises(ValueError):
             process_arguments(argument_namespace=argument_namespace)
 
-    def test_append(self) -> None:
-        """Process append request."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix='.notification'
-        )
+    def test_process_append_request(self) -> None:
         argument_namespace = argparse.Namespace(
             command='append',
             name='VeCat',
@@ -112,13 +99,13 @@ class TestProcessArguments(unittest.TestCase):
         original_text = 'Once up a time.'
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name,
-            configuration=configuration,
+            configuration=self.configuration,
             text=original_text
         )
         notification.save()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration
+            configuration=self.configuration
         )
         self.assertEqual(return_value, 0)
         self.assertTrue(notification.load())
@@ -127,16 +114,11 @@ class TestProcessArguments(unittest.TestCase):
             original_text + argument_namespace.content + '\n'
         )
 
-    def test_list(self) -> None:
-        """Process list request."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix='.notification'
-        )
+    def test_process_list_request(self) -> None:
         names = [
             'file_with.bad_extension',
-            'this_is_a' + configuration.notification_suffix,
-            'another' + configuration.notification_suffix,
+            'this_is_a' + self.configuration.notification_suffix,
+            'another' + self.configuration.notification_suffix,
             'not_really_a.notification.just_a_fake_one',
         ]
         for name in names:
@@ -145,7 +127,7 @@ class TestProcessArguments(unittest.TestCase):
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration,
+            configuration=self.configuration,
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
@@ -156,94 +138,72 @@ class TestProcessArguments(unittest.TestCase):
             ]
         )
 
-    def test_list_empty(self) -> None:
-        """Process list request even if directory is empty."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path
-        )
+    def test_process_list_request_even_if_directory_is_empty(
+        self
+    ) -> None:
         argument_namespace = argparse.Namespace(command='list')
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration,
+            configuration=self.configuration,
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
         self.assertTrue(not output_stream.getvalue())
 
-    def test_read(self) -> None:
-        """Process read request."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix='.notification'
-        )
+    def test_process_read_request(self) -> None:
         original_text = 'Once up a time.'
         argument_namespace = argparse.Namespace(
             command='read', name='VeCat'
         )
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name,
-            configuration=configuration,
+            configuration=self.configuration,
             text=original_text
         )
         notification.save()
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration,
+            configuration=self.configuration,
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
         self.assertEqual(output_stream.getvalue(), original_text)
 
-    def test_read_bad_file(self) -> None:
-        """Fail read request if loading fails."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix='.notification'
-        )
+    def test_fails_read_request_if_loading_fails(self) -> None:
         argument_namespace = argparse.Namespace(
             command='read', name='VeCat'
         )
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration,
+            configuration=self.configuration,
             output_stream=output_stream
         )
         self.assertEqual(return_value, 1)
 
-    def test_remove(self) -> None:
-        """Process remove request."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix='.notification'
-        )
+    def test_process_remove_request(self) -> None:
         argument_namespace = argparse.Namespace(
             command='remove',
             name='VeCat',
         )
         notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
+            argument_namespace.name, configuration=self.configuration
         )
         notification.path.touch()
         self.assertTrue(notification.path.is_file())
         output_stream = io.StringIO()
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration,
+            configuration=self.configuration,
             output_stream=output_stream
         )
         self.assertEqual(return_value, 0)
         self.assertTrue(not notification.path.exists())
         self.assertEqual(output_stream.getvalue(), '')
 
-    def test_write(self) -> None:
-        """Process write request."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path,
-            notification_suffix='.notification'
-        )
+    def test_process_write_request(self) -> None:
         argument_namespace = argparse.Namespace(
             command='write',
             name='VeCat',
@@ -251,31 +211,23 @@ class TestProcessArguments(unittest.TestCase):
         )
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration
+            configuration=self.configuration
         )
         self.assertEqual(return_value, 0)
         notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
+            argument_namespace.name, configuration=self.configuration
         )
         self.assertTrue(notification.load())
         self.assertEqual(
             notification.text, argument_namespace.content + '\n'
         )
 
-    def test_make_notification_directory(self) -> None:
-        """Create notification directory if missing."""
-        configuration = phile.Configuration(
-            notification_directory=self.notification_directory_path /
-            'subdirectory'
-        )
+    def test_creates_notification_directory_if_missing(self) -> None:
+        self.notification_directory_path.rmdir()
         argument_namespace = argparse.Namespace(command='list')
         return_value = process_arguments(
             argument_namespace=argument_namespace,
-            configuration=configuration
+            configuration=self.configuration
         )
         self.assertEqual(return_value, 0)
-        self.assertTrue(configuration.notification_directory.is_dir())
-
-
-if __name__ == '__main__':
-    unittest.main()
+        self.assertTrue(self.notification_directory_path.is_dir())

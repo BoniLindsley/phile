@@ -6,8 +6,6 @@ Test :mod:`phile.hotkey.pyside2`
 """
 
 # Standard library.
-import concurrent.futures
-import datetime
 import threading
 import typing
 import unittest
@@ -22,12 +20,7 @@ import phile.hotkey.pyside2
 import phile.PySide2.QtCore
 import phile.os
 import phile.signal
-from test_phile.test_init import UsesCapabilities, UsesConfiguration
-from test_phile.test_PySide2.test_QtCore import (
-    UsesExecutor, UsesQCoreApplication
-)
 from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
-from test_phile.test_trigger.test_init import UsesRegistry
 
 
 class TestKeyValueFromString(unittest.TestCase):
@@ -644,14 +637,11 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.assertEqual(self.key_sequence_widget.bound_values, [None])
 
 
-class TestHotkeyInput(
-    UsesQApplication, UsesRegistry, UsesExecutor, UsesConfiguration,
-    UsesCapabilities, unittest.TestCase
-):
-    """Tests :class:`~phile.hotkey.pyside2.HotkeyInput`."""
+class TestHotkeyInput(UsesQApplication, unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        self.trigger_registry = phile.trigger.Registry()
         self.alphabet_event = threading.Event()
         self.trigger_registry.bind('alphabet', self.alphabet_event.set)
         self.addCleanup(self.trigger_registry.unbind, 'alphabet')
@@ -737,14 +727,12 @@ class TestHotkeyInput(
         self.assertFalse(self.alphabet_event.is_set())
 
 
-class TestTriggerControlled(
-    UsesQApplication, UsesRegistry, UsesExecutor, UsesCapabilities,
-    unittest.TestCase
-):
-    """Tests :class:`~phile.hotkey.pyside2.TriggerControlled`."""
+class TestTriggerControlled(UsesQApplication, unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        self.trigger_registry = phile.trigger.Registry()
+        self.pyside2_executor = phile.PySide2.QtCore.Executor()
 
         class TriggerControlledWidget(
             phile.hotkey.pyside2.TriggerControlled,

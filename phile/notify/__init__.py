@@ -12,7 +12,7 @@ import pathlib
 import typing
 
 # Internal packages.
-import phile
+import phile.configuration
 import phile.data
 
 
@@ -25,11 +25,13 @@ class File(phile.data.File):
     def make_path(
         path_stem: str,
         *args: typing.Any,
-        configuration: phile.Configuration,
+        configuration: phile.configuration.Entries,
         **kwargs: typing.Any,
     ) -> pathlib.Path:
-        return configuration.notification_directory / (
-            path_stem + configuration.notification_suffix
+        return (
+            configuration.state_directory_path /
+            configuration.notification_directory /
+            (path_stem + configuration.notification_suffix)
         )
 
     def save(self) -> None:

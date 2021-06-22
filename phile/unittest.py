@@ -10,8 +10,8 @@ import unittest
 class UsesTemporaryDirectory(unittest.TestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.temporary_directory: pathlib.Path
         super().__init__(*args, **kwargs)
+        self.temporary_directory: pathlib.Path
 
     def setUp(self) -> None:
         super().setUp()

@@ -9,7 +9,6 @@ Test :mod:`phile.triggers`
 import collections.abc
 import os
 import pathlib
-import tempfile
 import typing
 import unittest
 import unittest.mock
@@ -18,9 +17,10 @@ import unittest.mock
 import portalocker
 
 # Internal packages.
-import phile
+import phile.configuration
 import phile.trigger
-from test_phile.test_init import UsesCapabilities
+import phile.unittest
+from test_phile.test_configuration.test_init import UsesConfiguration
 
 
 def noop_nullary() -> None:
@@ -28,7 +28,6 @@ def noop_nullary() -> None:
 
 
 class TestNullaryCallable(unittest.TestCase):
-    """Tests :data:`~phile.trigger.NullaryCallable`."""
 
     def test_compatible_lambda(self) -> None:
         _: phile.trigger.NullaryCallable = lambda: None
@@ -44,23 +43,21 @@ class TestNullaryCallable(unittest.TestCase):
         _: phile.trigger.NullaryCallable = noop_nullary
 
 
-class TestPidLock(unittest.TestCase):
-    """Tests :class:`~phile.trigger.PidLock`."""
+class TestPidLock(
+    phile.unittest.UsesTemporaryDirectory, unittest.TestCase
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.pid_lock_path: pathlib.Path
+        self.pid_lock: phile.trigger.PidLock
 
     def setUp(self) -> None:
-        """Create a directory to store the lock file."""
-        self.pid_lock_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.pid_lock_directory.cleanup)
-        self.pid_lock_path = pathlib.Path(
-            self.pid_lock_directory.name
-        ) / 'pid'
+        super().setUp()
+        self.pid_lock_path = self.temporary_directory / 'pid'
         self.pid_lock = phile.trigger.PidLock(self.pid_lock_path)
 
-    def test_setup_and_teardown(self) -> None:
-        """Ensure :meth:`setUp` and :meth:`tearDown` is working."""
-
     def test_acquire_and_release_and_locked(self) -> None:
-        """Basic usage of acquiring and then releasing."""
         self.assertFalse(self.pid_lock.locked())
         self.pid_lock.acquire()
         self.assertTrue(self.pid_lock.locked())
@@ -71,31 +68,26 @@ class TestPidLock(unittest.TestCase):
         self.assertFalse(self.pid_lock.locked())
         self.assertEqual(self.pid_lock_path.read_text(), '')
 
-    def test_acquire_twice(self) -> None:
-        """Acquiring twice warns."""
+    def test_acquire_twice_warns(self) -> None:
         self.pid_lock.acquire()
         self.addCleanup(self.pid_lock.release)
         with self.assertRaises(portalocker.LockException):
             self.pid_lock.acquire()
 
-    def test_double_acquire(self) -> None:
-        """Acquiring a PID that was acquired by someone else warns."""
+    def test_double_acquire_warns(self) -> None:
         self.pid_lock.acquire()
         self.addCleanup(self.pid_lock.release)
         new_pid_lock = phile.trigger.PidLock(self.pid_lock_path)
         with self.assertRaises(portalocker.LockException):
             new_pid_lock.acquire()
 
-    def test_release_unacquired(self) -> None:
-        """Releasing unacquired PID is okay."""
+    def test_release_unacquired_is_ignored(self) -> None:
         self.pid_lock.release()
 
-    def test_finaliser_when_unlocked(self) -> None:
-        """Finaliser should succeed if not locked."""
+    def test_finaliser__succeeds_when_unlocked(self) -> None:
         self.pid_lock.__del__()
 
-    def test_finaliser_when_locked(self) -> None:
-        """Finaliser should warn if locked."""
+    def test_finaliser__warns_when_locked(self) -> None:
         self.pid_lock.acquire()
         self.addCleanup(self.pid_lock.release)
         with self.assertWarns(UserWarning):
@@ -103,22 +95,18 @@ class TestPidLock(unittest.TestCase):
         self.assertFalse(self.pid_lock.locked())
 
 
-class TestEntryPoint(unittest.TestCase):
-    """Tests :func:`~phile.trigger.EntryPoint`."""
+class TestEntryPoint(UsesConfiguration, unittest.TestCase):
 
     def setUp(self) -> None:
-        """Create a directory to use as a trigger directory."""
-        user_state_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(user_state_directory.cleanup)
-        self.user_state_directory = pathlib.Path(
-            user_state_directory.name
-        )
-        self.configuration = phile.Configuration(
-            user_state_directory=self.user_state_directory,
+        super().setUp()
+        self.user_state_directory = (
+            self.configuration.state_directory_path
         )
         self.trigger_directory_name = 'tr'
         self.trigger_directory = (
-            self.configuration.trigger_root / self.trigger_directory_name
+            self.state_directory_path /
+            self.configuration.trigger_directory /
+            self.trigger_directory_name
         )
         self.entry_point = phile.trigger.EntryPoint(
             configuration=self.configuration,
@@ -129,20 +117,32 @@ class TestEntryPoint(unittest.TestCase):
             self.trigger_name + self.configuration.trigger_suffix
         )
 
-    def test_relative_trigger_directory(self) -> None:
-        """
-        Provides
-        :attr:`phile.trigger.EntryPoint.trigger_directory`
-        to determined the managed directory.
-        """
+    def test_init__with_bind(self) -> None:
+        entry_point = phile.trigger.EntryPoint(
+            bind=True,
+            configuration=self.configuration,
+            trigger_directory=pathlib.Path(self.trigger_directory_name),
+        )
+        entry_point.unbind()
+
+    def test_init__with_bind_and_available_triggers(self) -> None:
+        entry_point = phile.trigger.EntryPoint(
+            available_triggers=set('t'),
+            bind=True,
+            callback_map={'t': lambda: None},
+            configuration=self.configuration,
+            trigger_directory=pathlib.Path(self.trigger_directory_name),
+        )
+        entry_point.unbind()
+
+    def test_uses_directory_relative_to_trigger_directory(self) -> None:
         self.assertEqual(
             self.entry_point.trigger_directory, self.trigger_directory
         )
 
-    def test_absolute_trigger_directory(self) -> None:
-        """Provided trigger directory can be absolute."""
+    def test_can_use_absolute_directory(self) -> None:
         trigger_directory = (
-            self.configuration.user_state_directory / 'ttgg'
+            self.configuration.state_directory_path / 'ttgg'
         )
         entry_point = phile.trigger.EntryPoint(
             configuration=self.configuration,
@@ -153,11 +153,6 @@ class TestEntryPoint(unittest.TestCase):
         )
 
     def test_bind_and_unbind_and_is_bound(self) -> None:
-        """
-        Basic usage of :meth:`~phile.trigger.EntryPoint.bind`
-        and :meth:`~phile.trigger.EntryPoint.unbind`,
-        and :meth:`~phile.trigger.EntryPoint.is_bound`,
-        """
         self.assertTrue(not self.entry_point.is_bound())
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
@@ -165,19 +160,11 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.unbind()
         self.assertTrue(not self.entry_point.is_bound())
 
-    def test_unbind_without_bind(self) -> None:
-        """
-        Ignore :meth:`~phile.trigger.EntryPoint.unbind` calls
-        if not already bound.
-        """
+    def test_unbind__ignored_without_bind(self) -> None:
         self.entry_point.unbind()
         self.assertTrue(not self.entry_point.is_bound())
 
-    def test_two_instances_binding_same_trigger_directory(self) -> None:
-        """
-        Two instances :meth:`~phile.trigger.EntryPoint.bind`-ing
-        the same ``trigger_directory`` should fail.
-        """
+    def test_fails_if_two_instances_bind_same_directory(self) -> None:
         # Bind once.
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
@@ -197,35 +184,30 @@ class TestEntryPoint(unittest.TestCase):
         self.assertTrue(not entry_point.is_bound())
 
     def test_get_trigger_path(self) -> None:
-        """Fetch the trigger path of a given name."""
         trigger_path = self.entry_point.get_trigger_path(
             self.trigger_name
         )
         self.assertEqual(trigger_path, self.trigger_path)
 
-    def test_check_path_checks_directory(self) -> None:
-        """A trigger file path must be in trigger directory."""
+    def test_check_path__checks_directory(self) -> None:
         invalid_path = self.user_state_directory / 'ttgg'
         self.assertTrue(self.entry_point.check_path(self.trigger_path))
         self.assertTrue(not self.entry_point.check_path(invalid_path))
 
-    def test_check_path_checks_suffix(self) -> None:
-        """A trigger file path must be in trigger directory."""
+    def test_check_path__checks_suffix(self) -> None:
         invalid_path = self.trigger_directory / (
             'a' + self.configuration.trigger_suffix + '_not'
         )
         self.assertTrue(self.entry_point.check_path(self.trigger_path))
         self.assertTrue(not self.entry_point.check_path(invalid_path))
 
-    def test_add_trigger_checks_for_callback(self) -> None:
-        """Adding trigger makes sure the trigger has a callback."""
+    def test_add_trigger__checks_for_callback(self) -> None:
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
         with self.assertRaises(AssertionError):
             self.entry_point.add_trigger(self.trigger_name)
 
     def test_add_and_remove_trigger(self) -> None:
-        """Adding and removing trigger creates and deletes files."""
         self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
@@ -234,22 +216,19 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.remove_trigger(self.trigger_name)
         self.assertTrue(not self.trigger_path.exists())
 
-    def test_remove_non_existent_trigger(self) -> None:
-        """Removing a non-existent trigger is fine."""
+    def test_remove__ignores_non_existent_trigger(self) -> None:
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
         self.entry_point.remove_trigger(self.trigger_name)
         self.assertTrue(not self.trigger_path.exists())
 
-    def test_add_and_remove_trigger_without_binding(self) -> None:
-        """Manipulating triggers without binding raises an exception."""
+    def test_add_and_remove_trigger__raises_if_not_bound(self) -> None:
         with self.assertRaises(ResourceWarning):
             self.entry_point.add_trigger(self.trigger_name)
         with self.assertRaises(ResourceWarning):
             self.entry_point.remove_trigger(self.trigger_name)
 
-    def test_add_trigger_on_init(self) -> None:
-        """Triggers can be added in initialiser if also binding."""
+    def test_add_trigger__inside_init(self) -> None:
         entry_point = phile.trigger.EntryPoint(
             available_triggers={'red', 'yellow'},
             bind=True,
@@ -264,8 +243,9 @@ class TestEntryPoint(unittest.TestCase):
         self.assertTrue(entry_point.get_trigger_path('red').is_file())
         self.assertTrue(entry_point.get_trigger_path('yellow').is_file())
 
-    def test_activate_trigger_if_deleted(self) -> None:
-        """Activation is based on path."""
+    def test_activate_trigger__calls_callback_if_trigger_file_deleted(
+        self
+    ) -> None:
         trigger_callback = unittest.mock.Mock()
         self.entry_point.callback_map = {
             self.trigger_name: trigger_callback
@@ -277,8 +257,9 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.activate_trigger(self.trigger_path)
         trigger_callback.assert_called_once_with()
 
-    def test_activate_trigger_fails_if_not_deleted(self) -> None:
-        """Activation checks that the trigger path is deleted."""
+    def test_activate_trigger__ignores_if_trigger_file_not_deleted(
+        self
+    ) -> None:
         trigger_callback = unittest.mock.Mock()
         self.entry_point.callback_map = {
             self.trigger_name: trigger_callback
@@ -289,10 +270,9 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.activate_trigger(self.trigger_path)
         trigger_callback.assert_not_called()
 
-    def test_activate_trigger_fails_if_trigger_not_available(
+    def test_activate_trigger__ignores_if_trigger_not_available(
         self
     ) -> None:
-        """Activation checks that the trigger path is available."""
         trigger_callback = unittest.mock.Mock()
         self.entry_point.callback_map = {
             self.trigger_name: trigger_callback
@@ -300,8 +280,9 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.activate_trigger(self.trigger_path)
         trigger_callback.assert_not_called()
 
-    def test_activate_trigger_fails_without_callback(self) -> None:
-        """Activation checks that the trigger has a callback."""
+    def test_activate_trigger__ignores_trigger_without_callback(
+        self
+    ) -> None:
         self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
@@ -310,8 +291,7 @@ class TestEntryPoint(unittest.TestCase):
         self.entry_point.callback_map = {}
         self.entry_point.activate_trigger(self.trigger_path)
 
-    def test_unbind_removes_triggers(self) -> None:
-        """Unbinding cleans up any remaining triggers."""
+    def test_unbind__removes_all_remaining_triggers(self) -> None:
         self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
         self.entry_point.bind()
@@ -322,9 +302,9 @@ class TestEntryPoint(unittest.TestCase):
 
 
 class TestRegistry(unittest.TestCase):
-    """Tests :func:`~phile.trigger.Registry`."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.registry = phile.trigger.Registry()
 
     def test_available_exceptions(self) -> None:
@@ -549,18 +529,10 @@ class TestRegistry(unittest.TestCase):
         self.assertNotIn(name, self.registry.visible_triggers)
 
 
-class UsesRegistry(UsesCapabilities, unittest.TestCase):
+class TestProvider(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.trigger_registry = registry = phile.trigger.Registry()
-        self.capabilities.set(registry)
-
-
-class TestProvider(unittest.TestCase):
-    """Tests :func:`~phile.trigger.Provider`."""
-
-    def setUp(self) -> None:
         self.callback_map: dict[str, phile.trigger.NullaryCallable] = {
             'open': unittest.mock.Mock(),
             'close': unittest.mock.Mock(),
@@ -660,7 +632,3 @@ class TestProvider(unittest.TestCase):
         self.provider.show_all()
         for name in self.callback_map:
             self.assertTrue(self.registry.is_shown(name))
-
-
-if __name__ == '__main__':
-    unittest.main()

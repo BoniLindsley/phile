@@ -23,7 +23,7 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
-import phile
+import phile.configuration
 import phile.PySide2.QtCore
 import phile.PySide2.QtNetwork
 import phile.data
@@ -86,6 +86,7 @@ class NotificationMdiSubWindow(QMdiSubWindow):
 
     def closeEvent(self, close_event: QCloseEvent) -> None:
         """Internal method to handle the sub-window being closed. """
+        del close_event
         self.closed.emit(self.title)
 
     @property
@@ -254,9 +255,11 @@ class MainWindow(QMainWindow):
     """Internal. Emitted when the window is closed to handle cleanup."""
 
     def __init__(
-        self, *args: typing.Any, configuration: phile.Configuration,
+        self,
+        *args: typing.Any,
+        configuration: phile.configuration.Entries,
         watching_observer: watchdog.observers.Observer,
-        **kwargs: typing.Any
+        **kwargs: typing.Any,
     ):
         # Create the window.
         super().__init__(*args, **kwargs)
@@ -299,7 +302,10 @@ class MainWindow(QMainWindow):
                     phile.PySide2.QtCore.call_soon_threadsafe,
                     sorter.update,
                 ),
-                watched_path=configuration.notification_directory,
+                watched_path=(
+                    configuration.state_directory_path /
+                    configuration.notification_directory
+                ),
                 watching_observer=watching_observer,
             )
         )
@@ -348,16 +354,19 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, close_event: QCloseEvent) -> None:
         """Internal. Handle cleanup."""
+        del close_event
         _logger.debug('MainWindow is closing.')
         self._closed.emit()
 
     def hideEvent(self, hide_event: QHideEvent) -> None:
         _logger.debug('MainWindow is hiding.')
+        del hide_event
         self._notify_scheduler.unschedule()
         self._entry_point.remove_trigger('hide')
         self._entry_point.add_trigger('show')
 
     def showEvent(self, show_event: QShowEvent) -> None:
+        del show_event
         _logger.debug('MainWindow is showing.')
         # Start scheduling first to not miss events.
         self._notify_scheduler.schedule()
@@ -372,7 +381,10 @@ class MainWindow(QMainWindow):
         # but that seems over-engineered for the task at hand.
         configuration = self._configuration
         self.sorter.refresh(
-            data_directory=configuration.notification_directory,
+            data_directory=(
+                configuration.state_directory_path /
+                configuration.notification_directory
+            ),
             data_file_suffix=configuration.notification_suffix
         )
         self._entry_point.remove_trigger('show')
@@ -425,9 +437,13 @@ class MainWindow(QMainWindow):
         notification.path.unlink(missing_ok=True)
 
 
-def main(argv: typing.List[str] = sys.argv) -> int:  # pragma: no cover
+def main(
+    argv: typing.Optional[list[str]] = None
+) -> int:  # pragma: no cover
+    if argv is None:
+        argv = sys.argv
     app = QApplication(argv)
-    configuration = phile.Configuration()
+    configuration = phile.configuration.load()
     watching_observer = watchdog.observers.Observer()
     watching_observer.daemon = True
     watching_observer.start()

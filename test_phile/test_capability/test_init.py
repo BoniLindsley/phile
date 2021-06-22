@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-----------------------------
-Test :mod:`phile.capability`
-----------------------------
-"""
 
 # Standard libraries.
 import unittest
@@ -22,11 +17,21 @@ class TestAlreadyEnabled(unittest.TestCase):
 
 
 class TestRegistry(unittest.TestCase):
-    """Tests :func:`~phile.capability.Registry`."""
 
     def setUp(self) -> None:
         super().setUp()
         self.capability_registry = phile.capability.Registry()
+
+    def test_getitem_non_existent(self) -> None:
+        self.assertIsNone(self.capability_registry.get(int))
+
+    def test_getitem_setitem(self) -> None:
+        self.capability_registry[int] = 1
+        self.assertEqual(self.capability_registry[int], 1)
+
+    def test_set(self) -> None:
+        self.capability_registry.set(2)
+        self.assertEqual(self.capability_registry[int], 2)
 
     def test_provide_returns_context_manager_for_clean_up(self) -> None:
         with self.capability_registry.provide(1):
@@ -49,10 +54,3 @@ class TestRegistry(unittest.TestCase):
             with self.capability_registry.provide(1):
                 pass
         self.assertEqual(self.capability_registry[int], 0)
-
-
-class UsesRegistry(unittest.TestCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.capability_registry = phile.capability.Registry()

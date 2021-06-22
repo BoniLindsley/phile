@@ -8,7 +8,7 @@ Test :mod:`phile.notify.gui`
 # Standard library.
 import datetime
 import pathlib
-import tempfile
+import typing
 import unittest
 import unittest.mock
 
@@ -19,12 +19,13 @@ import watchdog.events
 import watchdog.observers
 
 # Internal packages.
-import phile
 import phile.PySide2.QtCore
+import phile.configuration
 import phile.notify
 import phile.notify.gui
 import test_phile.threaded_mock
 from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
+from test_phile.test_configuration.test_init import UsesConfiguration
 
 # TODO(BoniLindsley): Refactor to remove PySide2 warnings.
 # ```
@@ -34,6 +35,15 @@ from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
 
 class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
     """Tests :class:`~phile.notify.gui.NotificationMdiSubWindow`."""
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.content: str
+        self.modified_at: datetime.datetime
+        self.title: str
+        self.notification_sub_window: (
+            phile.notify.gui.NotificationMdiSubWindow
+        )
 
     def setUp(self) -> None:
         """
@@ -46,10 +56,12 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
         would interfere with each other.
         """
         super().setUp()
-        self.content = 'You have 123 friends.\n'
-        'You have 456 unread messages.\n'
-        'New security settings has been added.\n'
-        'Log in to review them.',
+        self.content = (
+            'You have 123 friends.\n'
+            'You have 456 unread messages.\n'
+            'New security settings has been added.\n'
+            'Log in to review them.'
+        )
         self.modified_at = datetime.datetime(
             year=2000,
             month=11,
@@ -446,21 +458,26 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         self.assertEqual(notification_sub_window.pos().x(), 1)
 
 
-class TestMainWindow(UsesQApplication, unittest.TestCase):
-    """Tests for :class:`~phile.notify.gui.MainWindow`."""
+class TestMainWindow(
+    UsesQApplication, UsesConfiguration, unittest.TestCase
+):
 
-    def set_up_configuration(self) -> None:
-        """
-        Use unique data directories to not interfere with other tests.
-        """
-        user_state_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(user_state_directory.cleanup)
-        self.configuration = phile.Configuration(
-            user_state_directory=pathlib.Path(user_state_directory.name)
-        )
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.trigger_directory: pathlib.Path
+        self.watching_observer: watchdog.observers.Observer
+        self.main_window: unittest.mock.Mock
+
+    def setUp(self) -> None:
+        super().setUp()
         self.trigger_directory = (
-            self.configuration.trigger_root / 'phile-notify-gui'
+            self.configuration.state_directory_path /
+            self.configuration.trigger_directory / 'phile-notify-gui'
         )
+        self.set_up_observer()
+        self.set_up_main_window()
+        self.set_up_notify_dispatcher()
+        self.set_up_trigger_dispatcher()
 
     def set_up_observer(self) -> None:
         """
@@ -501,14 +518,6 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
             new_callable=test_phile.threaded_mock.ThreadedMock,
             wraps=scheduler.path_handler
         )
-
-    def setUp(self) -> None:
-        self.set_up_configuration()
-        self.set_up_observer()
-        super().setUp()
-        self.set_up_main_window()
-        self.set_up_notify_dispatcher()
-        self.set_up_trigger_dispatcher()
 
     def test_initialisation(self) -> None:
         """Create a MainWindow object."""
@@ -604,13 +613,17 @@ class TestMainWindow(UsesQApplication, unittest.TestCase):
         )
         notification_2.save()
         # Throw in a file with a wrong suffix.
+        notification_directory = (
+            self.configuration.state_directory_path /
+            self.configuration.notification_directory
+        )
         (
-            self.configuration.notification_directory /
+            notification_directory /
             ('file' + self.configuration.notification_suffix + '_not')
         ).touch()
         # Also throw in a directory that should be ignored.
         (
-            self.configuration.notification_directory /
+            notification_directory /
             ('subdirectory' + self.configuration.notification_suffix)
         ).mkdir()
         # Check that they are all detected when showing the main window.

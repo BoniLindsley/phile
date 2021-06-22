@@ -22,7 +22,6 @@ import PySide2.QtCore
 import phile.PySide2.QtCore
 import phile.os
 import phile.signal
-from test_phile.test_init import UsesCapabilities
 
 
 class UsesPySide2(unittest.TestCase):
@@ -373,13 +372,3 @@ class TestExecutor(UsesQCoreApplication, unittest.TestCase):
             pass
         with self.assertRaises(RuntimeError):
             executor.submit(lambda: None)
-
-
-class UsesExecutor(UsesCapabilities, unittest.TestCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.pyside2_executor = pyside2_executor = (
-            phile.PySide2.QtCore.Executor()
-        )
-        self.capabilities.set(pyside2_executor)

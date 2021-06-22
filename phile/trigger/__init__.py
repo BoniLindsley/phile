@@ -24,7 +24,7 @@ import warnings
 import portalocker
 
 # Internal packages.
-import phile
+import phile.configuration
 import phile.data
 
 # TODO[mypy issue #1422]: __loader__ not defined
@@ -72,7 +72,9 @@ class PidLock:
         # Need the parent directory to exist before making the file.
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
         # Open with "append" which creates the file if missing.
-        file_handle = open(self._lock_path, 'a')
+        file_handle = open(  # pylint: disable=consider-using-with
+            self._lock_path, 'a'
+        )
         try:
             portalocker.lock(
                 file_handle, portalocker.LOCK_EX | portalocker.LOCK_NB
@@ -139,10 +141,10 @@ class EntryPoint:
     def __init__(
         self,
         *,
-        available_triggers: typing.Set[str] = set(),
+        available_triggers: typing.Optional[set[str]] = None,
         bind: bool = False,
-        callback_map: typing.Dict[str, NullaryCallable] = {},
-        configuration: phile.Configuration,
+        callback_map: typing.Optional[dict[str, NullaryCallable]] = None,
+        configuration: phile.configuration.Entries,
         trigger_directory: pathlib.Path,
     ) -> None:
         """
@@ -150,7 +152,7 @@ class EntryPoint:
             Triggers to add.
             This must be empty if `bind` is `False`.
         :parm bind: Whether to bind immediately.
-        :param ~phile.Configuration configuration:
+        :param ~phile.configuration.Entries configuration:
             Information on where data are saved.
         :param ~pathlib.Path trigger_directory:
             Directory containing trigger files
@@ -159,7 +161,8 @@ class EntryPoint:
             :attr:`~phile.Configuration.trigger_root`.
         """
         self.trigger_directory = (
-            configuration.trigger_root / trigger_directory
+            configuration.state_directory_path /
+            configuration.trigger_directory / trigger_directory
         )
         """The directory containing trigger files."""
         self._trigger_suffix = configuration.trigger_suffix
@@ -168,28 +171,32 @@ class EntryPoint:
             self.trigger_directory / configuration.pid_path
         )
         """Lock representing ownership of watched directory."""
-        self.callback_map: typing.Dict[
-            str,
-            NullaryCallable] = (callback_map if callback_map else {})
+        self.callback_map: typing.Dict[str, NullaryCallable] = (
+            callback_map if callback_map is not None else {}
+        )
         """Keeps track which callback handles which trigger."""
         self.available_triggers: typing.Set[str] = set()
         """Triggers that has been added and not removed nor used."""
         if bind:
             self.bind()
-            for trigger_name in available_triggers:
-                self.add_trigger(trigger_name)
+            if available_triggers is not None:
+                for trigger_name in available_triggers:
+                    self.add_trigger(trigger_name)
 
     def __enter__(self) -> 'EntryPoint':
         self.bind()
         return self
 
     def __exit__(
-        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
         exc_value: typing.Optional[BaseException],
-        traceback: typing.Optional[types.TracebackType]
-    ) -> typing.Optional[bool]:
+        traceback: typing.Optional[types.TracebackType],
+    ) -> None:
+        del exc_type
+        del exc_value
+        del traceback
         self.unbind()
-        return None
 
     def activate_trigger(self, trigger_path: pathlib.Path) -> None:
         """
@@ -435,12 +442,11 @@ class Provider:
         exc_type: typing.Optional[typing.Type[BaseException]],
         exc_value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> typing.Optional[bool]:
+    ) -> None:
         del exc_type
         del exc_value
         del traceback
         self.unbind()
-        return None
 
     def bind(self) -> None:
         try:

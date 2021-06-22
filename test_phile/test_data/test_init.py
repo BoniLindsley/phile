@@ -14,8 +14,9 @@ import unittest
 import unittest.mock
 
 # Internal packages.
-import phile
+import phile.configuration
 import phile.data
+from test_phile.test_configuration.test_init import UsesConfiguration
 
 
 class BasicLoadData(phile.data.SortableLoadData):
@@ -43,56 +44,41 @@ class SubFile(phile.data.File):
         cls,
         path_stem: str,
         *args: typing.Any,
-        configuration: phile.Configuration,
+        configuration: phile.configuration.Entries,
         **kwargs: typing.Any,
     ) -> pathlib.Path:
         del configuration
         return pathlib.Path(path_stem + cls.suffix)
 
 
-class TestFileMakePath(unittest.TestCase):
-    """Tests :meth:`~phile.data.File.make_path`."""
+class TestFileMakePath(UsesConfiguration, unittest.TestCase):
 
-    def set_up_configuration(self) -> None:
-        data_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(data_directory.cleanup)
-        self.configuration = configuration = (
-            phile.Configuration(
-                user_state_directory=pathlib.Path(data_directory.name)
-            )
-        )
-        self.data_directory = configuration.user_state_directory
+    def setUp(self) -> None:
+        super().setUp()
         self.data_suffix = '.phile'
-
-    def set_up_path_filter(self) -> None:
-        self.path_filter = path_filter = functools.partial(
+        self.path_filter = functools.partial(
             phile.data.File.check_path, configuration=self.configuration
         )
 
-    def setUp(self) -> None:
-        self.set_up_configuration()
-        self.set_up_path_filter()
-
-    def test_make_path(self) -> None:
-        """Call make_path."""
+    def test_make_path__from_stem_and_configuration(self) -> None:
         stem = 'name'
-        expected_path = self.data_directory / (stem + self.data_suffix)
+        expected_path = self.state_directory_path / (
+            stem + self.data_suffix
+        )
         file_path = phile.data.File.make_path(
             stem, configuration=self.configuration
         )
         self.assertEqual(file_path, expected_path)
 
-    def test_from_path_stem(self) -> None:
-        """Constructing with just path stem should be possible."""
+    def test_from_path_stem__and_configuration(self) -> None:
         stem = 'name'
-        path = self.data_directory / (stem + self.data_suffix)
+        path = self.state_directory_path / (stem + self.data_suffix)
         file = phile.data.File.from_path_stem(
             stem, configuration=self.configuration
         )
         self.assertEqual(file.path, path)
 
-    def test_subclass_from_path_stem(self) -> None:
-        """Subclasses can create by implementing ``make_path``."""
+    def test_subclass_by_implementing_make_path(self) -> None:
         stem = 'name'
         path = pathlib.Path(stem + SubFile.suffix)
         file = SubFile.from_path_stem(
@@ -100,18 +86,16 @@ class TestFileMakePath(unittest.TestCase):
         )
         self.assertEqual(file.path, path)
 
-    def test_match(self) -> None:
-        """Check an explicit path that should pass."""
+    def test_check_path__that_passes(self) -> None:
         name = 'name' + self.data_suffix
-        path = self.data_directory / name
+        path = self.state_directory_path / name
         self.assertTrue(
             phile.data.File.check_path(
                 configuration=self.configuration, path=path
             )
         )
 
-    def test_subclass_match(self) -> None:
-        """Subclasses can match by implementing ``make_path``."""
+    def test_check_path__of_subclass(self) -> None:
         self.assertTrue(
             SubFile.check_path(
                 configuration=self.configuration,
@@ -119,31 +103,28 @@ class TestFileMakePath(unittest.TestCase):
             )
         )
 
-    def test_partial_for_filter(self) -> None:
-        """
-        Usable as a single parameter callback
-        using :func:`~functools.partial`.
-        """
+    def test_check_path__is_a_filter_that_uses_configuration(
+        self
+    ) -> None:
         name = 'name' + self.data_suffix
-        path = self.data_directory / name
+        path = self.state_directory_path / name
         self.assertTrue(self.path_filter(path))
 
-    def test_make_path_result(self) -> None:
-        """Result of :meth:`~phile.data.File.make_path` should pass."""
+    def test_make_path__return_value_passes_check_path(self) -> None:
         path_stem = 'stem'
         path = phile.data.File.make_path(
             configuration=self.configuration, path_stem=path_stem
         )
         self.assertTrue(self.path_filter(path))
 
-    def test_directory_mismatch(self) -> None:
+    def test_check_path__fails_if_wrong_directory(self) -> None:
         name = 'name' + self.data_suffix
-        path = self.data_directory / name / name
+        path = self.state_directory_path / name / name
         self.assertTrue(not self.path_filter(path))
 
-    def test_suffix_mismatch(self) -> None:
+    def test_check_path__fails_if_wrong_suffix(self) -> None:
         name = 'name' + self.data_suffix + '_not'
-        path = self.data_directory / name
+        path = self.state_directory_path / name
         self.assertTrue(not self.path_filter(path))
 
 

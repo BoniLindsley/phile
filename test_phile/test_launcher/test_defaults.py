@@ -21,11 +21,8 @@ import phile.configuration
 import phile.launcher.defaults
 import phile.tray
 import phile.watchdog.asyncio
-from test_phile.test_capability.test_init import (
-    UsesRegistry as UsesCapabilityRegistry
-)
 from test_phile.test_configuration.test_init import (
-    PreparesEntries as PreparesConfigurationEntries,
+    PreparesEntries as PreparesConfiguration,
 )
 from test_phile.test_launcher.test_init import (
     UsesRegistry as UsesLauncherRegistry
@@ -36,8 +33,7 @@ from test_phile.test_watchdog.test_asyncio import UsesObserver
 
 class TestAddConfiguration(
     UsesLauncherRegistry,
-    PreparesConfigurationEntries,
-    UsesCapabilityRegistry,
+    PreparesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
     """Tests :func:`~phile.launcher.defaults.add_configuration`."""
@@ -79,8 +75,7 @@ class TestAddConfiguration(
 
 class TestAddLogFile(
     UsesLauncherRegistry,
-    PreparesConfigurationEntries,
-    UsesCapabilityRegistry,
+    PreparesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
     """Tests :func:`~phile.launcher.defaults.add_configuration`."""
@@ -186,7 +181,6 @@ class TestAddKeyring(
 
 class TestAddTray(
     UsesLauncherRegistry,
-    UsesCapabilityRegistry,
     unittest.IsolatedAsyncioTestCase,
 ):
 
@@ -234,8 +228,7 @@ class TestAddTray(
 class TestAddTrayDatetime(
     UsesObserver,
     UsesLauncherRegistry,
-    PreparesConfigurationEntries,
-    UsesCapabilityRegistry,
+    PreparesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
 
@@ -332,8 +325,7 @@ class TestAddTrayDatetime(
 class TestAddTrayPsutil(
     UsesLauncherRegistry,
     UsesObserver,
-    PreparesConfigurationEntries,
-    UsesCapabilityRegistry,
+    PreparesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
     """Tests :func:`~phile.launcher.defaults.add_trigger_watchdog`."""
@@ -428,7 +420,6 @@ class TestAddTrayPsutil(
 
 class TestAddTrayText(
     UsesLauncherRegistry,
-    UsesCapabilityRegistry,
     unittest.IsolatedAsyncioTestCase,
 ):
 
@@ -479,9 +470,8 @@ class TestAddTrayText(
 
 
 class TestAddTrayNotify(
-    PreparesConfigurationEntries,
+    PreparesConfiguration,
     UsesLauncherRegistry,
-    UsesCapabilityRegistry,
     unittest.IsolatedAsyncioTestCase,
 ):
 
@@ -541,7 +531,6 @@ class TestAddTrayNotify(
 class TestAddTrayTmux(
     UsesRunningTmuxServer,
     UsesLauncherRegistry,
-    UsesCapabilityRegistry,
     unittest.IsolatedAsyncioTestCase,
 ):
 
@@ -595,8 +584,7 @@ class TestAddTrayTmux(
 
 class TestAddTriggerWatchdog(
     UsesLauncherRegistry,
-    PreparesConfigurationEntries,
-    UsesCapabilityRegistry,
+    PreparesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
     """Tests :func:`~phile.launcher.defaults.add_trigger_watchdog`."""

@@ -19,9 +19,6 @@ import phile.asyncio
 import phile.asyncio.pubsub
 import phile.capability
 import phile.launcher
-from test_phile.test_capability.test_init import (
-    UsesRegistry as UsesCapabilityRegistry
-)
 
 _T = typing.TypeVar('_T')
 
@@ -1212,18 +1209,16 @@ class TestProvideRegistry(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(phile.launcher.Registry, capability_registry)
 
 
-class UsesRegistry(
-    UsesCapabilityRegistry,
-    unittest.IsolatedAsyncioTestCase,
-):
-    """Tests :func:`~phile.launcher.provide_registry`."""
+class UsesRegistry(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self.launcher_registry: phile.launcher.Registry
         super().__init__(*args, **kwargs)
+        self.capability_registry: phile.capability.Registry
+        self.launcher_registry: phile.launcher.Registry
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
+        self.capability_registry = phile.capability.Registry()
         registry_cm = phile.launcher.provide_registry(
             capability_registry=self.capability_registry,
         )
