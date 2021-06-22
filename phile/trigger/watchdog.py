@@ -11,21 +11,15 @@ import collections.abc
 import contextlib
 import functools
 import pathlib
-#import sys
-import types
 import typing
 
 # External dependencies.
 #import portalocker
 import watchdog.events
-import watchdog.observers
 
 # Internal modules.
-import phile
-import phile.asyncio.pubsub
 import phile.configuration
 import phile.trigger
-import phile.watchdog
 import phile.watchdog.asyncio
 
 # TODO[mypy issue #1422]: __loader__ not defined
@@ -40,53 +34,65 @@ class Producer:
     __Self = typing.TypeVar('__Self', bound='Producer')
 
     def __init__(
-        self, *args: typing.Any, capabilities: phile.Capabilities,
-        **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        configuration: phile.configuration.Entries,
+        observer: phile.watchdog.asyncio.BaseObserver,
+        trigger_registry: phile.trigger.Registry,
+        **kwargs: typing.Any,
     ) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        configuration = capabilities[phile.Configuration]
-        observer = capabilities[watchdog.observers.api.BaseObserver]
-        self._registry = capabilities[phile.trigger.Registry]
-        self._trigger_root = configuration.trigger_root
-        self._trigger_suffix = configuration.trigger_suffix
         self._bound_names = set[str]()
-        self._scheduler = phile.watchdog.Scheduler(
-            path_filter=self._is_trigger_path,
-            path_handler=self._on_path_change,
-            watched_path=self._trigger_root,
-            watching_observer=observer,
+        self._observer = observer
+        self._registry = trigger_registry
+        self._trigger_directory = (
+            configuration.state_directory_path /
+            configuration.trigger_directory
         )
+        self._trigger_suffix = configuration.trigger_suffix
 
-    def __enter__(self: __Self) -> __Self:
-        """Not reentrant."""
+    async def run(self) -> None:
+        await asyncio.to_thread(
+            self._trigger_directory.mkdir, parents=True, exist_ok=True
+        )
+        watchdog_event_queue = await self._observer.schedule(
+            str(self._trigger_directory)
+        )
+        watchdog_view = watchdog_event_queue.__aiter__()
+        del watchdog_event_queue
         try:
-            self._scheduler.__enter__()
-            for trigger in sorted(
-                self._trigger_root.glob('*' + self._trigger_suffix)
-            ):
-                self._on_path_change(trigger)
-        except:  # pragma: no cover  # Defensive.
-            self._scheduler.__exit__(None, None, None)
-            raise
-        return self
+            await asyncio.to_thread(self._bind_existing_triggers)
+            try:
+                ignore_directories = (
+                    phile.watchdog.asyncio.
+                    ignore_directories(watchdog_view)
+                )
+                to_paths = phile.watchdog.asyncio.to_paths(
+                    ignore_directories
+                )
+                filter_parent = phile.watchdog.asyncio.filter_parent(
+                    self._trigger_directory, to_paths
+                )
+                filter_suffix = phile.watchdog.asyncio.filter_suffix(
+                    self._trigger_suffix, filter_parent
+                )
+                async for path in filter_suffix:  # pragma: no branch
+                    self._on_path_change(path)
+            finally:
+                await asyncio.to_thread(self._unbind_all_triggers)
+        finally:
+            await self._observer.unschedule(str(self._trigger_directory))
 
-    def __exit__(
-        self, exc_type: typing.Optional[typing.Type[BaseException]],
-        exc_value: typing.Optional[BaseException],
-        traceback: typing.Optional[types.TracebackType]
-    ) -> None:
-        with contextlib.ExitStack() as stack:
-            # Make sure scheduler `__exit__`
-            # is called with appropriate arguments.
-            stack.push(self._scheduler)
-            # If unbind fails,
-            # exception is propagated to scheduler through exit stack.
-            for name in self._bound_names.copy():
-                self._unbind(name)
-            # If unbind succeeds,
-            # then exception for `self` is propagated instead.
-            stack.__exit__(exc_type, exc_value, traceback)
+    def _bind_existing_triggers(self) -> None:
+        for trigger in sorted(
+            self._trigger_directory.glob('*' + self._trigger_suffix)
+        ):
+            self._on_path_change(trigger)
+
+    def _unbind_all_triggers(self) -> None:
+        for name in self._bound_names.copy():
+            self._unbind(name)
 
     def _on_path_change(self, path: pathlib.Path) -> None:
         trigger_name = path.stem
@@ -109,9 +115,6 @@ class Producer:
             pass
         else:
             self._registry.unbind(name)
-
-    def _is_trigger_path(self, path: pathlib.Path) -> bool:
-        return path.suffix == self._trigger_suffix
 
 
 class View:

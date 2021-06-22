@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""
------------------------------
-Test :mod:`phile.trigger.cli`
------------------------------
-"""
 
 # Standard library.
 import io
+import typing
 import unittest
 import unittest.mock
 
@@ -15,19 +11,23 @@ import phile
 import phile.asyncio
 import phile.trigger
 import phile.trigger.cli
-from test_phile.test_init import UsesCapabilities
-from test_phile.test_trigger.test_init import UsesRegistry
 
 
-class TestPrompt(UsesRegistry, UsesCapabilities, unittest.TestCase):
-    """Tests :func:`~phile.trigger.cli.Prompt`."""
+class TestPrompt(unittest.TestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.stdin: io.StringIO
+        self.stdout: io.StringIO
+        self.trigger_registry: phile.trigger.Registry
 
     def setUp(self) -> None:
         super().setUp()
         self.stdin = io.StringIO()
         self.stdout = io.StringIO()
+        self.trigger_registry = phile.trigger.Registry()
         self.prompt = phile.trigger.cli.Prompt(
-            capabilities=self.capabilities,
+            trigger_registry=self.trigger_registry,
             stdin=self.stdin,
             stdout=self.stdout
         )
@@ -117,7 +117,3 @@ class TestPrompt(UsesRegistry, UsesCapabilities, unittest.TestCase):
             'Listing IDs of 1 available triggers.\n'
             'Trigger 1 is run\n'
         )
-
-
-if __name__ == '__main__':
-    unittest.main()

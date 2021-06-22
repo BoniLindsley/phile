@@ -6,33 +6,31 @@ Trigger manipulation using :mod:`cmd`
 """
 
 # Standard library.
+import asyncio
 import cmd
 import contextlib
+import logging
 import shlex
 import sys
 import typing
 
-# External dependencies.
-import watchdog.observers
-
 # Internal packages.
-import phile
 import phile.asyncio
-import phile.capability.asyncio
 import phile.cmd
-import phile.notify
-import phile.trigger.watchdog
-import phile.watchdog
+import phile.launcher
+import phile.main
 
 
 class Prompt(cmd.Cmd):
 
     def __init__(
-        self, *args: typing.Any, capabilities: phile.Capabilities,
-        **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        trigger_registry: phile.trigger.Registry,
+        **kwargs: typing.Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._registry = capabilities[phile.trigger.Registry]
+        self._registry = trigger_registry
         self.known_triggers: list[str] = []
         self.trigger_ids: dict[str, int] = {}
 
@@ -121,52 +119,117 @@ class Prompt(cmd.Cmd):
             assert self.known_triggers.index(trigger) == trigger_id
 
 
-async def async_run(
-    capability_registry: phile.capability.Registry
+async def add_trigger_cmd(
+    capability_registry: phile.capability.Registry,
 ) -> None:  # pragma: no cover
-    prompt = Prompt(capabilities=capability_registry)
-    await phile.cmd.async_cmdloop_threaded_stdin(prompt)
+
+    async def run() -> None:
+        import phile.trigger
+        import phile.cmd
+        await phile.cmd.async_cmdloop_threaded_stdin(
+            Prompt(
+                trigger_registry=capability_registry[
+                    phile.trigger.Registry]
+            )
+        )
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.trigger.cmd',
+        phile.launcher.Descriptor(
+            after={'phile.trigger.watchdog.producer'},
+            before={'phile_shutdown.target'},
+            binds_to={'phile.trigger.watchdog.producer'},
+            conflicts={'phile_shutdown.target'},
+            exec_start=[run],
+        )
+    )
+
+
+async def add_trigger_watchdog_producer(
+    capability_registry: phile.capability.Registry,
+) -> None:  # pragma: no cover
+
+    async def run() -> None:
+        import phile.configuration
+        import phile.trigger
+        import phile.trigger.watchdog
+        import phile.watchdog.asyncio
+        configuration = capability_registry[phile.configuration.Entries]
+        trigger_registry = capability_registry[phile.trigger.Registry]
+        observer = (
+            capability_registry[phile.watchdog.asyncio.BaseObserver]
+        )
+        producer = phile.trigger.watchdog.Producer(
+            configuration=configuration,
+            observer=observer,
+            trigger_registry=trigger_registry,
+        )
+        await producer.run()
+
+    launcher_registry = capability_registry[phile.launcher.Registry]
+    await launcher_registry.database.add(
+        'phile.trigger.watchdog.producer',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'phile.trigger',
+                'watchdog.asyncio.observer',
+            },
+            before={'phile_shutdown.target'},
+            binds_to={
+                'phile.configuration',
+                'phile.trigger',
+                'watchdog.asyncio.observer',
+            },
+            conflicts={'phile_shutdown.target'},
+            exec_start=[run],
+        )
+    )
+
+
+async def async_run(
+    capability_registry: phile.capability.Registry,
+) -> int:  # pragma: no cover
+    await add_trigger_cmd(capability_registry=capability_registry)
+    await add_trigger_watchdog_producer(
+        capability_registry=capability_registry
+    )
+    state_machine = (
+        capability_registry[phile.launcher.Registry].state_machine
+    )
+    await state_machine.start(cmd_name := 'phile.trigger.cmd')
+    try:
+        # pylint: disable=protected-access
+        cmd_task = state_machine._running_tasks[cmd_name]
+    except KeyError:
+        return 1
+    await cmd_task
+    return 0
 
 
 def main(
     argv: typing.Optional[list[str]] = None
 ) -> int:  # pragma: no cover
     del argv
-    capability_registry = phile.capability.Registry()
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(contextlib.suppress(KeyboardInterrupt))
-        stack.enter_context(
-            capability_registry.provide(phile.Configuration())
-        )
-        stack.enter_context(
-            capability_registry.provide(phile.trigger.Registry())
-        )
-        stack.enter_context(
-            capability_registry.provide(
-                stack.enter_context(phile.watchdog.observers.open()),
-                watchdog.observers.api.BaseObserver,
-            )
-        )
-        stack.enter_context(
-            phile.trigger.watchdog.Producer(
-                capabilities=capability_registry
-            )
-        )
-        stack.enter_context(
-            phile.capability.asyncio.provide(
-                capability_registry=capability_registry
-            )
-        )
-        loop = phile.capability.asyncio.get_instance(
-            capability_registry=capability_registry
-        )
-        cli_task = loop.create_task(
-            async_run(capability_registry=capability_registry),
-        )
-        cli_task.add_done_callback(lambda _future: loop.stop())
-        phile.capability.asyncio.run(capability_registry)
+    try:
+        return phile.main.run(async_run)
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        pass
     return 0
 
 
 if __name__ == '__main__':  # pragma: no cover
+    if __debug__:
+        log_level = logging.DEBUG
+        handler = logging.StreamHandler(sys.stderr)
+        formatter = logging.Formatter(
+            '[%(asctime)s] [%(levelno)03d] %(name)s:'
+            ' %(message)s',
+        )
+        handler.setFormatter(formatter)
+        handler.setLevel(log_level)
+        package_logger = logging.getLogger('phile')
+        package_logger.addHandler(handler)
+        package_logger.setLevel(1)
     sys.exit(main())
