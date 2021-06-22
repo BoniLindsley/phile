@@ -5,7 +5,6 @@ import asyncio
 import collections.abc
 import contextlib
 import logging
-import threading
 import typing
 
 # Internal modules.
@@ -64,67 +63,22 @@ def _shutdown() -> None:
     loop.run_until_complete(loop.shutdown_default_executor())
 
 
-def provide(
-    capability_registry: phile.capability.Registry
-) -> contextlib.AbstractContextManager[typing.Any]:
-    return capability_registry.provide(
-        asyncio.new_event_loop(),
-        asyncio.events.AbstractEventLoop,
-    )
-
-
 @contextlib.contextmanager
 def provide_loop(
     capability_registry: phile.capability.Registry,
 ) -> collections.abc.Iterator[asyncio.AbstractEventLoop]:
-    with contextlib.ExitStack() as clean_up:
-        loop = asyncio.new_event_loop()
-        clean_up.callback(loop.close)
+    loop = asyncio.new_event_loop()
+    try:
         asyncio.set_event_loop(loop)
-        clean_up.callback(asyncio.set_event_loop, None)
-        clean_up.callback(_shutdown)
-        clean_up.callback(asyncio.set_event_loop, loop)
-        clean_up.enter_context(
-            capability_registry.provide(
+        try:
+            with capability_registry.provide(
                 loop,
                 asyncio.AbstractEventLoop,
-            )
-        )
-        yield loop
-
-
-def get_instance(
-    capability_registry: phile.capability.Registry
-) -> asyncio.AbstractEventLoop:
-    Loop = asyncio.AbstractEventLoop
-    return capability_registry[Loop]  # type: ignore[misc]
-
-
-def run(capability_registry: phile.capability.Registry) -> None:
-    """
-    Same as :func:`asyncio.run` but forever with a specified event loop.
-    """
-    with contextlib.ExitStack() as clean_up:
-        loop = get_instance(capability_registry)
-        clean_up.callback(loop.close)
-        asyncio.set_event_loop(loop)
-        clean_up.callback(asyncio.set_event_loop, None)
-        clean_up.callback(_shutdown)
-        loop.run_forever()
-
-
-def stop(capability_registry: phile.capability.Registry) -> None:
-    loop = get_instance(capability_registry)
-    loop.call_soon_threadsafe(loop.stop)
-
-
-@contextlib.contextmanager
-def start(
-    capability_registry: phile.capability.Registry
-) -> collections.abc.Iterator[None]:
-    worker_thread = threading.Thread(
-        target=run, args=(capability_registry, )
-    )
-    worker_thread.start()
-    yield
-    worker_thread.join()
+            ):
+                yield loop
+        finally:
+            asyncio.set_event_loop(loop)
+            _shutdown()
+            asyncio.set_event_loop(None)
+    finally:
+        loop.close()
