@@ -70,11 +70,13 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('reset'))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 2 launchers.\n'
+            'Listing IDs and states of 3 launchers.\n'
             '[stopped] 0: {launcher_name_1}\n'
             '[stopped] 1: {launcher_name_2}\n'
-            'Listing IDs and states of 1 launchers.\n'
-            '[stopped] 0: {launcher_name_2}\n'.format(
+            '[stopped] 2: phile_shutdown.target\n'
+            'Listing IDs and states of 2 launchers.\n'
+            '[stopped] 0: {launcher_name_2}\n'
+            '[stopped] 1: phile_shutdown.target\n'.format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
             )
@@ -112,9 +114,10 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('start 1'))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 2 launchers.\n'
+            'Listing IDs and states of 3 launchers.\n'
             '[stopped] 0: {launcher_name_1}\n'
             '[stopped] 1: {launcher_name_2}\n'
+            '[stopped] 2: phile_shutdown.target\n'
             'Started 1 launchers.\n'.format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
@@ -174,9 +177,10 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('stop 0'))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 2 launchers.\n'
+            'Listing IDs and states of 3 launchers.\n'
             '[running] 0: {launcher_name_1}\n'
             '[stopped] 1: {launcher_name_2}\n'
+            '[stopped] 2: phile_shutdown.target\n'
             'Stopped 1 launchers.\n'.format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
@@ -199,9 +203,10 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 2 launchers.\n'
+            'Listing IDs and states of 3 launchers.\n'
             '[stopped] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'.format(
+            '[stopped] 1: {launcher_name_2}\n'
+            '[stopped] 2: phile_shutdown.target\n'.format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
             )
@@ -216,9 +221,10 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 2 launchers.\n'
+            'Listing IDs and states of 3 launchers.\n'
             '[running] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'.format(
+            '[stopped] 1: {launcher_name_2}\n'
+            '[stopped] 2: phile_shutdown.target\n'.format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
             )
@@ -230,11 +236,13 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 2 launchers.\n'
+            'Listing IDs and states of 3 launchers.\n'
             '[stopped] 0: {launcher_name_1}\n'
             '[stopped] 1: {launcher_name_2}\n'
-            'Listing IDs and states of 1 launchers.\n'
-            '[stopped] 1: {launcher_name_2}\n'.format(
+            '[stopped] 2: phile_shutdown.target\n'
+            'Listing IDs and states of 2 launchers.\n'
+            '[stopped] 1: {launcher_name_2}\n'
+            '[stopped] 2: phile_shutdown.target\n'.format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
             )

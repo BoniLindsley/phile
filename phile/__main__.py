@@ -7,7 +7,6 @@ import logging
 import sys
 
 # Internal packages.
-import phile.capability
 import phile.configuration
 import phile.launcher
 import phile.launcher.cmd
@@ -15,25 +14,29 @@ import phile.main
 
 
 async def async_run(
-    capability_registry: phile.capability.Registry,
+    launcher_registry: phile.launcher.Registry,
 ) -> int:  # pragma: no cover
-    state_machine = (
-        capability_registry[phile.launcher.Registry].state_machine
-    )
-    start = state_machine.start
+    start = launcher_registry.start
     await start('phile.configuration')
-    configurations = capability_registry[phile.configuration.Entries]
+    configurations = (
+        launcher_registry.capability_registry[phile.configuration.Entries
+                                              ]
+    )
+    event_publisher = (
+        launcher_registry.event_publishers[phile.launcher.Registry.stop]
+    )
+    event_view = event_publisher.__aiter__()
+    del event_publisher
     await asyncio.gather(
         *(start(name) for name in configurations.main_autostart),
         start(cmd_name := 'phile.launcher.cmd'),
         return_exceptions=True,
     )
-    try:
-        # pylint: disable=protected-access
-        cmd_task = state_machine._running_tasks[cmd_name]
-    except KeyError:
+    if not launcher_registry.is_running(cmd_name):
         return 1
-    await cmd_task
+    async for event in event_view:
+        if event == cmd_name:
+            break
     return 0
 
 

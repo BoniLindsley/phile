@@ -389,9 +389,18 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         self.launcher_database = launcher_registry.database
 
     def test_available_attributes(self) -> None:
-        self.assertEqual(
+        self.assertIsInstance(
+            self.launcher_registry.capability_registry,
+            phile.capability.Registry,
+        )
+        self.assertIsInstance(
             self.launcher_registry.database,
-            self.launcher_database,
+            phile.launcher.Database,
+        )
+
+    def test_init__adds_default_launchers(self) -> None:
+        self.assertTrue(
+            self.launcher_registry.contains('phile_shutdown.target')
         )
 
     def test_add_nowait__adds_launcher_as_known(self) -> None:
@@ -399,7 +408,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         self.launcher_registry.add_nowait(
             entry_name, {'exec_start': [noop]}
         )
-        self.assertTrue(self.launcher_database.contains(entry_name))
+        self.assertTrue(self.launcher_registry.contains(entry_name))
 
     async def test_add__is_coroutine_version_of_add_nowait(self) -> None:
         entry_name = 'add__is_coroutine_version_of_add_nowait'
@@ -408,7 +417,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
                 entry_name, {'exec_start': [noop]}
             )
         )
-        self.assertTrue(self.launcher_database.contains(entry_name))
+        self.assertTrue(self.launcher_registry.contains(entry_name))
 
     async def test_add_nowait__emits_events(self) -> None:
         entry_name = 'add_emits_events'
@@ -426,7 +435,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             entry_name, {'exec_start': [noop]}
         )
         self.launcher_registry.remove_nowait(entry_name)
-        self.assertFalse(self.launcher_database.contains(entry_name))
+        self.assertFalse(self.launcher_registry.contains(entry_name))
 
     async def test_remove__is_coroutine_version_of_remove_nowait(
         self
@@ -438,7 +447,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_registry.remove(entry_name)
         )
-        self.assertFalse(self.launcher_database.contains(entry_name))
+        self.assertFalse(self.launcher_registry.contains(entry_name))
 
     async def test_remove_nowait__emits_events(self) -> None:
         entry_name = 'remove_emits_events'
@@ -454,7 +463,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
     def test_remove_nowait__ignores_if_missing(self) -> None:
         entry_name = 'remove_nowait__ignores_if_missing'
         self.launcher_registry.remove_nowait(entry_name)
-        self.assertFalse(self.launcher_database.contains(entry_name))
+        self.assertFalse(self.launcher_registry.contains(entry_name))
 
     async def test_start__simple_runs_exec_start(self) -> None:
         name = 'simple_run'
@@ -1017,22 +1026,6 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             self.launcher_registry.remove_nowait(entry_name)
 
 
-class TestProvideRegistry(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.launcher.provide_registry`."""
-
-    async def test_adds_registry(self) -> None:
-        capability_registry = phile.capability.Registry()
-        async with phile.launcher.provide_registry(
-            capability_registry=capability_registry,
-        ) as launcher_registry:
-            self.assertIsInstance(
-                launcher_registry,
-                phile.launcher.Registry,
-            )
-            self.assertIn(phile.launcher.Registry, capability_registry)
-        self.assertNotIn(phile.launcher.Registry, capability_registry)
-
-
 class UsesRegistry(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -1042,11 +1035,11 @@ class UsesRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        self.capability_registry = phile.capability.Registry()
-        registry_cm = phile.launcher.provide_registry(
-            capability_registry=self.capability_registry,
+        self.launcher_registry = launcher_registry = (
+            phile.launcher.Registry()
         )
-        # pylint: disable=no-member
-        # Not sure why Pylint thinks the cm is just an AsyncGenerator.
-        self.launcher_registry = await registry_cm.__aenter__()
-        self.addAsyncCleanup(registry_cm.__aexit__, None, None, None)
+        self.capability_registry = launcher_registry.capability_registry
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            launcher_registry.start('phile_shutdown.target'),
+        )

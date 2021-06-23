@@ -270,6 +270,7 @@ class Registry:
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self._capability_registry = phile.capability.Registry()
         self._database = Database()
         self.event_publishers: (
             dict[collections.abc.Callable[..., typing.Any],
@@ -284,6 +285,11 @@ class Registry:
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
         self._start_tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._stop_tasks: dict[str, asyncio.Task[typing.Any]] = {}
+        self.add_default_launchers()
+
+    @property
+    def capability_registry(self) -> phile.capability.Registry:
+        return self._capability_registry
 
     @property
     def database(self) -> Database:
@@ -314,6 +320,9 @@ class Registry:
             raise RuntimeError('Cannot remove a running launcher.')
         self._database.remove(entry_name=entry_name)
         self.event_publishers[Registry.remove].put(entry_name)
+
+    def contains(self, entry_name: str) -> bool:
+        return self._database.contains(entry_name)
 
     def start(
         self,
@@ -497,22 +506,10 @@ class Registry:
     def is_running(self, entry_name: str) -> bool:
         return entry_name in self._running_tasks
 
-
-@contextlib.asynccontextmanager
-async def provide_registry(
-    capability_registry: phile.capability.Registry,
-) -> collections.abc.AsyncIterator[Registry]:
-    with capability_registry.provide(launcher_registry := Registry()):
-        launcher_name = 'phile_shutdown.target'
-        launcher_registry.add_nowait(
-            launcher_name,
+    def add_default_launchers(self) -> None:
+        self.add_nowait(
+            'phile_shutdown.target',
             phile.launcher.Descriptor(
-                exec_start=[asyncio.get_running_loop().create_future],
+                exec_start=[asyncio.get_event_loop().create_future],
             )
         )
-        try:
-            yield launcher_registry
-        finally:
-            _logger.debug('Launcher clean-up starting.')
-            await launcher_registry.start(launcher_name)
-            _logger.debug('Launcher clean-up done.')

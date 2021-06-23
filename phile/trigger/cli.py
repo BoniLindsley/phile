@@ -120,12 +120,13 @@ class Prompt(cmd.Cmd):
 
 
 async def add_trigger_cmd(
-    capability_registry: phile.capability.Registry,
+    launcher_registry: phile.launcher.Registry,
 ) -> None:  # pragma: no cover
 
     async def run() -> None:
         import phile.trigger
         import phile.cmd
+        capability_registry = launcher_registry.capability_registry
         await phile.cmd.async_cmdloop_threaded_stdin(
             Prompt(
                 trigger_registry=capability_registry[
@@ -133,7 +134,6 @@ async def add_trigger_cmd(
             )
         )
 
-    launcher_registry = capability_registry[phile.launcher.Registry]
     launcher_registry.add_nowait(
         'phile.trigger.cmd',
         phile.launcher.Descriptor(
@@ -147,7 +147,7 @@ async def add_trigger_cmd(
 
 
 async def add_trigger_watchdog_producer(
-    capability_registry: phile.capability.Registry,
+    launcher_registry: phile.launcher.Registry,
 ) -> None:  # pragma: no cover
 
     async def run() -> None:
@@ -155,6 +155,7 @@ async def add_trigger_watchdog_producer(
         import phile.trigger
         import phile.trigger.watchdog
         import phile.watchdog.asyncio
+        capability_registry = launcher_registry.capability_registry
         configuration = capability_registry[phile.configuration.Entries]
         trigger_registry = capability_registry[phile.trigger.Registry]
         observer = (
@@ -167,7 +168,6 @@ async def add_trigger_watchdog_producer(
         )
         await producer.run()
 
-    launcher_registry = capability_registry[phile.launcher.Registry]
     launcher_registry.add_nowait(
         'phile.trigger.watchdog.producer',
         phile.launcher.Descriptor(
@@ -189,22 +189,23 @@ async def add_trigger_watchdog_producer(
 
 
 async def async_run(
-    capability_registry: phile.capability.Registry,
+    launcher_registry: phile.launcher.Registry,
 ) -> int:  # pragma: no cover
-    await add_trigger_cmd(capability_registry=capability_registry)
+    await add_trigger_cmd(launcher_registry=launcher_registry)
     await add_trigger_watchdog_producer(
-        capability_registry=capability_registry
+        launcher_registry=launcher_registry
     )
-    state_machine = (
-        capability_registry[phile.launcher.Registry].state_machine
+    event_publisher = (
+        launcher_registry.event_publishers[phile.launcher.Registry.stop]
     )
-    await state_machine.start(cmd_name := 'phile.trigger.cmd')
-    try:
-        # pylint: disable=protected-access
-        cmd_task = state_machine._running_tasks[cmd_name]
-    except KeyError:
+    event_view = event_publisher.__aiter__()
+    del event_publisher
+    await launcher_registry.start(cmd_name := 'phile.trigger.cmd')
+    if not launcher_registry.is_running(cmd_name):
         return 1
-    await cmd_task
+    async for event in event_view:
+        if event == cmd_name:
+            break
     return 0
 
 

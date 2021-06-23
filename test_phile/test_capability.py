@@ -8,7 +8,6 @@ import phile.capability
 
 
 class TestAlreadyEnabled(unittest.TestCase):
-    """Tests :func:`~phile.capability.AlreadyEnabled`."""
 
     def test_check_is_runtime_error(self) -> None:
         self.assertIsInstance(

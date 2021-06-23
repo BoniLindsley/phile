@@ -11,21 +11,19 @@ import unittest
 
 # Internal packages.
 import phile.asyncio
-import phile.capability
 import phile.launcher
 import phile.main
 from test_phile.test_PySide2.test_QtCore import UsesPySide2
 
 
 class TestRun(unittest.TestCase):
-    """Tests :func:`~phile.main.run`."""
 
     def test_runs_given_target(self) -> None:
 
         async def target(
-            capability_registry: phile.capability.Registry,
+            launcher_registry: phile.launcher.Registry,
         ) -> None:
-            del capability_registry
+            del launcher_registry
             await asyncio.sleep(0)
 
         phile.main.run(target)
@@ -33,9 +31,9 @@ class TestRun(unittest.TestCase):
     def test_stopping_loop_forces_exit(self) -> None:
 
         async def target(
-            capability_registry: phile.capability.Registry,
+            launcher_registry: phile.launcher.Registry,
         ) -> None:
-            del capability_registry
+            del launcher_registry
             asyncio.get_running_loop().stop()
             await asyncio.sleep(0)
 
@@ -44,23 +42,20 @@ class TestRun(unittest.TestCase):
 
 
 class TestRunWithPySide2(UsesPySide2, unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.main.run` with PySide2 launcher."""
 
     def test_has_launcher_that_creates_qapplication(self) -> None:
 
         async def target(
-            capability_registry: phile.capability.Registry,
+            launcher_registry: phile.launcher.Registry,
         ) -> None:
             # pylint: disable=import-outside-toplevel
-            launcher_registry = (
-                capability_registry[phile.launcher.Registry]
-            )
             await phile.asyncio.wait_for(
                 launcher_registry.state_machine.start('pyside2')
             )
             import PySide2.QtWidgets
             self.assertIn(
-                PySide2.QtWidgets.QApplication, capability_registry
+                PySide2.QtWidgets.QApplication,
+                launcher_registry.capability_registry,
             )
 
         phile.main.run(target)

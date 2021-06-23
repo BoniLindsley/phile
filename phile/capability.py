@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-.. automodule:: phile.capability.asyncio
-"""
 
 # Standard libraries.
 import contextlib

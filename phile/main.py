@@ -10,12 +10,11 @@ import threading
 import typing
 
 # Internal packages.
-import phile.capability
 import phile.launcher
 import phile.launcher.defaults
 
 _T = typing.TypeVar('_T')
-AsyncTarget = collections.abc.Callable[[phile.capability.Registry],
+AsyncTarget = collections.abc.Callable[[phile.launcher.Registry],
                                        collections.abc.Awaitable[_T]]
 
 # TODO[mypy issue #1422]: __loader__ not defined
@@ -30,19 +29,17 @@ class _InverseDependencyData(typing.Generic[_T]):
 
 
 async def _async_run(data: _InverseDependencyData[_T]) -> _T:
-    capability_registry = phile.capability.Registry()
-    async with phile.launcher.provide_registry(
-        capability_registry=capability_registry
-    ) as launcher_registry:
+    launcher_registry = phile.launcher.Registry()
+    try:
+        phile.launcher.defaults.add(launcher_registry=launcher_registry)
         data.launcher_registry = launcher_registry
-        phile.launcher.defaults.add(
-            capability_registry=capability_registry,
-        )
         _logger.debug('Target of asyncio loop is starting.')
         try:
-            return await data.async_target(capability_registry)
+            return await data.async_target(launcher_registry)
         finally:
             _logger.debug('Target of asyncio loop has stopped.')
+    finally:
+        await launcher_registry.start('phile_shutdown.target')
 
 
 def run(async_target: AsyncTarget[_T]) -> _T:
