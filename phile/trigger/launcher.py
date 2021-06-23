@@ -105,7 +105,7 @@ class Producer:
         on_start = self._on_start
         async for launcher_name in (
             self._launcher_registry.state_machine.event_publishers[
-                phile.launcher.StateMachine.start]
+                phile.launcher.Registry.start]
         ):
             on_start(launcher_name)
 
@@ -113,7 +113,7 @@ class Producer:
         on_stop = self._on_stop
         async for launcher_name in (
             self._launcher_registry.state_machine.event_publishers[
-                phile.launcher.StateMachine.stop]
+                phile.launcher.Registry.stop]
         ):
             on_stop(launcher_name)
 

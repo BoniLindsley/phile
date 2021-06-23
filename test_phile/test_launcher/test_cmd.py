@@ -92,7 +92,7 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.cmd.onecmd('start 0'))
         subscriber = (
             self.launcher_registry.state_machine.event_publishers[
-                phile.launcher.StateMachine.start].__aiter__()
+                phile.launcher.Registry.start].__aiter__()
         )
 
         async def wait_for_launcher_to_start(launcher_name: str) -> None:
@@ -152,7 +152,7 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         async def wait_for_launcher_to_stop(launcher_name: str) -> None:
             async for next_name in (
                 self.launcher_registry.state_machine.event_publishers[
-                    phile.launcher.StateMachine.stop]
+                    phile.launcher.Registry.stop]
             ):
                 if launcher_name == next_name:
                     break

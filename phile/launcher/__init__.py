@@ -285,22 +285,30 @@ class Database:
         return entry_name in self.remover
 
 
-class StateMachine:
+class Registry:
 
-    def __init__(
-        self, *args: typing.Any, database: Database, **kwargs: typing.Any
-    ) -> None:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.event_publishers: (
             dict[collections.abc.Callable[..., typing.Any],
                  phile.asyncio.pubsub.Queue[str]]
         ) = {
-            StateMachine.start: phile.asyncio.pubsub.Queue[str](),
-            StateMachine.stop: phile.asyncio.pubsub.Queue[str](),
+            Registry.start: phile.asyncio.pubsub.Queue[str](),
+            Registry.stop: phile.asyncio.pubsub.Queue[str](),
         }
         """Pushes events to subscribers."""
-        self._database = database
+
+        registry = self
+
+        class DatabaseStopsOnRemove(Database):
+
+            async def remove(self, entry_name: str) -> None:
+                await registry.stop(entry_name)
+                await super().remove(entry_name=entry_name)
+
+        self._database = DatabaseStopsOnRemove()
+
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
         self._start_tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._stop_tasks: dict[str, asyncio.Task[typing.Any]] = {}
@@ -308,6 +316,10 @@ class StateMachine:
     @property
     def database(self) -> Database:
         return self._database
+
+    @property
+    def state_machine(self) -> 'Registry':
+        return self
 
     def start(
         self,
@@ -364,10 +376,10 @@ class StateMachine:
         runner_task.add_done_callback(
             functools.partial(running_tasks.pop, entry_name)
         )
-        self.event_publishers[StateMachine.start].put(entry_name)
+        self.event_publishers[Registry.start].put(entry_name)
         runner_task.add_done_callback(
             lambda _task:
-            (self.event_publishers[StateMachine.stop].put(entry_name))
+            (self.event_publishers[Registry.stop].put(entry_name))
         )
 
     async def _do_stop(self, entry_name: str) -> None:
@@ -492,31 +504,6 @@ class StateMachine:
         return entry_name in self._running_tasks
 
 
-class Registry:
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        # TODO[mypy issue 4001]: Remove type ignore.
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        registry = self
-
-        class DatabaseStopsOnRemove(Database):
-
-            async def remove(self, entry_name: str) -> None:
-                await registry.state_machine.stop(entry_name)
-                await super().remove(entry_name=entry_name)
-
-        database = DatabaseStopsOnRemove()
-        self._state_machine = StateMachine(database=database)
-
-    @property
-    def database(self) -> Database:
-        return self._state_machine.database
-
-    @property
-    def state_machine(self) -> StateMachine:
-        return self._state_machine
-
-
 @contextlib.asynccontextmanager
 async def provide_registry(
     capability_registry: phile.capability.Registry,
@@ -533,5 +520,5 @@ async def provide_registry(
             yield launcher_registry
         finally:
             _logger.debug('Launcher clean-up starting.')
-            await launcher_registry.state_machine.start(launcher_name)
+            await launcher_registry.start(launcher_name)
             _logger.debug('Launcher clean-up done.')

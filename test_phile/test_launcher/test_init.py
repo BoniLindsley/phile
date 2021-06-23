@@ -489,19 +489,23 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message, entry_name)
 
 
-class TestStateMachine(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.launcher.StateMachine`."""
+class TestRegistry(unittest.IsolatedAsyncioTestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_database: phile.launcher.Database
+        self.launcher_registry: phile.launcher.Registry
 
     def setUp(self) -> None:
         super().setUp()
-        self.launcher_database = phile.launcher.Database()
-        self.launcher_state_machine = phile.launcher.StateMachine(
-            database=self.launcher_database
+        self.launcher_registry = launcher_registry = (
+            phile.launcher.Registry()
         )
+        self.launcher_database = launcher_registry.database
 
     def test_available_attributes(self) -> None:
         self.assertEqual(
-            self.launcher_state_machine.database,
+            self.launcher_registry.database,
             self.launcher_database,
         )
 
@@ -518,9 +522,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 name, {'exec_start': [set_and_wait]}
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
         self.assertTrue(ran.is_set())
 
     async def test_start_simple_runs_exec_start_without_awaiting_it(
@@ -532,9 +534,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 name, {'exec_start': [asyncio.Event().wait]}
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
 
     async def test_start_exec_type_yields_once(self) -> None:
         name = 'exec_run_with_exec_type'
@@ -547,9 +547,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
         self.assertGreaterEqual(counter.value, 1)
 
     async def test_start_forking_waits_for_completion(self) -> None:
@@ -569,9 +567,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
         # There is not guarantee that the forker is awaited for,
         # but the limit should be sufficiently high in most cases.
         self.assertGreaterEqual(counter.value, limit)
@@ -586,12 +582,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
 
     async def test_start_awaits_if_already_starting(self) -> None:
         name = 'double_start'
@@ -609,9 +601,9 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        start_1 = self.launcher_state_machine.start(name)
+        start_1 = self.launcher_registry.start(name)
         await asyncio.sleep(0)
-        start_2 = self.launcher_state_machine.start(name)
+        start_2 = self.launcher_registry.start(name)
         await asyncio.sleep(0)
         self.assertFalse(start_1.done())
         self.assertFalse(start_2.done())
@@ -626,10 +618,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 name, {'exec_start': [asyncio.Event().wait]}
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        self.assertTrue(self.launcher_state_machine.is_running(name))
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        self.assertTrue(self.launcher_registry.is_running(name))
 
     async def test_start_starts_binds_to(self) -> None:
         create_future = asyncio.get_running_loop().create_future
@@ -654,7 +644,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependent')
+            self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(dependency_started)
 
@@ -697,21 +687,17 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('conflict')
+            self.launcher_registry.start('conflict')
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('conflicted')
+            self.launcher_registry.start('conflicted')
         )
-        self.assertTrue(
-            self.launcher_state_machine.is_running('conflict')
-        )
-        self.assertTrue(
-            self.launcher_state_machine.is_running('conflicted')
-        )
+        self.assertTrue(self.launcher_registry.is_running('conflict'))
+        self.assertTrue(self.launcher_registry.is_running('conflicted'))
         self.assertFalse(conflict_stopped.done())
         self.assertFalse(conflicted_stopped.done())
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('something')
+            self.launcher_registry.start('something')
         )
         await phile.asyncio.wait_for(conflict_stopped)
         await phile.asyncio.wait_for(conflicted_stopped)
@@ -740,7 +726,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependent')
+            self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(dependency_started.wait())
 
@@ -775,7 +761,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependent')
+            self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(dependent_started.wait())
         self.assertFalse(dependency_started.is_set())
@@ -796,7 +782,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaises(ZeroDivisionError):
             await phile.asyncio.wait_for(
-                self.launcher_state_machine.start(name)
+                self.launcher_registry.start(name)
             )
 
     async def test_stop_cancel_main_task_if_not_done(self) -> None:
@@ -807,12 +793,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 name, {'exec_start': [lambda: task_to_cancel]}
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(self.launcher_registry.stop(name))
         self.assertTrue(task_to_cancel.cancelled())
 
     async def test_stop_runs_exec_stop_if_given(self) -> None:
@@ -830,12 +812,8 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(self.launcher_registry.stop(name))
         self.assertTrue(stop.is_set())
 
     async def test_stop_returns_if_not_running(self) -> None:
@@ -848,9 +826,7 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.stop(name))
 
     async def test_stop_awaits_if_already_stopping(self) -> None:
         name = 'double_stop'
@@ -869,12 +845,10 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        stop_1 = self.launcher_state_machine.stop(name)
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        stop_1 = self.launcher_registry.stop(name)
         await asyncio.sleep(0)
-        stop_2 = self.launcher_state_machine.stop(name)
+        stop_2 = self.launcher_registry.stop(name)
         await asyncio.sleep(0)
         self.assertFalse(stop_1.done())
         self.assertFalse(stop_2.done())
@@ -889,13 +863,9 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 name, {'exec_start': [asyncio.Event().wait]}
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop(name)
-        )
-        self.assertFalse(self.launcher_state_machine.is_running(name))
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+        await phile.asyncio.wait_for(self.launcher_registry.stop(name))
+        self.assertFalse(self.launcher_registry.is_running(name))
 
     async def test_start_awaits_if_still_stopping(self) -> None:
         name = 'start_stop_start'
@@ -921,13 +891,11 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
         started.clear()
-        stop_task = self.launcher_state_machine.stop(name)
+        stop_task = self.launcher_registry.stop(name)
         await asyncio.sleep(0)
-        start_task = self.launcher_state_machine.start(name)
+        start_task = self.launcher_registry.start(name)
         await phile.asyncio.wait_for(stop_paused.wait())
         self.assertFalse(start_task.done())
         self.assertFalse(stop_task.done())
@@ -962,9 +930,9 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        start_task = self.launcher_state_machine.start(name)
+        start_task = self.launcher_registry.start(name)
         await asyncio.sleep(0)
-        stop_task = self.launcher_state_machine.stop(name)
+        stop_task = self.launcher_registry.stop(name)
         with self.assertRaises(asyncio.CancelledError):
             await phile.asyncio.wait_for(start_task)
         await phile.asyncio.wait_for(stop_task)
@@ -997,14 +965,14 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependent')
+            self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(dependent_started.wait())
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependency')
+            self.launcher_registry.start('dependency')
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop('dependency')
+            self.launcher_registry.stop('dependency')
         )
         await phile.asyncio.wait_for(dependent_stopped.wait())
 
@@ -1044,15 +1012,13 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependent')
+            self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependency')
+            self.launcher_registry.start('dependency')
         )
         await phile.asyncio.wait_for(dependency_started.wait())
-        dependency_stop_task = self.launcher_state_machine.stop(
-            'dependency'
-        )
+        dependency_stop_task = self.launcher_registry.stop('dependency')
         await phile.asyncio.wait_for(dependent_stopped.wait())
         self.assertFalse(dependency_stopped.is_set())
         dependent_exec_stop_continue.set()
@@ -1096,29 +1062,29 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependency')
+            self.launcher_registry.start('dependency')
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start('dependent')
+            self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(dependency_started)
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop('dependency')
+            self.launcher_registry.stop('dependency')
         )
         await phile.asyncio.wait_for(dependency_stopped)
         self.assertFalse(dependent_stopped.done())
 
     async def test_start_emits_events(self) -> None:
         entry_name = 'start_emits_events'
-        view = self.launcher_state_machine.event_publishers[
-            phile.launcher.StateMachine.start].__aiter__()
+        view = self.launcher_registry.event_publishers[
+            phile.launcher.Registry.start].__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_database.add(
                 entry_name, {'exec_start': [noop]}
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(entry_name)
+            self.launcher_registry.start(entry_name)
         )
         message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
@@ -1131,37 +1097,15 @@ class TestStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         )
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.start(entry_name)
+            self.launcher_registry.start(entry_name)
         )
-        view = self.launcher_state_machine.event_publishers[
-            phile.launcher.StateMachine.stop].__aiter__()
+        view = self.launcher_registry.event_publishers[
+            phile.launcher.Registry.stop].__aiter__()
         await phile.asyncio.wait_for(
-            self.launcher_state_machine.stop(entry_name)
+            self.launcher_registry.stop(entry_name)
         )
         message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
-
-
-class TestRegistry(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.launcher.Registry`."""
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.launcher_registry: phile.launcher.Registry
-
-    async def asyncSetUp(self) -> None:
-        super().setUp()
-        self.launcher_registry = phile.launcher.Registry()
-
-    def test_has_properties(self) -> None:
-        self.assertIsInstance(
-            self.launcher_registry.database,
-            phile.launcher.Database,
-        )
-        self.assertIsInstance(
-            self.launcher_registry.state_machine,
-            phile.launcher.StateMachine,
-        )
 
     async def test_remove_stops_launcher(self) -> None:
         name = 'to_be_stopped_when_deregistering'
@@ -1183,9 +1127,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
                 }
             )
         )
-        await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.start(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(started.wait())
         await phile.asyncio.wait_for(
             self.launcher_registry.database.remove(name)
