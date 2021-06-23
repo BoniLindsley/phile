@@ -3,65 +3,67 @@
 # Standard library.
 import asyncio
 import collections.abc
+import dataclasses
 import functools
 import logging
 import threading
 import typing
 
 # Internal packages.
-import phile
 import phile.capability
-import phile.capability.asyncio
 import phile.launcher
 import phile.launcher.defaults
 
 _T = typing.TypeVar('_T')
-Awaitable = collections.abc.Awaitable[_T]
-Registry = phile.capability.Registry
-AsyncTarget = collections.abc.Callable[[Registry], Awaitable[_T]]
+AsyncTarget = collections.abc.Callable[[phile.capability.Registry],
+                                       collections.abc.Awaitable[_T]]
 
 # TODO[mypy issue #1422]: __loader__ not defined
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
 _logger = logging.getLogger(_loader_name)
 
 
-async def _async_run(
-    async_target: AsyncTarget[_T],
-    capability_registry: Registry,
-) -> _T:  # pragma: no cover
+@dataclasses.dataclass
+class _InverseDependencyData(typing.Generic[_T]):
+    async_target: AsyncTarget[_T]
+    launcher_registry: typing.Optional[phile.launcher.Registry] = None
+
+
+async def _async_run(data: _InverseDependencyData[_T]) -> _T:
+    capability_registry = phile.capability.Registry()
     async with phile.launcher.provide_registry(
         capability_registry=capability_registry
     ) as launcher_registry:
+        data.launcher_registry = launcher_registry
         await phile.launcher.defaults.add(
             capability_registry=capability_registry,
         )
         _logger.debug('Target of asyncio loop is starting.')
         try:
-            return await async_target(capability_registry)
+            return await data.async_target(capability_registry)
         finally:
             _logger.debug('Target of asyncio loop has stopped.')
 
 
-def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
-    capability_registry = phile.capability.Registry()
-    with phile.capability.asyncio.provide_loop(
-        capability_registry=capability_registry,
-    ) as loop:
-        main_task = loop.create_task(
-            _async_run(
-                async_target=async_target,
-                capability_registry=capability_registry,
-            ),
-        )
+def run(async_target: AsyncTarget[_T]) -> _T:
+    loop = asyncio.new_event_loop()
+    # This statement should technically be wrapped in a try block
+    # that closes the loop on any exception.
+    # But this is such a basic building block that, if it breaks,
+    # then we might as well just terminate.
+    asyncio.set_event_loop(loop)
+    try:
+        data = _InverseDependencyData(async_target=async_target)
+        main_task = loop.create_task(_async_run(data=data))
         main_task.add_done_callback(lambda _task: loop.stop())
         loop.run_forever()
         if not main_task.done():
             asyncio.set_event_loop(None)
-            launcher_registry = (
-                capability_registry[phile.launcher.Registry]
-            )
+            launcher_registry = data.launcher_registry
             # pylint: disable=protected-access
-            if 'pyside2' in launcher_registry.state_machine._start_tasks:
+            if (launcher_registry is not None) and (
+                'pyside2' in launcher_registry.state_machine._start_tasks
+            ):
                 # pylint: disable=import-outside-toplevel
                 import PySide2.QtWidgets
                 qt_app = PySide2.QtWidgets.QApplication()
@@ -88,3 +90,6 @@ def run(async_target: AsyncTarget[_T]) -> _T:  # pragma: no cover
                 main_task.cancel()
                 loop.run_until_complete(main_task)
         return main_task.result()
+    finally:
+        asyncio.set_event_loop(loop)
+        phile.asyncio.close()
