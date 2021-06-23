@@ -134,7 +134,7 @@ async def add_trigger_cmd(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.trigger.cmd',
         phile.launcher.Descriptor(
             after={'phile.trigger.watchdog.producer'},
@@ -168,7 +168,7 @@ async def add_trigger_watchdog_producer(
         await producer.run()
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.trigger.watchdog.producer',
         phile.launcher.Descriptor(
             after={

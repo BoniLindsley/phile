@@ -44,12 +44,12 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
             stdout=self.stdout,
             launcher_registry=launcher_registry,
         )
-        await phile.asyncio.wait_for(self.add_launchers())
+        self.add_launchers()
 
-    async def add_launchers(self) -> None:
+    def add_launchers(self) -> None:
 
-        async def add(launcher_name: str) -> None:
-            await self.launcher_registry.database.add(
+        def add(launcher_name: str) -> None:
+            self.launcher_registry.add_nowait(
                 entry_name=launcher_name,
                 descriptor=phile.launcher.Descriptor(
                     exec_start=[asyncio.get_event_loop().create_future],
@@ -57,18 +57,16 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
             )
 
         self.launcher_name_1 = 'launcher_cmd_runner'
-        await add(self.launcher_name_1)
+        add(self.launcher_name_1)
         self.launcher_name_2 = 'launcher_cmd_tester'
-        await add(self.launcher_name_2)
+        add(self.launcher_name_2)
 
     def test_do_eof_stops_cmd(self) -> None:
         self.assertTrue(self.cmd.onecmd('EOF'))
 
     async def test_do_reset_reuses_id(self) -> None:
         self.test_do_list_sorts_output_of_new_launchers()
-        await phile.asyncio.wait_for(
-            self.launcher_registry.database.remove(self.launcher_name_1)
-        )
+        self.launcher_registry.remove_nowait(self.launcher_name_1)
         self.assertFalse(self.cmd.onecmd('reset'))
         self.assertEqual(
             self.stdout.getvalue(),
@@ -228,9 +226,7 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
 
     async def test_do_list_ignores_removed_launchers(self) -> None:
         self.assertFalse(self.cmd.onecmd('list'))
-        await phile.asyncio.wait_for(
-            self.launcher_registry.database.remove(self.launcher_name_1)
-        )
+        self.launcher_registry.remove_nowait(self.launcher_name_1)
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertEqual(
             self.stdout.getvalue(),

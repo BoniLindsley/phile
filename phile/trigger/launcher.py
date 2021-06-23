@@ -88,16 +88,16 @@ class Producer:
     async def _process_database_add_events(self) -> None:
         bind = self._bind
         async for launcher_name in (
-            self._launcher_registry.database.event_publishers[
-                phile.launcher.Database.add]
+            self._launcher_registry.event_publishers[
+                phile.launcher.Registry.add]
         ):
             bind(launcher_name)
 
     async def _process_database_remove_events(self) -> None:
         unbind = self._unbind
         async for launcher_name in (
-            self._launcher_registry.database.event_publishers[
-                phile.launcher.Database.remove]
+            self._launcher_registry.event_publishers[
+                phile.launcher.Registry.remove]
         ):
             unbind(launcher_name)
 

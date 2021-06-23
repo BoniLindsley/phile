@@ -35,7 +35,7 @@ async def _async_run(data: _InverseDependencyData[_T]) -> _T:
         capability_registry=capability_registry
     ) as launcher_registry:
         data.launcher_registry = launcher_registry
-        await phile.launcher.defaults.add(
+        phile.launcher.defaults.add(
             capability_registry=capability_registry,
         )
         _logger.debug('Target of asyncio loop is starting.')

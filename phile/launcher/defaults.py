@@ -15,7 +15,7 @@ import typing
 import phile.capability
 
 
-async def add_configuration(
+def add_configuration(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -40,7 +40,7 @@ async def add_configuration(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.configuration',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -56,23 +56,23 @@ async def add_configuration(
     )
 
 
-async def add_hotkey_gui(
+def add_hotkey_gui(
     capability_registry: phile.capability.Registry,
 ) -> None:
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.hotkey.gui',
         phile.launcher.Descriptor(
             after={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
             before={'phile_shutdown.target'},
             binds_to={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
             conflicts={'phile_shutdown.target'},
-            exec_start=[asyncio.get_running_loop().create_future],
+            exec_start=[asyncio.get_event_loop().create_future],
         )
     )
 
 
-async def add_hotkey_pynput(
+def add_hotkey_pynput(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -90,7 +90,7 @@ async def add_hotkey_pynput(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.hotkey.pynput',
         phile.launcher.Descriptor(
             after={
@@ -110,7 +110,7 @@ async def add_hotkey_pynput(
     )
 
 
-async def add_hotkey_pyside2(
+def add_hotkey_pyside2(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -133,7 +133,7 @@ async def add_hotkey_pyside2(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.hotkey.pyside2',
         phile.launcher.Descriptor(
             after={
@@ -155,7 +155,7 @@ async def add_hotkey_pyside2(
     )
 
 
-async def add_launcher_cmd(
+def add_launcher_cmd(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -170,7 +170,7 @@ async def add_launcher_cmd(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.launcher.cmd',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -180,7 +180,7 @@ async def add_launcher_cmd(
     )
 
 
-async def add_log_file(
+def add_log_file(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -224,7 +224,7 @@ async def add_log_file(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.log.file',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -237,7 +237,7 @@ async def add_log_file(
     )
 
 
-async def add_log_stderr(
+def add_log_stderr(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -278,7 +278,7 @@ async def add_log_stderr(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.log.stderr',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
@@ -291,7 +291,7 @@ async def add_log_stderr(
     )
 
 
-async def add_keyring(
+def add_keyring(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -318,7 +318,7 @@ async def add_keyring(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'keyring',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -334,9 +334,7 @@ async def add_keyring(
     )
 
 
-async def add_tmux(
-    capability_registry: phile.capability.Registry
-) -> None:
+def add_tmux(capability_registry: phile.capability.Registry) -> None:
 
     async def phile_tmux_control_mode(
         capability_registry: phile.capability.Registry,
@@ -366,7 +364,7 @@ async def add_tmux(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tmux.control_mode',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -382,9 +380,7 @@ async def add_tmux(
     )
 
 
-async def add_tray(
-    capability_registry: phile.capability.Registry,
-) -> None:
+def add_tray(capability_registry: phile.capability.Registry, ) -> None:
 
     async def start() -> asyncio.Future[typing.Any]:
         loop = asyncio.get_running_loop()
@@ -406,7 +402,7 @@ async def add_tray(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -417,7 +413,7 @@ async def add_tray(
     )
 
 
-async def add_tray_datetime(
+def add_tray_datetime(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -430,7 +426,7 @@ async def add_tray_datetime(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.datetime',
         phile.launcher.Descriptor(
             after={'phile.tray.watchdog'},
@@ -442,7 +438,7 @@ async def add_tray_datetime(
     )
 
 
-async def add_tray_imap(
+def add_tray_imap(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -461,7 +457,7 @@ async def add_tray_imap(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.imapclient',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'keyring'},
@@ -473,7 +469,7 @@ async def add_tray_imap(
     )
 
 
-async def add_tray_notify(
+def add_tray_notify(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -495,7 +491,7 @@ async def add_tray_notify(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.notify',
         phile.launcher.Descriptor(
             after={
@@ -515,7 +511,7 @@ async def add_tray_notify(
     )
 
 
-async def add_tray_psutil(
+def add_tray_psutil(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -527,7 +523,7 @@ async def add_tray_psutil(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.psutil',
         phile.launcher.Descriptor(
             after={'phile.tray.watchdog'},
@@ -539,7 +535,7 @@ async def add_tray_psutil(
     )
 
 
-async def add_tray_pyside2_window(
+def add_tray_pyside2_window(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -557,7 +553,7 @@ async def add_tray_pyside2_window(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.pyside2.window',
         phile.launcher.Descriptor(
             after={'phile.tray.text', 'pyside2'},
@@ -569,7 +565,7 @@ async def add_tray_pyside2_window(
     )
 
 
-async def add_tray_text(
+def add_tray_text(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -596,7 +592,7 @@ async def add_tray_text(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.text',
         phile.launcher.Descriptor(
             after={'phile.tray'},
@@ -609,7 +605,7 @@ async def add_tray_text(
     )
 
 
-async def add_tray_tmux(
+def add_tray_tmux(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -627,7 +623,7 @@ async def add_tray_tmux(
         )
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.tmux',
         phile.launcher.Descriptor(
             after={
@@ -645,7 +641,7 @@ async def add_tray_tmux(
     )
 
 
-async def add_tray_watchdog(
+def add_tray_watchdog(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -684,7 +680,7 @@ async def add_tray_watchdog(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.tray.watchdog',
         phile.launcher.Descriptor(
             after={
@@ -705,9 +701,7 @@ async def add_tray_watchdog(
     )
 
 
-async def add_trigger(
-    capability_registry: phile.capability.Registry
-) -> None:
+def add_trigger(capability_registry: phile.capability.Registry) -> None:
 
     async def phile_trigger_registry(
         capability_registry: phile.capability.Registry,
@@ -727,7 +721,7 @@ async def add_trigger(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.trigger',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -743,7 +737,7 @@ async def add_trigger(
     )
 
 
-async def add_trigger_launcher(
+def add_trigger_launcher(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -777,7 +771,7 @@ async def add_trigger_launcher(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.trigger.launcher',
         phile.launcher.Descriptor(
             after={'phile.trigger'},
@@ -795,7 +789,7 @@ async def add_trigger_launcher(
     )
 
 
-async def add_trigger_watchdog(
+def add_trigger_watchdog(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -821,7 +815,7 @@ async def add_trigger_watchdog(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'phile.trigger.watchdog',
         phile.launcher.Descriptor(
             after={
@@ -842,7 +836,7 @@ async def add_trigger_watchdog(
     )
 
 
-async def add_pyside2(
+def add_pyside2(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -894,7 +888,7 @@ async def add_pyside2(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'pyside2',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -910,7 +904,7 @@ async def add_pyside2(
     )
 
 
-async def add_watchdog_asyncio_observer(
+def add_watchdog_asyncio_observer(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -933,7 +927,7 @@ async def add_watchdog_asyncio_observer(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'watchdog.asyncio.observer',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -944,7 +938,7 @@ async def add_watchdog_asyncio_observer(
     )
 
 
-async def add_watchdog_observer(
+def add_watchdog_observer(
     capability_registry: phile.capability.Registry,
 ) -> None:
 
@@ -971,7 +965,7 @@ async def add_watchdog_observer(
         return running_task
 
     launcher_registry = capability_registry[phile.launcher.Registry]
-    await launcher_registry.database.add(
+    launcher_registry.add_nowait(
         'watchdog.observer',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
@@ -987,32 +981,30 @@ async def add_watchdog_observer(
     )
 
 
-async def add(capability_registry: phile.capability.Registry) -> None:
-    await add_configuration(capability_registry=capability_registry)
-    await add_hotkey_gui(capability_registry=capability_registry)
-    await add_hotkey_pynput(capability_registry=capability_registry)
-    await add_hotkey_pyside2(capability_registry=capability_registry)
-    await add_log_file(capability_registry=capability_registry)
-    await add_log_stderr(capability_registry=capability_registry)
-    await add_keyring(capability_registry=capability_registry)
-    await add_launcher_cmd(capability_registry=capability_registry)
-    await add_pyside2(capability_registry=capability_registry)
-    await add_tmux(capability_registry=capability_registry)
-    await add_tray(capability_registry=capability_registry)
-    await add_tray_datetime(capability_registry=capability_registry)
-    await add_tray_imap(capability_registry=capability_registry)
-    await add_tray_notify(capability_registry=capability_registry)
-    await add_tray_psutil(capability_registry=capability_registry)
-    await add_tray_pyside2_window(
+def add(capability_registry: phile.capability.Registry) -> None:
+    add_configuration(capability_registry=capability_registry)
+    add_hotkey_gui(capability_registry=capability_registry)
+    add_hotkey_pynput(capability_registry=capability_registry)
+    add_hotkey_pyside2(capability_registry=capability_registry)
+    add_log_file(capability_registry=capability_registry)
+    add_log_stderr(capability_registry=capability_registry)
+    add_keyring(capability_registry=capability_registry)
+    add_launcher_cmd(capability_registry=capability_registry)
+    add_pyside2(capability_registry=capability_registry)
+    add_tmux(capability_registry=capability_registry)
+    add_tray(capability_registry=capability_registry)
+    add_tray_datetime(capability_registry=capability_registry)
+    add_tray_imap(capability_registry=capability_registry)
+    add_tray_notify(capability_registry=capability_registry)
+    add_tray_psutil(capability_registry=capability_registry)
+    add_tray_pyside2_window(capability_registry=capability_registry)
+    add_tray_text(capability_registry=capability_registry)
+    add_tray_tmux(capability_registry=capability_registry)
+    add_tray_watchdog(capability_registry=capability_registry)
+    add_trigger(capability_registry=capability_registry)
+    add_trigger_launcher(capability_registry=capability_registry)
+    add_trigger_watchdog(capability_registry=capability_registry)
+    add_watchdog_asyncio_observer(
         capability_registry=capability_registry
     )
-    await add_tray_text(capability_registry=capability_registry)
-    await add_tray_tmux(capability_registry=capability_registry)
-    await add_tray_watchdog(capability_registry=capability_registry)
-    await add_trigger(capability_registry=capability_registry)
-    await add_trigger_launcher(capability_registry=capability_registry)
-    await add_trigger_watchdog(capability_registry=capability_registry)
-    await add_watchdog_asyncio_observer(
-        capability_registry=capability_registry
-    )
-    await add_watchdog_observer(capability_registry=capability_registry)
+    add_watchdog_observer(capability_registry=capability_registry)

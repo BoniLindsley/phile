@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
---------------------------
-Test :mod:`phile.launcher`
---------------------------
-"""
 
 # Standard libraries.
 import asyncio
@@ -70,7 +65,6 @@ def create_awaiter(limit: int) -> tuple[Counter, phile.launcher.Command]:
 
 
 class TestOneToManyTwoWayDict(unittest.TestCase):
-    """Tests :func:`~phile.launcher.OneToManyTwoWayDict`."""
 
     def test_has_attribute(self) -> None:
         int_map = phile.launcher.OneToManyTwoWayDict[int, int]()
@@ -134,45 +128,31 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
     def test_contains_on_empty_database(self) -> None:
         self.assertFalse(self.launcher_database.contains('not_there'))
 
-    async def test_add_with_minimal_data(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'minimal', {'exec_start': [noop]}
-            )
-        )
+    def test_add_with_minimal_data(self) -> None:
+        self.launcher_database.add('minimal', {'exec_start': [noop]})
 
-    async def test_add_fails_if_name_already_added(self) -> None:
+    def test_add_fails_if_name_already_added(self) -> None:
         name = 'reused'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(name, {'exec_start': [noop]})
-        )
+        self.launcher_database.add(name, {'exec_start': [noop]})
         with self.assertRaises(phile.launcher.NameInUse):
-            await phile.asyncio.wait_for(
-                self.launcher_database.add(name, {'exec_start': [noop]})
-            )
-
-    async def test_contains_after_add(self) -> None:
-        name = 'checked'
-        await phile.asyncio.wait_for(
             self.launcher_database.add(name, {'exec_start': [noop]})
-        )
+
+    def test_contains_after_add(self) -> None:
+        name = 'checked'
+        self.launcher_database.add(name, {'exec_start': [noop]})
         self.assertTrue(self.launcher_database.contains(name))
 
-    async def test_add_fails_without_exec_start(self) -> None:
+    def test_add_fails_without_exec_start(self) -> None:
         with self.assertRaises(phile.launcher.MissingDescriptorData):
-            await phile.asyncio.wait_for(
-                self.launcher_database.add('no_exec_start', {})
-            )
+            self.launcher_database.add('no_exec_start', {})
 
-    async def test_add_updates_afters(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent',
-                {
-                    'exec_start': [noop],
-                    'after': {'dependency'},
-                },
-            )
+    def test_add_updates_afters(self) -> None:
+        self.launcher_database.add(
+            'dependent',
+            {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            },
         )
         self.assertEqual(
             self.launcher_database.after['dependent'],
@@ -183,21 +163,17 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent'},
         )
 
-    async def test_add_binds_to_creates_inverses(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent',
-                {
-                    'exec_start': [noop],
-                    'binds_to': {'bind_target'},
-                },
-            )
+    def test_add_binds_to_creates_inverses(self) -> None:
+        self.launcher_database.add(
+            'dependent',
+            {
+                'exec_start': [noop],
+                'binds_to': {'bind_target'},
+            },
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'bind_target',
-                {'exec_start': [noop]},
-            )
+        self.launcher_database.add(
+            'bind_target',
+            {'exec_start': [noop]},
         )
         self.assertEqual(
             self.launcher_database.binds_to['dependent'],
@@ -208,50 +184,38 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'dependent'},
         )
 
-    async def test_add_binds_to_adds_to_existing_inverses(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent_1', {
-                    'exec_start': [noop],
-                    'binds_to': {'bind_target'},
-                }
-            )
+    def test_add_binds_to_adds_to_existing_inverses(self) -> None:
+        self.launcher_database.add(
+            'dependent_1', {
+                'exec_start': [noop],
+                'binds_to': {'bind_target'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'bind_target', {'exec_start': [noop]}
-            )
-        )
+        self.launcher_database.add('bind_target', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1'},
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent_2', {
-                    'exec_start': [noop],
-                    'binds_to': {'bind_target'},
-                }
-            )
+        self.launcher_database.add(
+            'dependent_2', {
+                'exec_start': [noop],
+                'binds_to': {'bind_target'},
+            }
         )
         self.assertEqual(
             self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1', 'dependent_2'},
         )
 
-    async def test_add__with_before_creates_inverses(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'first',
-                {
-                    'exec_start': [noop],
-                    'before': {'second'},
-                },
-            )
+    def test_add__with_before_creates_inverses(self) -> None:
+        self.launcher_database.add(
+            'first',
+            {
+                'exec_start': [noop],
+                'before': {'second'},
+            },
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add('second', {'exec_start': [noop]})
-        )
+        self.launcher_database.add('second', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.before['first'],
             {'second'},
@@ -261,21 +225,15 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'first'},
         )
 
-    async def test_add__with_conflicts_creates_inverses(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'something',
-                {
-                    'exec_start': [noop],
-                    'conflicts': {'conflict'},
-                },
-            )
+    def test_add__with_conflicts_creates_inverses(self) -> None:
+        self.launcher_database.add(
+            'something',
+            {
+                'exec_start': [noop],
+                'conflicts': {'conflict'},
+            },
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'conflict', {'exec_start': [noop]}
-            )
-        )
+        self.launcher_database.add('conflict', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.conflicts['something'],
             {'conflict'},
@@ -285,18 +243,16 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'something'},
         )
 
-    async def test_add__with_default_dependencies_adds_dependencies(
+    def test_add__with_default_dependencies_adds_dependencies(
         self
     ) -> None:
         database = self.launcher_database
-        await phile.asyncio.wait_for(
-            database.add(
-                'something',
-                {
-                    'exec_start': [noop],
-                    'default_dependencies': True
-                },
-            )
+        database.add(
+            'something',
+            {
+                'exec_start': [noop],
+                'default_dependencies': True
+            },
         )
         self.assertEqual(
             database.default_dependencies['something'], True
@@ -308,185 +264,114 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             database.before['something'], {'phile_shutdown.target'}
         )
 
-        await phile.asyncio.wait_for(
-            database.add(
-                'else',
-                {
-                    'exec_start': [noop],
-                    'default_dependencies': False
-                },
-            )
+        database.add(
+            'else',
+            {
+                'exec_start': [noop],
+                'default_dependencies': False
+            },
         )
         self.assertEqual(database.default_dependencies['else'], False)
         self.assertEqual(database.conflicts['else'], set())
         self.assertEqual(database.before['else'], set())
 
-    async def test_remove(self) -> None:
+    def test_remove__succeeds_after_add(self) -> None:
         name = 'to_be_removed'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(name, {'exec_start': [noop]})
-        )
-        await phile.asyncio.wait_for(self.launcher_database.remove(name))
+        self.launcher_database.add(name, {'exec_start': [noop]})
+        self.launcher_database.remove(name)
 
-    async def test_is_contains_after_remove(self) -> None:
+    async def test_is_contains__is_false_after_remove(self) -> None:
         name = 'unchecked'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(name, {'exec_start': [noop]})
-        )
-        await phile.asyncio.wait_for(self.launcher_database.remove(name))
+        self.launcher_database.add(name, {'exec_start': [noop]})
+        self.launcher_database.remove(name)
         self.assertFalse(self.launcher_database.contains(name))
 
-    async def test_remove_ignores_if_not_added(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.remove('not_added_unit')
-        )
+    def test_remove__ignores_if_not_added(self) -> None:
+        self.launcher_database.remove('not_added_unit')
 
-    async def test_remove_with_after_removes_from_inverses(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent_1', {
-                    'exec_start': [noop],
-                    'after': {'dependency'},
-                }
-            )
+    def test_remove__with_after_removes_from_inverses(self) -> None:
+        self.launcher_database.add(
+            'dependent_1', {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent_2', {
-                    'exec_start': [noop],
-                    'after': {'dependency'},
-                }
-            )
+        self.launcher_database.add(
+            'dependent_2', {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {'exec_start': [noop]}
-            )
-        )
+        self.launcher_database.add('dependency', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.after.inverses['dependency'],
             {'dependent_1', 'dependent_2'},
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.remove('dependent_1')
-        )
+        self.launcher_database.remove('dependent_1')
         self.assertEqual(
             self.launcher_database.after.inverses['dependency'],
             {'dependent_2'},
         )
 
-    async def test_remove__with_after_removes_inverse_if_it_empties(
+    def test_remove__with_after_removes_inverse_if_it_empties(
         self
     ) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [noop],
-                    'after': {'dependency'},
-                }
-            )
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [noop],
+                'after': {'dependency'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {'exec_start': [noop]}
-            )
-        )
+        self.launcher_database.add('dependency', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.after.inverses['dependency'],
             {'dependent'},
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.remove('dependent')
-        )
+        self.launcher_database.remove('dependent')
         self.assertNotIn(
             'bind_target', self.launcher_database.after.inverses
         )
 
-    async def test_remove_unbinds_from_inverses(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent_1', {
-                    'exec_start': [noop],
-                    'binds_to': {'bind_target'},
-                }
-            )
+    def test_remove_unbinds_from_inverses(self) -> None:
+        self.launcher_database.add(
+            'dependent_1', {
+                'exec_start': [noop],
+                'binds_to': {'bind_target'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent_2', {
-                    'exec_start': [noop],
-                    'binds_to': {'bind_target'},
-                }
-            )
+        self.launcher_database.add(
+            'dependent_2', {
+                'exec_start': [noop],
+                'binds_to': {'bind_target'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'bind_target', {'exec_start': [noop]}
-            )
-        )
+        self.launcher_database.add('bind_target', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_1', 'dependent_2'},
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.remove('dependent_1')
-        )
+        self.launcher_database.remove('dependent_1')
         self.assertEqual(
             self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent_2'},
         )
 
-    async def test_remove_removes_inverses_if_it_empties(self) -> None:
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [noop],
-                    'binds_to': {'bind_target'},
-                }
-            )
+    def test_remove_removes_inverses_if_it_empties(self) -> None:
+        self.launcher_database.add(
+            'dependent', {
+                'exec_start': [noop],
+                'binds_to': {'bind_target'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'bind_target', {'exec_start': [noop]}
-            )
-        )
+        self.launcher_database.add('bind_target', {'exec_start': [noop]})
         self.assertEqual(
             self.launcher_database.binds_to.inverses['bind_target'],
             {'dependent'},
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.remove('dependent')
-        )
+        self.launcher_database.remove('dependent')
         self.assertNotIn(
             'bind_target', self.launcher_database.binds_to.inverses
         )
-
-    async def test_add_emits_events(self) -> None:
-        entry_name = 'add_emits_events'
-        view = self.launcher_database.event_publishers[
-            phile.launcher.Database.add].__aiter__()
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                entry_name, {'exec_start': [noop]}
-            )
-        )
-        message = await phile.asyncio.wait_for(view.__anext__())
-        self.assertEqual(message, entry_name)
-
-    async def test_remove_emits_events(self) -> None:
-        entry_name = 'remove_emits_events'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                entry_name, {'exec_start': [noop]}
-            )
-        )
-        view = self.launcher_database.event_publishers[
-            phile.launcher.Database.remove].__aiter__()
-        await phile.asyncio.wait_for(
-            self.launcher_database.remove(entry_name)
-        )
-        message = await phile.asyncio.wait_for(view.__anext__())
-        self.assertEqual(message, entry_name)
 
 
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
@@ -509,7 +394,69 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             self.launcher_database,
         )
 
-    async def test_start_simple_runs_exec_start(self) -> None:
+    def test_add_nowait__adds_launcher_as_known(self) -> None:
+        entry_name = 'add_nowait__adds_launcher_as_known'
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [noop]}
+        )
+        self.assertTrue(self.launcher_database.contains(entry_name))
+
+    async def test_add__is_coroutine_version_of_add_nowait(self) -> None:
+        entry_name = 'add__is_coroutine_version_of_add_nowait'
+        await phile.asyncio.wait_for(
+            self.launcher_registry.add(
+                entry_name, {'exec_start': [noop]}
+            )
+        )
+        self.assertTrue(self.launcher_database.contains(entry_name))
+
+    async def test_add_nowait__emits_events(self) -> None:
+        entry_name = 'add_emits_events'
+        view = self.launcher_registry.event_publishers[
+            phile.launcher.Registry.add].__aiter__()
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [noop]}
+        )
+        message = await phile.asyncio.wait_for(view.__anext__())
+        self.assertEqual(message, entry_name)
+
+    def test_remove_nowait__removes_given_launcher(self) -> None:
+        entry_name = 'remove_nowait__removes_given_launcher'
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [noop]}
+        )
+        self.launcher_registry.remove_nowait(entry_name)
+        self.assertFalse(self.launcher_database.contains(entry_name))
+
+    async def test_remove__is_coroutine_version_of_remove_nowait(
+        self
+    ) -> None:
+        entry_name = 'remove__is_coroutine_version_of_remove_nowait'
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [noop]}
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.remove(entry_name)
+        )
+        self.assertFalse(self.launcher_database.contains(entry_name))
+
+    async def test_remove_nowait__emits_events(self) -> None:
+        entry_name = 'remove_emits_events'
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [noop]}
+        )
+        view = self.launcher_registry.event_publishers[
+            phile.launcher.Registry.remove].__aiter__()
+        self.launcher_registry.remove_nowait(entry_name)
+        message = await phile.asyncio.wait_for(view.__anext__())
+        self.assertEqual(message, entry_name)
+
+    def test_remove_nowait__ignores_if_missing(self) -> None:
+        entry_name = 'remove_nowait__ignores_if_missing'
+        self.launcher_registry.remove_nowait(entry_name)
+        self.assertFalse(self.launcher_database.contains(entry_name))
+
+    async def test_start__simple_runs_exec_start(self) -> None:
         name = 'simple_run'
         ran = asyncio.Event()
 
@@ -517,40 +464,34 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             ran.set()
             await asyncio.Event().wait()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {'exec_start': [set_and_wait]}
-            )
+        self.launcher_registry.add_nowait(
+            name, {'exec_start': [set_and_wait]}
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         self.assertTrue(ran.is_set())
 
-    async def test_start_simple_runs_exec_start_without_awaiting_it(
+    async def test_start__simple_runs_exec_start_without_awaiting_it(
         self
     ) -> None:
         name = 'simple_run_not_awaited'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {'exec_start': [asyncio.Event().wait]}
-            )
+        self.launcher_registry.add_nowait(
+            name, {'exec_start': [asyncio.Event().wait]}
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
 
-    async def test_start_exec_type_yields_once(self) -> None:
+    async def test_start__exec_type_yields_once(self) -> None:
         name = 'exec_run_with_exec_type'
         counter, awaiter = create_awaiter(limit=4)
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [awaiter],
-                    'type': phile.launcher.Type.EXEC,
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [awaiter],
+                'type': phile.launcher.Type.EXEC,
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         self.assertGreaterEqual(counter.value, 1)
 
-    async def test_start_forking_waits_for_completion(self) -> None:
+    async def test_start__forking_waits_for_completion(self) -> None:
         name = 'exec_forking'
         limit = 16
         counter, awaiter = create_awaiter(limit=limit)
@@ -559,33 +500,29 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await awaiter()
             return asyncio.create_task(asyncio.sleep(0))
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [forker],
-                    'type': phile.launcher.Type.FORKING,
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [forker],
+                'type': phile.launcher.Type.FORKING,
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         # There is not guarantee that the forker is awaited for,
         # but the limit should be sufficiently high in most cases.
         self.assertGreaterEqual(counter.value, limit)
 
-    async def test_start_returns_if_running(self) -> None:
+    async def test_start__returns_if_running(self) -> None:
         name = 'starting_after_start'
         stop_launcher = asyncio.Event()
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [stop_launcher.wait],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [stop_launcher.wait],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
 
-    async def test_start_awaits_if_already_starting(self) -> None:
+    async def test_start__awaits_if_already_starting(self) -> None:
         name = 'double_start'
         continue_forker = asyncio.Event()
 
@@ -593,13 +530,11 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await continue_forker.wait()
             return asyncio.create_task(asyncio.sleep(0))
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [forker],
-                    'type': phile.launcher.Type.FORKING,
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [forker],
+                'type': phile.launcher.Type.FORKING,
+            }
         )
         start_1 = self.launcher_registry.start(name)
         await asyncio.sleep(0)
@@ -611,37 +546,29 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(start_2)
         await phile.asyncio.wait_for(start_1)
 
-    async def test_is_running_after_start(self) -> None:
+    async def test_is_running__is_true_after_start(self) -> None:
         name = 'run_check'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {'exec_start': [asyncio.Event().wait]}
-            )
+        self.launcher_registry.add_nowait(
+            name, {'exec_start': [asyncio.Event().wait]}
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         self.assertTrue(self.launcher_registry.is_running(name))
 
-    async def test_start_starts_binds_to(self) -> None:
+    async def test_start__starts_binds_to(self) -> None:
         create_future = asyncio.get_running_loop().create_future
         dependency_started = create_future()
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [create_future],
-                    'binds_to': {'dependency'},
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependent', {
+                'exec_start': [create_future],
+                'binds_to': {'dependency'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {
-                    'exec_start': [
-                        make_nullary_async(
-                            dependency_started.set_result, 0
-                        ),
-                    ],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependency', {
+                'exec_start': [
+                    make_nullary_async(dependency_started.set_result, 0),
+                ],
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('dependent')
@@ -652,39 +579,27 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         loop = asyncio.get_running_loop()
         conflict_stopped = loop.create_future()
         conflicted_stopped = loop.create_future()
-
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'something', {
-                    'exec_start': [asyncio.Event().wait],
-                    'conflicts': {'conflict'},
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'something', {
+                'exec_start': [asyncio.Event().wait],
+                'conflicts': {'conflict'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'conflict', {
-                    'exec_start': [loop.create_future],
-                    'exec_stop': [
-                        make_nullary_async(
-                            conflict_stopped.set_result, 0
-                        )
-                    ],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'conflict', {
+                'exec_start': [loop.create_future],
+                'exec_stop':
+                    [make_nullary_async(conflict_stopped.set_result, 0)],
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'conflicted', {
-                    'conflicts': {'something'},
-                    'exec_start': [loop.create_future],
-                    'exec_stop': [
-                        make_nullary_async(
-                            conflicted_stopped.set_result, 0
-                        )
-                    ],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'conflicted', {
+                'conflicts': {'something'},
+                'exec_start': [loop.create_future],
+                'exec_stop': [
+                    make_nullary_async(conflicted_stopped.set_result, 0)
+                ],
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('conflict')
@@ -702,35 +617,31 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(conflict_stopped)
         await phile.asyncio.wait_for(conflicted_stopped)
 
-    async def test_start_starts_after_dependencies(self) -> None:
+    async def test_start__starts_after_dependencies(self) -> None:
         dependency_started = asyncio.Event()
 
         async def dependency_exec_start() -> None:
             dependency_started.set()
             await asyncio.Event().wait()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [asyncio.Event().wait],
-                    'after': {'dependency'},
-                    'binds_to': {'dependency'},
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependent', {
+                'exec_start': [asyncio.Event().wait],
+                'after': {'dependency'},
+                'binds_to': {'dependency'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {
-                    'exec_start': [dependency_exec_start],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('dependent')
         )
         await phile.asyncio.wait_for(dependency_started.wait())
 
-    async def test_start_does_not_start_afters_without_binds_to(
+    async def test_start__does_not_start_afters_without_binds_to(
         self
     ) -> None:
         dependency_started = asyncio.Event()
@@ -744,21 +655,16 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             dependent_started.set()
             await asyncio.Event().wait()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {
-                    'exec_start': [dependency_exec_start],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+            }
         )
-
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [dependent_exec_start],
-                    'after': {'dependency'},
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependent', {
+                'exec_start': [dependent_exec_start],
+                'after': {'dependency'},
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('dependent')
@@ -766,69 +672,61 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(dependent_started.wait())
         self.assertFalse(dependency_started.is_set())
 
-    async def test_start_rewinds_if_exec_start_raises(self) -> None:
+    async def test_start__rewinds_if_exec_start_raises(self) -> None:
         name = 'exec_start_raises'
 
         async def divide_by_zero() -> None:
             1 / 0  # pylint: disable=pointless-statement
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [divide_by_zero],
-                    'type': phile.launcher.Type.FORKING,
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [divide_by_zero],
+                'type': phile.launcher.Type.FORKING,
+            }
         )
         with self.assertRaises(ZeroDivisionError):
             await phile.asyncio.wait_for(
                 self.launcher_registry.start(name)
             )
 
-    async def test_stop_cancel_main_task_if_not_done(self) -> None:
+    async def test_stop__cancel_main_task_if_not_done(self) -> None:
         name = 'simple_stop'
         task_to_cancel = asyncio.create_task(asyncio.Event().wait())
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {'exec_start': [lambda: task_to_cancel]}
-            )
+        self.launcher_registry.add_nowait(
+            name, {'exec_start': [lambda: task_to_cancel]}
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(self.launcher_registry.stop(name))
         self.assertTrue(task_to_cancel.cancelled())
 
-    async def test_stop_runs_exec_stop_if_given(self) -> None:
+    async def test_stop__runs_exec_stop_if_given(self) -> None:
         name = 'stop_with_exec_stop'
         stop = asyncio.Event()
 
         async def stopper() -> None:
             stop.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [stop.wait],
-                    'exec_stop': [stopper],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [stop.wait],
+                'exec_stop': [stopper],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(self.launcher_registry.stop(name))
         self.assertTrue(stop.is_set())
 
-    async def test_stop_returns_if_not_running(self) -> None:
+    async def test_stop__returns_if_not_running(self) -> None:
         name = 'starting_after_start'
         stop_launcher = asyncio.Event()
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [stop_launcher.wait],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [stop_launcher.wait],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.stop(name))
 
-    async def test_stop_awaits_if_already_stopping(self) -> None:
+    async def test_stop__awaits_if_already_stopping(self) -> None:
         name = 'double_stop'
         stop = asyncio.Event()
         continue_stopper = asyncio.Event()
@@ -837,13 +735,11 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await continue_stopper.wait()
             stop.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [stop.wait],
-                    'exec_stop': [stopper],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [stop.wait],
+                'exec_stop': [stopper],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         stop_1 = self.launcher_registry.stop(name)
@@ -856,18 +752,16 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(stop_2)
         await phile.asyncio.wait_for(stop_1)
 
-    async def test_is_not_running_after_stop(self) -> None:
+    async def test_is_running__is_false_after_stop(self) -> None:
         name = 'simple_stop'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {'exec_start': [asyncio.Event().wait]}
-            )
+        self.launcher_registry.add_nowait(
+            name, {'exec_start': [asyncio.Event().wait]}
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(self.launcher_registry.stop(name))
         self.assertFalse(self.launcher_registry.is_running(name))
 
-    async def test_start_awaits_if_still_stopping(self) -> None:
+    async def test_start__awaits_if_still_stopping(self) -> None:
         name = 'start_stop_start'
         started = asyncio.Event()
         stop_paused = asyncio.Event()
@@ -883,13 +777,11 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await continue_stopper.wait()
             stop.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [starter],
-                    'exec_stop': [stopper],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [starter],
+                'exec_stop': [stopper],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         started.clear()
@@ -905,7 +797,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(stop_task.done())
         await phile.asyncio.wait_for(stop_task)
 
-    async def test_stop_cancels_if_still_starting(self) -> None:
+    async def test_stop__cancels_if_still_starting(self) -> None:
         name = 'start_stop'
         started = asyncio.Event()
         stop_paused = asyncio.Event()
@@ -921,14 +813,12 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await continue_stopper.wait()
             stop.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                name, {
-                    'exec_start': [starter],
-                    'exec_stop': [stopper],
-                    'type': phile.launcher.Type.FORKING,
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [starter],
+                'exec_stop': [stopper],
+                'type': phile.launcher.Type.FORKING,
+            }
         )
         start_task = self.launcher_registry.start(name)
         await asyncio.sleep(0)
@@ -937,7 +827,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(start_task)
         await phile.asyncio.wait_for(stop_task)
 
-    async def test_stop_stops_bind_to_inverse_entries(self) -> None:
+    async def test_stop__stops_bind_to_inverse_entries(self) -> None:
         dependent_started = asyncio.Event()
         dependent_stopped = asyncio.Event()
 
@@ -948,21 +838,17 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         async def dependent_exec_stop() -> None:
             dependent_stopped.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [dependent_exec_start],
-                    'exec_stop': [dependent_exec_stop],
-                    'binds_to': {'dependency'}
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependent', {
+                'exec_start': [dependent_exec_start],
+                'exec_stop': [dependent_exec_stop],
+                'binds_to': {'dependency'}
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {
-                    'exec_start': [asyncio.Event().wait],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependency', {
+                'exec_start': [asyncio.Event().wait],
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('dependent')
@@ -976,7 +862,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         )
         await phile.asyncio.wait_for(dependent_stopped.wait())
 
-    async def test_stop_stops_after_dependents(self) -> None:
+    async def test_stop__stops_after_dependents(self) -> None:
         dependency_started = asyncio.Event()
         dependency_stopped = asyncio.Event()
         dependent_stopped = asyncio.Event()
@@ -993,23 +879,19 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             dependent_stopped.set()
             await dependent_exec_stop_continue.wait()
 
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [asyncio.Event().wait],
-                    'exec_stop': [dependent_exec_stop],
-                    'after': {'dependency'},
-                    'binds_to': {'dependency'},
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependent', {
+                'exec_start': [asyncio.Event().wait],
+                'exec_stop': [dependent_exec_stop],
+                'after': {'dependency'},
+                'binds_to': {'dependency'},
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {
-                    'exec_start': [dependency_exec_start],
-                    'exec_stop': [dependency_exec_stop],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependency', {
+                'exec_start': [dependency_exec_start],
+                'exec_stop': [dependency_exec_stop],
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('dependent')
@@ -1025,41 +907,37 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(dependency_stop_task)
         await phile.asyncio.wait_for(dependent_stopped.wait())
 
-    async def test_stop_does_not_stop_afters_without_binds_to(
+    async def test_stop__does_not_stop_afters_without_binds_to(
         self
     ) -> None:
         create_future = asyncio.get_running_loop().create_future
         dependency_started = create_future()
         dependency_stopped = create_future()
         dependent_stopped = create_future()
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependency', {
-                    'exec_start': [
-                        make_nullary_async(
-                            dependency_started.set_result, None
-                        )
-                    ],
-                    'exec_stop': [
-                        make_nullary_async(
-                            dependency_stopped.set_result, None
-                        )
-                    ],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependency', {
+                'exec_start': [
+                    make_nullary_async(
+                        dependency_started.set_result, None
+                    )
+                ],
+                'exec_stop': [
+                    make_nullary_async(
+                        dependency_stopped.set_result, None
+                    )
+                ],
+            }
         )
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                'dependent', {
-                    'exec_start': [create_future],
-                    'exec_stop': [
-                        make_nullary_async(
-                            dependent_stopped.set_result, None
-                        )
-                    ],
-                    'after': {'dependency'},
-                }
-            )
+        self.launcher_registry.add_nowait(
+            'dependent', {
+                'exec_start': [create_future],
+                'exec_stop': [
+                    make_nullary_async(
+                        dependent_stopped.set_result, None
+                    )
+                ],
+                'after': {'dependency'},
+            }
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start('dependency')
@@ -1074,14 +952,12 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(dependency_stopped)
         self.assertFalse(dependent_stopped.done())
 
-    async def test_start_emits_events(self) -> None:
+    async def test_start__emits_events(self) -> None:
         entry_name = 'start_emits_events'
         view = self.launcher_registry.event_publishers[
             phile.launcher.Registry.start].__aiter__()
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                entry_name, {'exec_start': [noop]}
-            )
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [noop]}
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start(entry_name)
@@ -1089,12 +965,10 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
 
-    async def test_stop_emits_events(self) -> None:
+    async def test_stop__emits_events(self) -> None:
         entry_name = 'remove_emits_events'
-        await phile.asyncio.wait_for(
-            self.launcher_database.add(
-                entry_name, {'exec_start': [asyncio.Event().wait]}
-            )
+        self.launcher_registry.add_nowait(
+            entry_name, {'exec_start': [asyncio.Event().wait]}
         )
         await phile.asyncio.wait_for(
             self.launcher_registry.start(entry_name)
@@ -1107,7 +981,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         message = await phile.asyncio.wait_for(view.__anext__())
         self.assertEqual(message, entry_name)
 
-    async def test_remove_stops_launcher(self) -> None:
+    async def test_remove__stops_launcher(self) -> None:
         name = 'to_be_stopped_when_deregistering'
         started = asyncio.Event()
         stopped = asyncio.Event()
@@ -1119,20 +993,28 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         async def exec_stop() -> None:
             stopped.set()
 
-        await phile.asyncio.wait_for(
-            self.launcher_registry.database.add(
-                name, {
-                    'exec_start': [exec_start],
-                    'exec_stop': [exec_stop],
-                }
-            )
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [exec_start],
+                'exec_stop': [exec_stop],
+            }
         )
         await phile.asyncio.wait_for(self.launcher_registry.start(name))
         await phile.asyncio.wait_for(started.wait())
-        await phile.asyncio.wait_for(
-            self.launcher_registry.database.remove(name)
-        )
+        await phile.asyncio.wait_for(self.launcher_registry.remove(name))
         await phile.asyncio.wait_for(stopped.wait())
+
+    async def test_remove_nowait__raises_if_running(self) -> None:
+        entry_name = 'remove_nowait_raises_if_running'
+        self.launcher_registry.add_nowait(
+            entry_name,
+            {'exec_start': [asyncio.get_running_loop().create_future]}
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start(entry_name)
+        )
+        with self.assertRaises(RuntimeError):
+            self.launcher_registry.remove_nowait(entry_name)
 
 
 class TestProvideRegistry(unittest.IsolatedAsyncioTestCase):

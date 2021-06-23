@@ -168,14 +168,6 @@ class Database:
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        self.event_publishers: (
-            dict[collections.abc.Callable[..., typing.Any],
-                 phile.asyncio.pubsub.Queue[str]]
-        ) = {
-            Database.add: phile.asyncio.pubsub.Queue[str](),
-            Database.remove: phile.asyncio.pubsub.Queue[str](),
-        }
-        """Pushes events to subscribers."""
         self.known_descriptors: dict[str, Descriptor] = {}
         """
         The launcher names added, with given :class:`Descriptor`.
@@ -208,7 +200,7 @@ class Database:
         self.type: dict[str, Type] = {}
         """Initialisation and termination conditions of launchers."""
 
-    async def add(self, entry_name: str, descriptor: Descriptor) -> None:
+    def add(self, entry_name: str, descriptor: Descriptor) -> None:
         """Not thread-safe."""
         self._check_new_descriptor(entry_name, descriptor)
         known_descriptors = self.known_descriptors
@@ -243,18 +235,6 @@ class Database:
                 self.before[entry_name].add('phile_shutdown.target')
                 self.conflicts[entry_name].add('phile_shutdown.target')
 
-            def publish_remove_event() -> None:
-                publisher = self.event_publishers[Database.remove]
-                try:
-                    publisher.put(entry_name)
-                except RuntimeError:  # pragma: no cover  # Defensive.
-                    # If there is no current event loop,
-                    # pushing is not possible, and asyncio raises this.
-                    pass
-
-            self.event_publishers[Database.add].put(entry_name)
-            stack.callback(publish_remove_event)
-
             self.remover[entry_name] = functools.partial(
                 stack.pop_all().__exit__, None, None, None
             )
@@ -276,7 +256,7 @@ class Database:
                 ' {entry_name}'.format(entry_name=entry_name)
             )
 
-    async def remove(self, entry_name: str) -> None:
+    def remove(self, entry_name: str) -> None:
         entry_remover = self.remover.pop(entry_name, None)
         if entry_remover is not None:
             entry_remover()
@@ -290,25 +270,17 @@ class Registry:
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self._database = Database()
         self.event_publishers: (
             dict[collections.abc.Callable[..., typing.Any],
                  phile.asyncio.pubsub.Queue[str]]
         ) = {
             Registry.start: phile.asyncio.pubsub.Queue[str](),
             Registry.stop: phile.asyncio.pubsub.Queue[str](),
+            Registry.add: phile.asyncio.pubsub.Queue[str](),
+            Registry.remove: phile.asyncio.pubsub.Queue[str](),
         }
         """Pushes events to subscribers."""
-
-        registry = self
-
-        class DatabaseStopsOnRemove(Database):
-
-            async def remove(self, entry_name: str) -> None:
-                await registry.stop(entry_name)
-                await super().remove(entry_name=entry_name)
-
-        self._database = DatabaseStopsOnRemove()
-
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
         self._start_tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._stop_tasks: dict[str, asyncio.Task[typing.Any]] = {}
@@ -320,6 +292,28 @@ class Registry:
     @property
     def state_machine(self) -> 'Registry':
         return self
+
+    async def add(self, entry_name: str, descriptor: Descriptor) -> None:
+        # Symmetric counterpart of `remove`.
+        self.add_nowait(entry_name=entry_name, descriptor=descriptor)
+
+    def add_nowait(
+        self, entry_name: str, descriptor: Descriptor
+    ) -> None:
+        self._database.add(entry_name=entry_name, descriptor=descriptor)
+        self.event_publishers[Registry.add].put(entry_name)
+
+    async def remove(self, entry_name: str) -> None:
+        await self.stop(entry_name=entry_name)
+        self.remove_nowait(entry_name=entry_name)
+
+    def remove_nowait(self, entry_name: str) -> None:
+        if not self._database.contains(entry_name):
+            return
+        if self.is_running(entry_name=entry_name):
+            raise RuntimeError('Cannot remove a running launcher.')
+        self._database.remove(entry_name=entry_name)
+        self.event_publishers[Registry.remove].put(entry_name)
 
     def start(
         self,
@@ -510,7 +504,7 @@ async def provide_registry(
 ) -> collections.abc.AsyncIterator[Registry]:
     with capability_registry.provide(launcher_registry := Registry()):
         launcher_name = 'phile_shutdown.target'
-        await launcher_registry.database.add(
+        launcher_registry.add_nowait(
             launcher_name,
             phile.launcher.Descriptor(
                 exec_start=[asyncio.get_running_loop().create_future],

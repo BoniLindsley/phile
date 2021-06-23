@@ -45,11 +45,11 @@ class TestProducer(
             phile.trigger.launcher.Producer,
         )
 
-    async def set_up_launcher_entry(self) -> None:
+    def set_up_launcher_entry(self) -> None:
         self.entry_name = entry_name = 'add-launcher'
         self.start_trigger_name = 'launcher_' + entry_name + '_start'
         self.stop_trigger_name = 'launcher_' + entry_name + '_stop'
-        await self.launcher_registry.database.add(
+        self.launcher_registry.add_nowait(
             entry_name,
             descriptor=phile.launcher.Descriptor(
                 exec_start=[
@@ -87,14 +87,12 @@ class TestProducer(
             await asyncio.sleep(0)
 
     async def test_add_launcher_binds_triggers(self) -> None:
-        await phile.asyncio.wait_for(self.set_up_launcher_entry())
+        self.set_up_launcher_entry()
         await phile.asyncio.wait_for(self.wait_for_trigger_binding())
 
     async def test_remove_launcher_unbinds_trigger(self) -> None:
         await self.test_add_launcher_binds_triggers()
-        await phile.asyncio.wait_for(
-            self.launcher_registry.database.remove(self.entry_name)
-        )
+        self.launcher_registry.remove_nowait(self.entry_name)
         await phile.asyncio.wait_for(self.wait_for_trigger_unbinding())
 
     async def test_start_launcher_toggles_trigger(self) -> None:
@@ -122,7 +120,7 @@ class TestProducer(
             self.launcher_triggers.__aexit__(None, None, None)
         )
         try:
-            await phile.asyncio.wait_for(self.set_up_launcher_entry())
+            self.set_up_launcher_entry()
         finally:
             await phile.asyncio.wait_for(
                 self.launcher_triggers.__aenter__()
@@ -136,7 +134,7 @@ class TestProducer(
             self.launcher_triggers.__aexit__(None, None, None)
         )
         try:
-            await phile.asyncio.wait_for(self.set_up_launcher_entry())
+            self.set_up_launcher_entry()
             await phile.asyncio.wait_for(
                 self.launcher_registry.state_machine.start(
                     self.entry_name
