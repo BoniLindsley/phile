@@ -14,6 +14,7 @@ import contextlib
 import contextvars
 import datetime
 import functools
+import logging
 import queue
 import socket
 import threading
@@ -21,6 +22,10 @@ import typing
 
 _T = typing.TypeVar('_T')
 _T_co = typing.TypeVar('_T_co', covariant=True)
+
+# TODO[mypy issue #1422]: __loader__ not defined
+_loader_name: str = __loader__.name  # type: ignore[name-defined]
+_logger = logging.getLogger(_loader_name)
 
 wait_for_timeout: contextvars.ContextVar[datetime.timedelta] = (
     contextvars.ContextVar(
@@ -52,6 +57,58 @@ async def cancel_and_wait(
         if not target.cancelled():
             raise
     return None
+
+
+def cancel(
+    tasks_to_cancel: collections.abc.Iterable[asyncio.Task[typing.Any]],
+) -> None:
+    loop = asyncio.get_event_loop()
+    gatherer = asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+    gatherer.cancel()
+    try:
+        loop.run_until_complete(gatherer)
+    except asyncio.CancelledError:
+        pass
+
+
+def handle_exceptions(
+    done_tasks: collections.abc.Iterable[asyncio.Task[typing.Any]],
+) -> None:
+    loop = asyncio.get_event_loop()
+    possible_exceptions = (
+        task.exception() for task in done_tasks if not task.cancelled()
+    )
+    raised_exceptions = (
+        exception for exception in possible_exceptions
+        if exception is not None
+    )
+    handle_exception = loop.call_exception_handler
+    for exception in raised_exceptions:
+        handle_exception({
+            'message': 'Unhandled exception during loop shutdown.',
+            'exception': exception,
+        })
+
+
+def close() -> None:
+    loop = asyncio.get_event_loop()
+    try:
+        try:
+            _logger.debug('Cancelling existing asyncio tasks.')
+            pending_tasks = asyncio.all_tasks(loop)
+            if pending_tasks:
+                cancel(pending_tasks)
+                handle_exceptions(pending_tasks)
+            del pending_tasks
+        finally:
+            _logger.debug('Shutting down asyncio loop states.')
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
+    finally:
+        try:
+            asyncio.set_event_loop(None)
+        finally:
+            loop.close()
 
 
 # TODO[python/mypy#9922]: Use `asyncio.Task[_T_co]` in return value.

@@ -119,7 +119,6 @@ class TestProducer(
                 raise error from original_error
             raise
 
-    # TODO(BoniLindsley): Continue here, making the tests work.
     async def test_creating_file_binds_and_shows_trigger(self) -> None:
         self.set_up_runner()
         self.assertTrue(not self.trigger_file_path.is_file())
