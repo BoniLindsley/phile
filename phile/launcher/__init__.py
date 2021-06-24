@@ -91,17 +91,27 @@ class Type(enum.IntEnum):
     from its ``exec_start`` coroutine.
     The future is then identified s the main subroutine of the unit.
     """
+    CAPABILITY = enum.auto()
+    """
+    A capability :class:`Descriptor` starts
+    when its `capability_name` is set in registry.
+    """
 
 
 class Descriptor(typing.TypedDict, total=False):
     after: set[str]
     before: set[str]
     binds_to: set[str]
+    capability_name: str
     conflicts: set[str]
     default_dependencies: bool
     exec_start: CommandLines
     exec_stop: CommandLines
     type: Type
+
+
+class CapabilityNotSet(RuntimeError):
+    pass
 
 
 class MissingDescriptorData(KeyError):
@@ -188,6 +198,8 @@ class Database:
         """Order dependencies of launchers."""
         self.binds_to = OneToManyTwoWayDict[str, str]()
         """Dependencies of launchers."""
+        self.capability_name: dict[str, str] = {}
+        """Capabilities registered by launcher."""
         self.conflicts = OneToManyTwoWayDict[str, str]()
         """Conflicts between launchers."""
         self.default_dependencies: dict[str, bool] = {}
@@ -222,15 +234,20 @@ class Database:
                     )
                 )
 
-            provide_option('after', set())
-            provide_option('before', set())
+            provide_option('after', set[str]())
+            provide_option('before', set[str]())
             provide_option('binds_to', set[str]())
+            provide_option('capability_name', '')
             provide_option('conflicts', set[str]())
             # Default value to be changed once it is implemented.
             provide_option('default_dependencies', False)
             provide_option('exec_start', None)
             provide_option('exec_stop', [])
-            provide_option('type', Type.SIMPLE)
+            default_type = Type.SIMPLE
+            if self.capability_name[entry_name]:
+                default_type = Type.CAPABILITY
+            provide_option('type', default_type)
+            del default_type
             if self.default_dependencies[entry_name]:
                 self.before[entry_name].add('phile_shutdown.target')
                 self.conflicts[entry_name].add('phile_shutdown.target')
@@ -489,6 +506,40 @@ class Registry:
             elif unit_type is Type.FORKING:
                 main_task = await main_task
                 assert isinstance(main_task, asyncio.Future)
+            elif unit_type is Type.CAPABILITY:
+                expected_capability_name = (
+                    database.capability_name[entry_name]
+                )
+                # TODO(BoniLindsley): Stop on capability unregistering.
+                # Need to use the same event_view as here
+                # to not miss any events.
+                event_view = (
+                    self.capability_registry.event_queue.__aiter__()
+                )
+                capabilities_set: list[str] = []
+                async for event in event_view:  # pragma: no branch
+                    if event.type is not (
+                        phile.capability.EventType.SET
+                    ):
+                        continue
+                    capability_name = (
+                        event.capability.__module__ + '.' +
+                        event.capability.__qualname__
+                    )
+                    capabilities_set.append(capability_name)
+                    if capability_name == expected_capability_name:
+                        break
+                if not capabilities_set or (
+                    capabilities_set[-1] != expected_capability_name
+                ):
+                    raise CapabilityNotSet(
+                        'Launcher {} did not set capability {}.\n'
+                        'Only detected the following: {}'.format(
+                            entry_name,
+                            expected_capability_name,
+                            capabilities_set,
+                        )
+                    )
             return main_task
         except:
             await phile.asyncio.cancel_and_wait(main_task)

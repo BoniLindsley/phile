@@ -12,7 +12,6 @@ setup(
         'phile',
         'phile.PySide2',
         'phile.asyncio',
-        'phile.capability',
         'phile.configuration',
         'phile.data',
         'phile.hotkey',

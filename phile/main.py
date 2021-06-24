@@ -71,6 +71,7 @@ def run(async_target: AsyncTarget[_T]) -> _T:
                         'pyside2',
                     )
                 )
+                qt_app.setQuitLockEnabled(False)
                 loop.call_soon_threadsafe(
                     main_task.add_done_callback,
                     (lambda _task: qt_app.quit()),

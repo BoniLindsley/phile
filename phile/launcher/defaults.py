@@ -19,31 +19,21 @@ def add_configuration(
     launcher_registry: phile.launcher.Registry
 ) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile
-            import phile.configuration
-            with launcher_registry.capability_registry.provide(
-                await asyncio.to_thread(phile.configuration.load)
-            ):
-                ready.set_result(True)
-                await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.configuration
+        with launcher_registry.capability_registry.provide(
+            await asyncio.to_thread(phile.configuration.load)
+        ):
+            await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'phile.configuration',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='phile.configuration.Entries',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -275,106 +265,71 @@ def add_log_stderr(launcher_registry: phile.launcher.Registry) -> None:
 
 def add_keyring(launcher_registry: phile.launcher.Registry) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import keyring
-            default_keyring = await asyncio.to_thread(
-                keyring.get_keyring
-            )
-            capability_registry = launcher_registry.capability_registry
-            with capability_registry.provide(
-                default_keyring, keyring.backend.KeyringBackend
-            ):
-                ready.set_result(True)
-                await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import keyring
+        default_keyring = await asyncio.to_thread(keyring.get_keyring)
+        with launcher_registry.capability_registry.provide(
+            default_keyring, keyring.backend.KeyringBackend
+        ):
+            await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'keyring',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='keyring.backend.KeyringBackend',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
 
 def add_tmux(launcher_registry: phile.launcher.Registry) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.tmux.control_mode
-            async with phile.tmux.control_mode.open(
-                control_mode_arguments=(
-                    phile.tmux.control_mode.Arguments()
-                )
-            ) as control_mode:
-                with launcher_registry.capability_registry.provide(
-                    control_mode, phile.tmux.control_mode.Client
-                ):
-                    async with phile.asyncio.open_task(
-                        control_mode.run()
-                    ):
-                        ready.set_result(True)
-                        await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.tmux.control_mode
+        async with phile.tmux.control_mode.open(
+            control_mode_arguments=(phile.tmux.control_mode.Arguments())
+        ) as control_mode, phile.asyncio.open_task(control_mode.run()):
+            with launcher_registry.capability_registry.provide(
+                control_mode, phile.tmux.control_mode.Client
+            ):
+                await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'phile.tmux.control_mode',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='phile.tmux.control_mode.Client',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
 
 def add_tray(launcher_registry: phile.launcher.Registry) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.tray
-            tray_registry = phile.tray.Registry()
-            try:
-                with launcher_registry.capability_registry.provide(
-                    tray_registry
-                ):
-                    ready.set_result(True)
-                    await create_future()
-            finally:
-                tray_registry.close()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.tray
+        tray_registry = phile.tray.Registry()
+        try:
+            with launcher_registry.capability_registry.provide(
+                tray_registry
+            ):
+                await asyncio.get_running_loop().create_future()
+        finally:
+            tray_registry.close()
 
     launcher_registry.add_nowait(
         'phile.tray',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='phile.tray.Registry',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -527,28 +482,16 @@ def add_tray_pyside2_window(
 
 def add_tray_text(launcher_registry: phile.launcher.Registry) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.tray
-            capability_registry = launcher_registry.capability_registry
-            tray_registry = capability_registry[phile.tray.Registry]
-            text_icons = phile.tray.TextIcons(
-                tray_registry=tray_registry
-            )
-            try:
-                with capability_registry.provide(text_icons):
-                    ready.set_result(True)
-                    await create_future()
-            finally:
-                await text_icons.aclose()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.tray
+        capability_registry = launcher_registry.capability_registry
+        tray_registry = capability_registry[phile.tray.Registry]
+        text_icons = phile.tray.TextIcons(tray_registry=tray_registry)
+        try:
+            with capability_registry.provide(text_icons):
+                await asyncio.get_running_loop().create_future()
+        finally:
+            await text_icons.aclose()
 
     launcher_registry.add_nowait(
         'phile.tray.text',
@@ -556,9 +499,10 @@ def add_tray_text(launcher_registry: phile.launcher.Registry) -> None:
             after={'phile.tray'},
             before={'phile_shutdown.target'},
             binds_to={'phile.tray'},
+            capability_name='phile.tray.TextIcons',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -601,40 +545,30 @@ def add_tray_watchdog(
     launcher_registry: phile.launcher.Registry
 ) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.configuration
-            import phile.tray.watchdog
-            import phile.watchdog.asyncio
-            capability_registry = launcher_registry.capability_registry
-            configuration = (
-                capability_registry[phile.configuration.Entries]
-            )
-            observer = (
-                capability_registry[phile.watchdog.asyncio.BaseObserver]
-            )
-            tray_registry = capability_registry[phile.tray.Registry]
-            tray_target = phile.tray.watchdog.Target(
-                configuration=configuration
-            )
-            async with phile.tray.watchdog.async_open(
-                configuration=configuration,
-                observer=observer,
-                tray_registry=tray_registry,
-            ) as tray_source:
-                with capability_registry.provide(
-                    tray_source
-                ), capability_registry.provide(tray_target):
-                    ready.set_result(True)
-                    await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.configuration
+        import phile.tray.watchdog
+        import phile.watchdog.asyncio
+        capability_registry = launcher_registry.capability_registry
+        configuration = (
+            capability_registry[phile.configuration.Entries]
+        )
+        observer = (
+            capability_registry[phile.watchdog.asyncio.BaseObserver]
+        )
+        tray_registry = capability_registry[phile.tray.Registry]
+        tray_target = phile.tray.watchdog.Target(
+            configuration=configuration
+        )
+        async with phile.tray.watchdog.async_open(
+            configuration=configuration,
+            observer=observer,
+            tray_registry=tray_registry,
+        ) as tray_source:
+            with capability_registry.provide(
+                tray_source
+            ), capability_registry.provide(tray_target):
+                await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'phile.tray.watchdog',
@@ -650,38 +584,30 @@ def add_tray_watchdog(
                 'phile.tray',
                 'watchdog.asyncio.observer',
             },
+            capability_name='phile.tray.watchdog.Target',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
 
 def add_trigger(launcher_registry: phile.launcher.Registry) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.trigger
-            capability_registry = launcher_registry.capability_registry
-            with capability_registry.provide(phile.trigger.Registry()):
-                ready.set_result(True)
-                await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.trigger
+        capability_registry = launcher_registry.capability_registry
+        with capability_registry.provide(phile.trigger.Registry()):
+            await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'phile.trigger',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='phile.trigger.Registry',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -690,30 +616,18 @@ def add_trigger_launcher(
     launcher_registry: phile.launcher.Registry
 ) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.launcher
-            import phile.trigger
-            import phile.trigger.launcher
-            capability_registry = launcher_registry.capability_registry
-            trigger_registry = (
-                capability_registry[phile.trigger.Registry]
-            )
-            async with phile.trigger.launcher.Producer(
-                launcher_registry=launcher_registry,
-                trigger_registry=trigger_registry,
-            ) as producer:
-                with capability_registry.provide(producer):
-                    ready.set_result(True)
-                    await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.launcher
+        import phile.trigger
+        import phile.trigger.launcher
+        capability_registry = launcher_registry.capability_registry
+        trigger_registry = (capability_registry[phile.trigger.Registry])
+        async with phile.trigger.launcher.Producer(
+            launcher_registry=launcher_registry,
+            trigger_registry=trigger_registry,
+        ) as producer:
+            with capability_registry.provide(producer):
+                await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'phile.trigger.launcher',
@@ -721,9 +635,10 @@ def add_trigger_launcher(
             after={'phile.trigger'},
             before={'phile_shutdown.target'},
             binds_to={'phile.trigger'},
+            capability_name='phile.trigger.launcher.Producer',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -777,56 +692,47 @@ def add_trigger_watchdog(
 
 def add_pyside2(launcher_registry: phile.launcher.Registry) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
+    async def run() -> None:
+        import PySide2.QtCore
+        import PySide2.QtGui
+        import PySide2.QtWidgets
+        import phile.PySide2.QtCore
+        import phile.launcher
+        # Force the loop to pause,
+        # so that the PySide2 app can be created.
         loop = asyncio.get_running_loop()
         loop.stop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import PySide2.QtCore
-            import PySide2.QtGui
-            import PySide2.QtWidgets
-            import phile.PySide2.QtCore
-            import phile.launcher
-            capability_registry = launcher_registry.capability_registry
-            provide = capability_registry.provide
-            qt_app = PySide2.QtWidgets.QApplication.instance()
-            qt_app.setQuitLockEnabled(False)
-            with provide(
-                qt_app,
-                PySide2.QtCore.QCoreApplication,
-            ), provide(
-                qt_app,
-                PySide2.QtGui.QGuiApplication,
-            ), provide(
-                qt_app,
-            ), phile.PySide2.QtCore.Executor(
-            ) as pyside2_executor, provide(
-                pyside2_executor,
-            ):
-                ready.set_result(True)
-                try:
-                    await create_future()
-                finally:
-                    launcher_registry.state_machine.start(
-                        'phile_shutdown.target'
-                    )
-                    phile.PySide2.QtCore.call_soon_threadsafe(
-                        qt_app.quit
-                    )
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+        # Need to yield control for the loop to stop.
+        await asyncio.sleep(0)
+        provide = launcher_registry.capability_registry.provide
+        qt_app = PySide2.QtWidgets.QApplication.instance()
+        with provide(
+            qt_app,
+            PySide2.QtCore.QCoreApplication,
+        ), provide(
+            qt_app,
+            PySide2.QtGui.QGuiApplication,
+        ), provide(
+            qt_app,
+        ), phile.PySide2.QtCore.Executor() as pyside2_executor, provide(
+            pyside2_executor,
+        ):
+            try:
+                await loop.create_future()
+            finally:
+                launcher_registry.state_machine.start(
+                    'phile_shutdown.target'
+                )
+                phile.PySide2.QtCore.call_soon_threadsafe(qt_app.quit)
 
     launcher_registry.add_nowait(
         'pyside2',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='phile.PySide2.QtCore.Executor',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -835,32 +741,22 @@ def add_watchdog_asyncio_observer(
     launcher_registry: phile.launcher.Registry
 ) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import phile.watchdog.asyncio
-            capability_registry = launcher_registry.capability_registry
-            with capability_registry.provide(
-                phile.watchdog.asyncio.Observer(),
-                phile.watchdog.asyncio.BaseObserver,
-            ):
-                ready.set_result(True)
-                await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import phile.watchdog.asyncio
+        with launcher_registry.capability_registry.provide(
+            phile.watchdog.asyncio.Observer(),
+            phile.watchdog.asyncio.BaseObserver,
+        ):
+            await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'watchdog.asyncio.observer',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='phile.watchdog.asyncio.BaseObserver',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 
@@ -869,34 +765,24 @@ def add_watchdog_observer(
     launcher_registry: phile.launcher.Registry
 ) -> None:
 
-    async def start() -> asyncio.Future[typing.Any]:
-        loop = asyncio.get_running_loop()
-        create_future = loop.create_future
-        ready = create_future()
-
-        async def run() -> None:
-            import watchdog.observers
-            import phile.trigger.watchdog
-            capability_registry = launcher_registry.capability_registry
-            async with phile.watchdog.observers.async_open() as observer:
-                with capability_registry.provide(
-                    observer,
-                    watchdog.observers.api.BaseObserver,
-                ):
-                    ready.set_result(True)
-                    await create_future()
-
-        running_task = loop.create_task(run())
-        await ready
-        return running_task
+    async def run() -> None:
+        import watchdog.observers
+        import phile.trigger.watchdog
+        async with phile.watchdog.observers.async_open() as observer:
+            with launcher_registry.capability_registry.provide(
+                observer,
+                watchdog.observers.api.BaseObserver,
+            ):
+                await asyncio.get_running_loop().create_future()
 
     launcher_registry.add_nowait(
         'watchdog.observer',
         phile.launcher.Descriptor(
             before={'phile_shutdown.target'},
+            capability_name='watchdog.observers.api.BaseObserver',
             conflicts={'phile_shutdown.target'},
-            exec_start=[start],
-            type=phile.launcher.Type.FORKING,
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
         )
     )
 

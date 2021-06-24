@@ -18,11 +18,63 @@ import phile.launcher
 _T = typing.TypeVar('_T')
 
 
-class TestNameInUse(unittest.TestCase):
-    """Tests :func:`~phile.launcher.NameInUse`."""
+async def noop() -> None:
+    pass
 
-    def test_check_is_runtime_error(self) -> None:
-        self.assertIsInstance(phile.launcher.NameInUse(), RuntimeError)
+
+class TestType(unittest.TestCase):
+
+    def test_members_exist(self) -> None:
+        members = {
+            phile.launcher.Type.SIMPLE,
+            phile.launcher.Type.EXEC,
+            phile.launcher.Type.FORKING,
+            phile.launcher.Type.CAPABILITY,
+        }
+        self.assertEqual(len(members), 4)
+
+
+class TestDescriptor(unittest.TestCase):
+
+    def test_attributes(self) -> None:
+        phile.launcher.Descriptor(
+            after=set(),
+            before=set(),
+            binds_to=set(),
+            capability_name='a',
+            conflicts=set(),
+            default_dependencies=True,
+            exec_start=[noop],
+            exec_stop=[noop],
+            type=phile.launcher.Type.SIMPLE,
+        )
+
+
+class TestCapabilityNotSet(unittest.TestCase):
+
+    def test_is_exception(self) -> None:
+        with self.assertRaises(phile.launcher.CapabilityNotSet):
+            raise phile.launcher.CapabilityNotSet()
+        with self.assertRaises(RuntimeError):
+            raise phile.launcher.CapabilityNotSet()
+
+
+class TestMissingDescriptorData(unittest.TestCase):
+
+    def test_is_exception(self) -> None:
+        with self.assertRaises(phile.launcher.MissingDescriptorData):
+            raise phile.launcher.MissingDescriptorData()
+        with self.assertRaises(KeyError):
+            raise phile.launcher.MissingDescriptorData()
+
+
+class TestNameInUse(unittest.TestCase):
+
+    def test_is_exception(self) -> None:
+        with self.assertRaises(phile.launcher.NameInUse):
+            raise phile.launcher.NameInUse()
+        with self.assertRaises(RuntimeError):
+            raise phile.launcher.NameInUse()
 
 
 def make_nullary_async(
@@ -42,10 +94,6 @@ def make_nullary_async(
         return function(*args, **kwargs)
 
     return wrapper_coroutine
-
-
-async def noop() -> None:
-    pass
 
 
 @dataclasses.dataclass
@@ -213,6 +261,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {
                 'exec_start': [noop],
                 'before': {'second'},
+                'default_dependencies': False,
             },
         )
         self.launcher_database.add('second', {'exec_start': [noop]})
@@ -225,12 +274,44 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             {'first'},
         )
 
+    def test_add__with_capability_name(self) -> None:
+        self.launcher_database.add(
+            'something',
+            {
+                'capability_name': 'int',
+                'exec_start': [noop],
+                'type': phile.launcher.Type.CAPABILITY,
+            },
+        )
+        self.assertEqual(
+            self.launcher_database.capability_name['something'], 'int'
+        )
+
+    def test_add__with_capability_name_has_default_type_capability(
+        self
+    ) -> None:
+        self.launcher_database.add(
+            'something',
+            {
+                'capability_name': 'int',
+                'exec_start': [noop],
+            },
+        )
+        self.assertEqual(
+            self.launcher_database.capability_name['something'], 'int'
+        )
+        self.assertEqual(
+            self.launcher_database.type['something'],
+            phile.launcher.Type.CAPABILITY,
+        )
+
     def test_add__with_conflicts_creates_inverses(self) -> None:
         self.launcher_database.add(
             'something',
             {
                 'exec_start': [noop],
                 'conflicts': {'conflict'},
+                'default_dependencies': False,
             },
         )
         self.launcher_database.add('conflict', {'exec_start': [noop]})
@@ -519,6 +600,45 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         # There is not guarantee that the forker is awaited for,
         # but the limit should be sufficiently high in most cases.
         self.assertGreaterEqual(counter.value, limit)
+
+    async def test_start__capability_waits_for_capability(self) -> None:
+
+        async def run() -> None:
+            # Test that irrelevant capability events are ignored.
+            self.launcher_registry.capability_registry.set('a')
+            del self.launcher_registry.capability_registry[str]
+            self.launcher_registry.capability_registry.set(1)
+            await asyncio.get_running_loop().create_future()
+
+        name = 'exec_capability'
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [run],
+                'capability_name': 'builtins.int'
+            }
+        )
+        await phile.asyncio.wait_for(self.launcher_registry.start(name))
+
+    async def test_start__capability_warns_if_not_set(self) -> None:
+
+        async def run() -> None:
+            capability_registry = (
+                self.launcher_registry.capability_registry
+            )
+            capability_registry.event_queue.put_done()
+            await asyncio.get_running_loop().create_future()
+
+        name = 'exec_capability'
+        self.launcher_registry.add_nowait(
+            name, {
+                'exec_start': [run],
+                'capability_name': 'builtins.int'
+            }
+        )
+        with self.assertRaises(phile.launcher.CapabilityNotSet):
+            await phile.asyncio.wait_for(
+                self.launcher_registry.start(name)
+            )
 
     async def test_start__returns_if_running(self) -> None:
         name = 'starting_after_start'
