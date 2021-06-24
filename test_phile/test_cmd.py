@@ -122,19 +122,6 @@ class TestAsyncCmdloopThreadedStdin(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-    # TODO(BoniLindsley): Fix unclosed loop.
-    # Possibly from waiting on stdin in another thread.
-    # Seems to trigger in the first test of this test case?
-    # Ordered alphabetically.
-    # ```
-    # /usr/lib/python3.9/asyncio/base_events.py:681: ResourceWarning: unc
-    # losed event loop <_UnixSelectorEventLoop running=False closed=False
-    # debug=False>
-    #   _warn(f"unclosed event loop {self!r}", ResourceWarning, source=se
-    # lf)
-    # ResourceWarning: Enable tracemalloc to get the object allocation tr
-    # aceback
-    # ```
     async def test_exits_if_eof_reached(self) -> None:
         self.stdin_writer.close()
         await phile.asyncio.wait_for(

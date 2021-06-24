@@ -288,6 +288,7 @@ class Registry:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._capability_registry = phile.capability.Registry()
         self._database = Database()
+        # TODO(BoniLindsley): Merge publishers into a single event_queue.
         self.event_publishers: (
             dict[collections.abc.Callable[..., typing.Any],
                  phile.asyncio.pubsub.Queue[str]]
