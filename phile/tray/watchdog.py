@@ -188,7 +188,7 @@ async def async_open(
         tray_suffix=configuration.tray_suffix,
         tray_registry=tray_registry,
     )
-    watchdog_event_queue = await observer.schedule(str(tray_directory))
+    watchdog_event_queue = await observer.schedule(tray_directory)
     try:
         worker_task = asyncio.create_task(
             tray_source.process_watchdog_event_queue(
@@ -200,4 +200,4 @@ async def async_open(
         finally:
             await phile.asyncio.cancel_and_wait(worker_task)
     finally:
-        await observer.unschedule(str(tray_directory))
+        await observer.unschedule(tray_directory)

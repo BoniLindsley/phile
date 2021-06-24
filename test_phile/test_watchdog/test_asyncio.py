@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
------------------------------------
-Test :mod:`phile.watchdog.asyncio`
------------------------------------
-"""
 
 # Standard library.
 import collections.abc
@@ -30,22 +25,18 @@ class StartFailed(Exception):
     pass
 
 
-class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
-    """Tests :class:`~phile.watchdog.asyncio.BaseObserver`."""
+class TestBaseObserver(
+    phile.unittest.UsesTemporaryDirectory,
+    unittest.IsolatedAsyncioTestCase,
+):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.event_emitter_class_mock: unittest.mock.Mock
         self.observer: phile.watchdog.asyncio.BaseObserver
-        self.watched_directory: tempfile.TemporaryDirectory[str]
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        watched_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
-        )
-        self.addCleanup(watched_directory.cleanup)
-        self.watched_directory = watched_directory
         emitter_patcher = unittest.mock.patch(
             'phile.watchdog.asyncio.EventEmitter',
             autospec=True,
@@ -68,14 +59,14 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         emitter_mock = self.event_emitter_class_mock.return_value
         emitter_mock.is_alive.return_value = False
         await phile.asyncio.wait_for(
-            self.observer.schedule(self.watched_directory.name)
+            self.observer.schedule(self.temporary_directory)
         )
         try:
             emitter_mock.start.assert_called_once()
             emitter_mock.is_alive.return_value = True
         finally:
             await phile.asyncio.wait_for(
-                self.observer.unschedule(self.watched_directory.name),
+                self.observer.unschedule(self.temporary_directory)
             )
             emitter_mock.stop.assert_called_once()
 
@@ -83,7 +74,7 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         self
     ) -> None:
         event_queue = await phile.asyncio.wait_for(
-            self.observer.schedule(self.watched_directory.name)
+            self.observer.schedule(self.temporary_directory)
         )
         try:
             self.assertIsInstance(
@@ -92,7 +83,7 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         finally:
             view = event_queue.__aiter__()
             await phile.asyncio.wait_for(
-                self.observer.unschedule(self.watched_directory.name),
+                self.observer.unschedule(self.temporary_directory),
             )
             with self.assertRaises(StopAsyncIteration):
                 await phile.asyncio.wait_for(view.__anext__())
@@ -101,13 +92,13 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         self
     ) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
-        async with self.observer.open(self.watched_directory.name):
+        async with self.observer.open(self.temporary_directory):
             emitter_mock.start.assert_called_once()
         emitter_mock.stop.assert_called_once()
 
     async def test_open_returns_queue_and_stops_it_on_exit(self) -> None:
         async with self.observer.open(
-            self.watched_directory.name
+            self.temporary_directory
         ) as event_queue:
             self.assertIsInstance(
                 event_queue, phile.watchdog.asyncio.EventQueue
@@ -122,7 +113,7 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         emitter_mock.start.side_effect = StartFailed
         with self.assertRaises(StartFailed):
             await phile.asyncio.wait_for(
-                self.observer.schedule(self.watched_directory.name)
+                self.observer.schedule(self.temporary_directory)
             )
         emitter_mock.stop.assert_not_called()
 
@@ -147,7 +138,7 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
         emitter_mock.is_alive.return_value = False
         with self.assertRaises(StartFailed):
             await phile.asyncio.wait_for(
-                self.observer.schedule(self.watched_directory.name)
+                self.observer.schedule(self.temporary_directory)
             )
         emitter_mock.stop.assert_not_called()
         event_queue_class_mock.return_value.put_done.assert_not_called()
@@ -155,31 +146,27 @@ class TestBaseObserver(unittest.IsolatedAsyncioTestCase):
     async def test_schedule_can_be_stacked(self) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
         async with self.observer.open(
-            self.watched_directory.name
+            self.temporary_directory
         ) as event_queue:
             async with self.observer.open(
-                self.watched_directory.name
+                self.temporary_directory
             ) as another_queue:
                 self.assertIs(another_queue, event_queue)
             emitter_mock.stop.assert_not_called()
         emitter_mock.stop.assert_called_once()
 
 
-class TestObserver(unittest.IsolatedAsyncioTestCase):
-    """Tests :class:`~phile.watchdog.asyncio.Observer`."""
+class TestObserver(
+    phile.unittest.UsesTemporaryDirectory,
+    unittest.IsolatedAsyncioTestCase,
+):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.observer: phile.watchdog.asyncio.Observer
-        self.watched_directory: tempfile.TemporaryDirectory[str]
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        watched_directory = (  # pylint: disable=consider-using-with
-            tempfile.TemporaryDirectory()
-        )
-        self.addCleanup(watched_directory.cleanup)
-        self.watched_directory = watched_directory
         self.observer = phile.watchdog.asyncio.Observer()
 
     async def test_is_base_observer(self) -> None:
@@ -190,11 +177,10 @@ class TestObserver(unittest.IsolatedAsyncioTestCase):
 
     async def test_detects_create_event(self) -> None:
         async with self.observer.open(
-            self.watched_directory.name
+            self.temporary_directory
         ) as event_queue:
             view = event_queue.__aiter__()
-            watched_path = pathlib.Path(self.watched_directory.name)
-            file_path = watched_path / 'touched.txt'
+            file_path = self.temporary_directory / 'touched.txt'
             file_path.touch()
             event = await phile.asyncio.wait_for(view.__anext__())
             self.assertEqual(
@@ -245,7 +231,7 @@ class UsesObserver(unittest.IsolatedAsyncioTestCase):
     ) -> phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]:
         observer = self.observer
         event_queue = await phile.asyncio.wait_for(
-            observer.schedule(str(path))
+            observer.schedule(path)
         )
         self.addAsyncCleanup(observer.unschedule, str(path))
         return event_queue.__aiter__()

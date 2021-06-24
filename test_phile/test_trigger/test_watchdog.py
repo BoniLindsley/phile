@@ -241,11 +241,11 @@ class TestView(
         self.trigger_directory.mkdir()
         self.observer = phile.watchdog.asyncio.Observer()
         event_queue = await self.observer.schedule(
-            str(self.trigger_directory)
+            self.trigger_directory
         )
         self.addAsyncCleanup(
             phile.asyncio.wait_for,
-            self.observer.unschedule(str(self.trigger_directory)),
+            self.observer.unschedule(self.trigger_directory),
         )
         self.observer_view = event_queue.__aiter__()
         self.trigger_callback = test_phile.threaded_mock.ThreadedMock()

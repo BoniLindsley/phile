@@ -424,7 +424,7 @@ class TestRun(
         await super().asyncSetUp()
         self.observer = observer = phile.watchdog.asyncio.Observer()
         self.file_event_queue = await observer.schedule(
-            str(self.notify_directory)
+            self.notify_directory
         )
         self.addAsyncCleanup(
             observer.unschedule, str(self.notify_directory)

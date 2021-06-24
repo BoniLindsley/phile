@@ -40,7 +40,7 @@ async def run(
                 data_file_suffix=configuration.notification_suffix
             )
             watchdog_event_queue = await observer.schedule(
-                str(notify_directory)
+                notify_directory
             )
             try:
                 ignore_directories = (
@@ -62,7 +62,7 @@ async def run(
                 async for path in filter_suffix:  # pragma: no branch
                     notify_sorter.update(path)
             finally:
-                await observer.unschedule(str(notify_directory))
+                await observer.unschedule(notify_directory)
         finally:
             notify_sorter.tracked_data.clear()
     finally:

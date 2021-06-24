@@ -120,10 +120,8 @@ class TestRun(
         await self.set_up_worker()
         await phile.asyncio.wait_for(
             self.observer.unschedule(
-                str(
-                    self.state_directory_path /
-                    self.configuration.notification_directory
-                )
+                self.state_directory_path /
+                self.configuration.notification_directory
             )
         )
         await phile.asyncio.wait_for(self.worker_task)

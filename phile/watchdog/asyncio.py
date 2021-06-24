@@ -65,7 +65,6 @@ class EventEmitter(
 
 
 class BaseObserver:
-    """Base observer."""
 
     def __init__(
         self,
@@ -95,7 +94,7 @@ class BaseObserver:
     @contextlib.asynccontextmanager
     async def open(
         self,
-        path: str,
+        path: pathlib.Path,
         recursive: bool = False,
     ) -> collections.abc.AsyncIterator[EventQueue]:
         event_queue = await self.schedule(path, recursive)
@@ -107,14 +106,14 @@ class BaseObserver:
     # TODO(BoniLindsley): Consider returning a view instead.
     # Need to change open as well.
     # Add EventView class if this change is used.
-    # TODO(BoniLindsley): Accept pathlib.Path instead.
-    # Need to change open and unschedule as well.
     async def schedule(
         self,
-        path: str,
+        path: pathlib.Path,
         recursive: bool = False,
     ) -> EventQueue:
-        watch = watchdog.observers.api.ObservedWatch(path, recursive)
+        watch = watchdog.observers.api.ObservedWatch(
+            str(path), recursive
+        )
         self._watch_count[watch] += 1
         try:
             event_queue = self._event_queues[watch]
@@ -134,10 +133,12 @@ class BaseObserver:
 
     async def unschedule(
         self,
-        path: str,
+        path: pathlib.Path,
         recursive: bool = False,
     ) -> None:
-        watch = watchdog.observers.api.ObservedWatch(path, recursive)
+        watch = watchdog.observers.api.ObservedWatch(
+            str(path), recursive
+        )
         self._watch_count[watch] -= 1
         if self._watch_count[watch]:
             return

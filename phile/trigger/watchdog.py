@@ -57,7 +57,7 @@ class Producer:
             self._trigger_directory.mkdir, parents=True, exist_ok=True
         )
         watchdog_event_queue = await self._observer.schedule(
-            str(self._trigger_directory)
+            self._trigger_directory
         )
         watchdog_view = watchdog_event_queue.__aiter__()
         del watchdog_event_queue
@@ -82,7 +82,7 @@ class Producer:
             finally:
                 await asyncio.to_thread(self._unbind_all_triggers)
         finally:
-            await self._observer.unschedule(str(self._trigger_directory))
+            await self._observer.unschedule(self._trigger_directory)
 
     def _bind_existing_triggers(self) -> None:
         for trigger in sorted(
