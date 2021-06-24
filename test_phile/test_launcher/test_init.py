@@ -1145,6 +1145,25 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             self.launcher_registry.remove_nowait(entry_name)
 
+    async def test_start__shutdown_target_stops_launchers_by_default(
+        self
+    ) -> None:
+        entry_name = 'shutdown_target_stops_launchers'
+        self.launcher_registry.add_nowait(
+            entry_name, {
+                'default_dependencies': True,
+                'exec_start': [asyncio.get_running_loop().create_future],
+            }
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start(entry_name)
+        )
+        self.assertTrue(self.launcher_registry.is_running(entry_name))
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start('phile_shutdown.target')
+        )
+        self.assertFalse(self.launcher_registry.is_running(entry_name))
+
 
 class UsesRegistry(unittest.IsolatedAsyncioTestCase):
 

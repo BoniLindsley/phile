@@ -248,8 +248,12 @@ class Database:
             provide_option('type', default_type)
             del default_type
             if self.default_dependencies[entry_name]:
-                self.before[entry_name].add('phile_shutdown.target')
-                self.conflicts[entry_name].add('phile_shutdown.target')
+                before = self.before[entry_name].copy()
+                before.add('phile_shutdown.target')
+                self.before[entry_name] = before
+                conflicts = self.conflicts[entry_name].copy()
+                conflicts.add('phile_shutdown.target')
+                self.conflicts[entry_name] = conflicts
 
             self.remover[entry_name] = functools.partial(
                 stack.pop_all().__exit__, None, None, None
