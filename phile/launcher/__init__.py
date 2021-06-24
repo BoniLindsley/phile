@@ -239,8 +239,7 @@ class Database:
             provide_option('binds_to', set[str]())
             provide_option('capability_name', '')
             provide_option('conflicts', set[str]())
-            # Default value to be changed once it is implemented.
-            provide_option('default_dependencies', False)
+            provide_option('default_dependencies', True)
             provide_option('exec_start', None)
             provide_option('exec_stop', [])
             default_type = Type.SIMPLE
@@ -561,6 +560,7 @@ class Registry:
         self.add_nowait(
             'phile_shutdown.target',
             phile.launcher.Descriptor(
+                default_dependencies=False,
                 exec_start=[asyncio.get_event_loop().create_future],
             )
         )

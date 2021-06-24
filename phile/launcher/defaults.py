@@ -29,9 +29,7 @@ def add_configuration(
     launcher_registry.add_nowait(
         'phile.configuration',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='phile.configuration.Entries',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -43,9 +41,7 @@ def add_hotkey_gui(launcher_registry: phile.launcher.Registry) -> None:
         'phile.hotkey.gui',
         phile.launcher.Descriptor(
             after={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.hotkey.pynput', 'phile.hotkey.pyside2'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[asyncio.get_event_loop().create_future],
         )
     )
@@ -77,13 +73,11 @@ def add_hotkey_pynput(
                 'phile.trigger',
                 'phile.trigger.launcher',
             },
-            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.trigger',
                 'phile.trigger.launcher',
             },
-            conflicts={'phile_shutdown.target'},
             exec_start=[run_pynput],
         )
     )
@@ -121,14 +115,12 @@ def add_hotkey_pyside2(
                 'phile.trigger.launcher',
                 'pyside2',
             },
-            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.trigger',
                 'phile.trigger.launcher',
                 'pyside2',
             },
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -148,11 +140,7 @@ def add_launcher_cmd(launcher_registry: phile.launcher.Registry) -> None:
 
     launcher_registry.add_nowait(
         'phile.launcher.cmd',
-        phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
-            conflicts={'phile_shutdown.target'},
-            exec_start=[run],
-        )
+        phile.launcher.Descriptor(exec_start=[run], )
     )
 
 
@@ -202,9 +190,7 @@ def add_log_file(launcher_registry: phile.launcher.Registry) -> None:
         'phile.log.file',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.configuration'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )
@@ -254,9 +240,7 @@ def add_log_stderr(launcher_registry: phile.launcher.Registry) -> None:
         'phile.log.stderr',
         phile.launcher.Descriptor(
             after={'phile.configuration'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.configuration'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         )
@@ -276,9 +260,7 @@ def add_keyring(launcher_registry: phile.launcher.Registry) -> None:
     launcher_registry.add_nowait(
         'keyring',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='keyring.backend.KeyringBackend',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -300,9 +282,7 @@ def add_tmux(launcher_registry: phile.launcher.Registry) -> None:
     launcher_registry.add_nowait(
         'phile.tmux.control_mode',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='phile.tmux.control_mode.Client',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -325,9 +305,7 @@ def add_tray(launcher_registry: phile.launcher.Registry) -> None:
     launcher_registry.add_nowait(
         'phile.tray',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='phile.tray.Registry',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -351,9 +329,7 @@ def add_tray_datetime(
         'phile.tray.datetime',
         phile.launcher.Descriptor(
             after={'phile.tray.watchdog'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.tray.watchdog'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -380,9 +356,7 @@ def add_tray_imap(launcher_registry: phile.launcher.Registry) -> None:
         'phile.tray.imapclient',
         phile.launcher.Descriptor(
             after={'phile.configuration', 'keyring'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.configuration', 'keyring'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -416,13 +390,11 @@ def add_tray_notify(launcher_registry: phile.launcher.Registry) -> None:
                 'phile.tray.watchdog',
                 'watchdog.asyncio.observer',
             },
-            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.tray.watchdog',
                 'watchdog.asyncio.observer',
             },
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -442,9 +414,7 @@ def add_tray_psutil(launcher_registry: phile.launcher.Registry) -> None:
         'phile.tray.psutil',
         phile.launcher.Descriptor(
             after={'phile.tray.watchdog'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.tray.watchdog'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -472,9 +442,7 @@ def add_tray_pyside2_window(
         'phile.tray.pyside2.window',
         phile.launcher.Descriptor(
             after={'phile.tray.text', 'pyside2'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.tray.text', 'pyside2'},
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
         )
     )
@@ -497,10 +465,8 @@ def add_tray_text(launcher_registry: phile.launcher.Registry) -> None:
         'phile.tray.text',
         phile.launcher.Descriptor(
             after={'phile.tray'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.tray'},
             capability_name='phile.tray.TextIcons',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -530,12 +496,10 @@ def add_tray_tmux(launcher_registry: phile.launcher.Registry) -> None:
                 'phile.tmux.control_mode',
                 'phile.tray.text',
             },
-            before={'phile_shutdown.target'},
             binds_to={
                 'phile.tmux.control_mode',
                 'phile.tray.text',
             },
-            conflicts={'phile_shutdown.target'},
             exec_start=[run]
         )
     )
@@ -578,14 +542,12 @@ def add_tray_watchdog(
                 'phile.tray',
                 'watchdog.asyncio.observer',
             },
-            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.tray',
                 'watchdog.asyncio.observer',
             },
             capability_name='phile.tray.watchdog.Target',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -603,9 +565,7 @@ def add_trigger(launcher_registry: phile.launcher.Registry) -> None:
     launcher_registry.add_nowait(
         'phile.trigger',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='phile.trigger.Registry',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -633,10 +593,8 @@ def add_trigger_launcher(
         'phile.trigger.launcher',
         phile.launcher.Descriptor(
             after={'phile.trigger'},
-            before={'phile_shutdown.target'},
             binds_to={'phile.trigger'},
             capability_name='phile.trigger.launcher.Producer',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -677,13 +635,11 @@ def add_trigger_watchdog(
                 'phile.trigger',
                 'watchdog.asyncio.observer',
             },
-            before={'phile_shutdown.target'},
             binds_to={
                 'phile.configuration',
                 'phile.trigger',
                 'watchdog.asyncio.observer',
             },
-            conflicts={'phile_shutdown.target'},
             exec_start=[start],
             type=phile.launcher.Type.FORKING,
         ),
@@ -728,9 +684,7 @@ def add_pyside2(launcher_registry: phile.launcher.Registry) -> None:
     launcher_registry.add_nowait(
         'pyside2',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='phile.PySide2.QtCore.Executor',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -752,9 +706,7 @@ def add_watchdog_asyncio_observer(
     launcher_registry.add_nowait(
         'watchdog.asyncio.observer',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='phile.watchdog.asyncio.BaseObserver',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
@@ -778,9 +730,7 @@ def add_watchdog_observer(
     launcher_registry.add_nowait(
         'watchdog.observer',
         phile.launcher.Descriptor(
-            before={'phile_shutdown.target'},
             capability_name='watchdog.observers.api.BaseObserver',
-            conflicts={'phile_shutdown.target'},
             exec_start=[run],
             type=phile.launcher.Type.CAPABILITY,
         )
