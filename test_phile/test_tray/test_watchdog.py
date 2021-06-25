@@ -329,11 +329,11 @@ class TestSource(
         with self.assertRaises(StopAsyncIteration):
             await phile.asyncio.wait_for(event_view.__anext__())
 
-    async def test_process_watchdog_event_queue(self) -> None:
+    async def test_process_watchdog_event_view(self) -> None:
         watchdog_event_queue = phile.watchdog.asyncio.EventQueue()
         process = asyncio.create_task(
-            self.tray_source.process_watchdog_event_queue(
-                event_queue=watchdog_event_queue
+            self.tray_source.process_watchdog_event_view(
+                event_view=watchdog_event_queue.__aiter__(),
             )
         )
         self.addAsyncCleanup(phile.asyncio.cancel_and_wait, process)

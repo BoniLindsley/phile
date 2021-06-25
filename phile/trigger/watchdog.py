@@ -13,10 +13,6 @@ import functools
 import pathlib
 import typing
 
-# External dependencies.
-#import portalocker
-import watchdog.events
-
 # Internal modules.
 import phile.configuration
 import phile.trigger
@@ -56,11 +52,9 @@ class Producer:
         await asyncio.to_thread(
             self._trigger_directory.mkdir, parents=True, exist_ok=True
         )
-        watchdog_event_queue = await self._observer.schedule(
+        watchdog_view = await self._observer.schedule(
             self._trigger_directory
         )
-        watchdog_view = watchdog_event_queue.__aiter__()
-        del watchdog_event_queue
         try:
             await asyncio.to_thread(self._bind_existing_triggers)
             try:
@@ -82,7 +76,7 @@ class Producer:
             finally:
                 await asyncio.to_thread(self._unbind_all_triggers)
         finally:
-            await self._observer.unschedule(self._trigger_directory)
+            await watchdog_view.aclose()
 
     def _bind_existing_triggers(self) -> None:
         for trigger in sorted(
@@ -159,21 +153,21 @@ class View:
             If ``trigger_root`` has a locked PID file already.
         """
         async with self._monitor_directory(
-        ) as event_queue, self._monitor_registry_callback():
+        ) as event_view, self._monitor_registry_callback():
             ignore_directories = (
-                phile.watchdog.asyncio.ignore_directories
+                phile.watchdog.asyncio.ignore_directories(event_view)
             )
-            to_paths = phile.watchdog.asyncio.to_paths
-            filter_parent = phile.watchdog.asyncio.filter_parent
-            filter_suffix = phile.watchdog.asyncio.filter_suffix
+            to_paths = phile.watchdog.asyncio.to_paths(
+                ignore_directories
+            )
+            filter_parent = phile.watchdog.asyncio.filter_parent(
+                self._trigger_directory, to_paths
+            )
+            filter_suffix = phile.watchdog.asyncio.filter_suffix(
+                self._trigger_suffix, filter_parent
+            )
             ready.set_result(None)
-            async for path in filter_suffix(
-                self._trigger_suffix,
-                filter_parent(
-                    self._trigger_directory,
-                    to_paths(ignore_directories(event_queue))
-                )
-            ):
+            async for path in filter_suffix:
                 trigger_name = path.stem
                 if not path.is_file():
                     with contextlib.suppress(
@@ -185,18 +179,14 @@ class View:
     @contextlib.asynccontextmanager
     async def _monitor_directory(
         self
-    ) -> collections.abc.AsyncIterator[collections.abc.AsyncIterable[
-        watchdog.events.FileSystemEvent]]:
+    ) -> collections.abc.AsyncIterator[phile.watchdog.asyncio.EventView]:
         await asyncio.to_thread(
             self._trigger_directory.mkdir, parents=True, exist_ok=True
         )
         pid_lock = phile.trigger.PidLock(self._trigger_directory / 'pid')
         await asyncio.to_thread(pid_lock.acquire)
         try:
-            async with self._observer.open(
-                str(self._trigger_directory)
-            ) as event_queue:
-                yield event_queue
+            yield await self._observer.schedule(self._trigger_directory)
         finally:
             try:
 

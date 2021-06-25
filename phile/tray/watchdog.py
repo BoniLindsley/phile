@@ -141,11 +141,11 @@ class Source:
         self._tray_registry = tray_registry
         self._tray_suffix = tray_suffix
 
-    async def process_watchdog_event_queue(
+    async def process_watchdog_event_view(
         self,
-        event_queue: phile.watchdog.asyncio.EventQueue,
+        event_view: phile.watchdog.asyncio.EventView,
     ) -> None:
-        async for event in event_queue:
+        async for event in event_view:
             self.process_watchdog_event(event)
 
     def process_watchdog_event(
@@ -188,11 +188,11 @@ async def async_open(
         tray_suffix=configuration.tray_suffix,
         tray_registry=tray_registry,
     )
-    watchdog_event_queue = await observer.schedule(tray_directory)
+    watchdog_event_view = await observer.schedule(tray_directory)
     try:
         worker_task = asyncio.create_task(
-            tray_source.process_watchdog_event_queue(
-                event_queue=watchdog_event_queue
+            tray_source.process_watchdog_event_view(
+                event_view=watchdog_event_view
             )
         )
         try:
@@ -200,4 +200,4 @@ async def async_open(
         finally:
             await phile.asyncio.cancel_and_wait(worker_task)
     finally:
-        await observer.unschedule(tray_directory)
+        await watchdog_event_view.aclose()

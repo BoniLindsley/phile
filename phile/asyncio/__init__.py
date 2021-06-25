@@ -35,6 +35,10 @@ wait_for_timeout: contextvars.ContextVar[datetime.timedelta] = (
 """Default timeout value for :func:`wait_for`."""
 
 
+async def noop() -> None:
+    pass
+
+
 async def wait_for(
     awaitable: typing.Awaitable[_T_co],
     timeout: typing.Optional[datetime.timedelta] = None,

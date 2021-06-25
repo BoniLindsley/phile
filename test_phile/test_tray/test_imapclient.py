@@ -396,7 +396,7 @@ class TestRun(
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.configuration: phile.configuration.Entries
-        self.file_event_queue: phile.watchdog.asyncio.EventQueue
+        self.file_event_view: phile.watchdog.asyncio.EventView
         self.notify_directory: pathlib.Path
         self.notify_path: pathlib.Path
         self.observer: phile.watchdog.asyncio.BaseObserver
@@ -423,8 +423,8 @@ class TestRun(
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.observer = observer = phile.watchdog.asyncio.Observer()
-        self.file_event_queue = await observer.schedule(
-            self.notify_directory
+        self.file_event_view = await phile.asyncio.wait_for(
+            observer.schedule(self.notify_directory)
         )
         self.addAsyncCleanup(
             observer.unschedule, str(self.notify_directory)
@@ -472,7 +472,7 @@ class TestRun(
         )
         await phile.asyncio.wait_for(self.wait_for_new_imap_client())
         self.imap_clients[0]._imap._server_socket.sendall(b'\0')
-        async for event in self.file_event_queue:
+        async for event in self.file_event_view:
             expected_event = watchdog.events.FileCreatedEvent(
                 str(self.notify_path)
             )
@@ -494,7 +494,7 @@ class TestRun(
         )
         await phile.asyncio.wait_for(self.wait_for_new_imap_client())
         self.imap_clients[0]._imap._server_socket.sendall(b'\0')
-        async for event in self.file_event_queue:
+        async for event in self.file_event_view:
             expected_event = watchdog.events.FileCreatedEvent(
                 str(self.notify_path)
             )

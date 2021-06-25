@@ -22,9 +22,10 @@ Mixing :mod:`watchdog` with :mod:`asyncio`
 import asyncio
 import collections
 import collections.abc
-import contextlib
+import functools
 import pathlib
 import platform
+import types
 import typing
 import warnings
 
@@ -39,6 +40,43 @@ import phile.asyncio
 import phile.asyncio.pubsub
 
 
+class EventView(
+    phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
+):
+
+    def __init__(
+        self,
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.aclose_callback: (
+            collections.abc.Callable[
+                [],
+                collections.abc.Awaitable[typing.Any],
+            ]
+        ) = phile.asyncio.noop
+
+    async def __aenter__(self) -> 'EventView':
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_value: typing.Optional[BaseException],
+        traceback: typing.Optional[types.TracebackType],
+    ) -> typing.Optional[bool]:
+        del exc_type
+        del exc_value
+        del traceback
+        await self.aclose()
+        return None
+
+    async def aclose(self) -> None:
+        await self.aclose_callback()
+        self.aclose_callback = phile.asyncio.noop
+
+
 class EventQueue(
     phile.asyncio.pubsub.Queue[watchdog.events.FileSystemEvent]
 ):
@@ -46,6 +84,9 @@ class EventQueue(
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self._loop = asyncio.get_event_loop()
+
+    def __aiter__(self) -> EventView:
+        return EventView(next_node=self._next_node)
 
     def put(  # type: ignore[override]
         # pylint: disable=arguments-differ
@@ -91,26 +132,12 @@ class BaseObserver:
         self._watch_count = collections.defaultdict[
             watchdog.observers.api.ObservedWatch, int](int)
 
-    @contextlib.asynccontextmanager
-    async def open(
-        self,
-        path: pathlib.Path,
-        recursive: bool = False,
-    ) -> collections.abc.AsyncIterator[EventQueue]:
-        event_queue = await self.schedule(path, recursive)
-        try:
-            yield event_queue
-        finally:
-            await self.unschedule(path, recursive)
-
-    # TODO(BoniLindsley): Consider returning a view instead.
-    # Need to change open as well.
-    # Add EventView class if this change is used.
     async def schedule(
         self,
         path: pathlib.Path,
         recursive: bool = False,
-    ) -> EventQueue:
+    ) -> EventView:
+        cleanup = functools.partial(self.unschedule, path, recursive)
         watch = watchdog.observers.api.ObservedWatch(
             str(path), recursive
         )
@@ -126,9 +153,11 @@ class BaseObserver:
                     self.timeout,
                 )
                 emitter.start()
-            return event_queue
+            event_view = event_queue.__aiter__()
+            event_view.aclose_callback = cleanup
+            return event_view
         except:
-            await self.unschedule(path, recursive)
+            await cleanup()
             raise
 
     async def unschedule(
@@ -441,3 +470,7 @@ async def filter_suffix(
     async for next_path in paths:
         if next_path.suffix == expected_suffix:
             yield next_path
+
+
+# TODO(BoniLindsley): Add iterator that returns path and stream
+# whenever a file is changed.

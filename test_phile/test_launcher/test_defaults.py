@@ -506,6 +506,7 @@ class TestAddTrayTmux(
 
 
 class TestAddTriggerWatchdog(
+    UsesObserver,
     UsesLauncherRegistry,
     PreparesConfiguration,
     unittest.IsolatedAsyncioTestCase,
@@ -539,9 +540,7 @@ class TestAddTriggerWatchdog(
     async def test_start_launcher(self) -> None:
         self.test_add_launcher()
         await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.start(
-                self.launcher_name
-            )
+            self.launcher_registry.start(self.launcher_name)
         )
         self.addAsyncCleanup(
             phile.asyncio.wait_for,
@@ -551,42 +550,45 @@ class TestAddTriggerWatchdog(
         )
 
     async def test_showing_trigger_creates_file(self) -> None:
-        await self.test_start_launcher()
+        self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start('phile.configuration')
+        )
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start('phile.trigger')
+        )
         # Get objects created by other launcher.
         configuration: phile.configuration.Entries = (
             self.capability_registry[phile.configuration.Entries]
         )
-        observer: phile.watchdog.asyncio.BaseObserver = (
-            self.capability_registry[phile.watchdog.asyncio.BaseObserver]
-        )
         trigger_registry: phile.trigger.Registry = (
             self.capability_registry[phile.trigger.Registry]
         )
-        # Monitor trigger directory before showing trigger.
         trigger_directory = (
             configuration.state_directory_path /
             configuration.trigger_directory
         )
+        trigger_directory.mkdir()
         trigger_name = 'something'
-        trigger_file_path = trigger_directory / (
-            trigger_name + configuration.trigger_suffix
+        # Monitor trigger directory before showing trigger.
+        await phile.asyncio.wait_for(
+            self.launcher_registry.start(self.launcher_name)
         )
-        async with observer.open(
-            str(trigger_directory)
+        async with await self.schedule_watchdog_observer(
+            trigger_directory
         ) as observer_view:
             # Show a trigger and a corresponding file should be created.
             trigger_registry.bind(trigger_name, lambda: None)
             trigger_registry.show(trigger_name)
             expected_event = watchdog.events.FileCreatedEvent(
-                str(trigger_file_path)
+                str(
+                    trigger_directory /
+                    (trigger_name + configuration.trigger_suffix)
+                )
             )
-
-            async def get_event_until() -> None:
-                async for event in observer_view:
-                    if event == expected_event:
-                        break
-
-            await phile.asyncio.wait_for(get_event_until())
+            await self.assert_watchdog_emits(
+                observer_view, expected_event
+            )
 
 
 class TestAdd(

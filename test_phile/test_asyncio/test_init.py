@@ -39,8 +39,10 @@ class TestWaitForTimeout(unittest.TestCase):
         self.assertEqual(phile.asyncio.wait_for_timeout.get(), timedelta)
 
 
-async def noop_coroutine() -> None:
-    pass
+class TestNoop(unittest.IsolatedAsyncioTestCase):
+
+    async def test_callable(self) -> None:
+        await phile.asyncio.wait_for(phile.asyncio.noop())
 
 
 class TestWaitFor(unittest.IsolatedAsyncioTestCase):
@@ -49,13 +51,13 @@ class TestWaitFor(unittest.IsolatedAsyncioTestCase):
     async def test_with_timeout(self) -> None:
         with self.assertRaises(asyncio.TimeoutError):
             await phile.asyncio.wait_for(
-                noop_coroutine(), timeout=datetime.timedelta()
+                phile.asyncio.noop(), timeout=datetime.timedelta()
             )
 
     async def test_custom_default_timeout(self) -> None:
         phile.asyncio.wait_for_timeout.set(datetime.timedelta())
         with self.assertRaises(asyncio.TimeoutError):
-            await phile.asyncio.wait_for(noop_coroutine())
+            await phile.asyncio.wait_for(phile.asyncio.noop())
 
 
 class SomethingBadHappened(Exception):
@@ -120,20 +122,20 @@ class TestCancel(unittest.TestCase):
         self.addCleanup(asyncio.set_event_loop, None)
 
     def test_cancels_existing_task(self) -> None:
-        task_1 = self.loop.create_task(noop_coroutine())
-        task_2 = self.loop.create_task(noop_coroutine())
+        task_1 = self.loop.create_task(phile.asyncio.noop())
+        task_2 = self.loop.create_task(phile.asyncio.noop())
         phile.asyncio.cancel({task_1, task_2})
         self.assertTrue(task_1.cancelled())
         self.assertTrue(task_2.cancelled())
 
     def test_ignores_if_done(self) -> None:
-        task = self.loop.create_task(noop_coroutine())
+        task = self.loop.create_task(phile.asyncio.noop())
         self.loop.run_until_complete(task)
         phile.asyncio.cancel((task, ))
         self.assertFalse(task.cancelled())
 
     def test_ignores_if_already_cancelled_and_done(self) -> None:
-        task = self.loop.create_task(noop_coroutine())
+        task = self.loop.create_task(phile.asyncio.noop())
         task.cancel()
         try:
             self.loop.run_until_complete(task)
@@ -163,7 +165,7 @@ class TestCancel(unittest.TestCase):
                 pass
 
         task = self.loop.create_task(waits_forever())
-        noop_task = self.loop.create_task(noop_coroutine())
+        noop_task = self.loop.create_task(phile.asyncio.noop())
         self.loop.run_until_complete(noop_task)
         phile.asyncio.cancel((task, ))
         self.assertTrue(task.done())
@@ -206,19 +208,19 @@ class TestHandleExceptions(unittest.TestCase):
         )
 
     def test_ignores_cancelled_tasks(self) -> None:
-        task = self.loop.create_task(noop_coroutine())
+        task = self.loop.create_task(phile.asyncio.noop())
         phile.asyncio.cancel((task, ))
         phile.asyncio.handle_exceptions((task, ))
         self.exception_handler.assert_not_called()
 
     def test_ignores_returned_tasks(self) -> None:
-        task = self.loop.create_task(noop_coroutine())
+        task = self.loop.create_task(phile.asyncio.noop())
         self.loop.run_until_complete(task)
         phile.asyncio.handle_exceptions((task, ))
         self.exception_handler.assert_not_called()
 
     def test_raises_if_not_done(self) -> None:
-        task = self.loop.create_task(noop_coroutine())
+        task = self.loop.create_task(phile.asyncio.noop())
         self.addCleanup(self.loop.run_until_complete, task)
         with self.assertRaises(asyncio.InvalidStateError):
             phile.asyncio.handle_exceptions((task, ))
@@ -245,7 +247,7 @@ class TestClose(unittest.TestCase):
             asyncio.get_event_loop()
 
     def test_cancels_existing_task(self) -> None:
-        task = self.loop.create_task(noop_coroutine())
+        task = self.loop.create_task(phile.asyncio.noop())
         phile.asyncio.close()
         self.assertTrue(task.cancelled())
 

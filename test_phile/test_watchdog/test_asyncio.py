@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Standard library.
+import asyncio
 import collections.abc
 import pathlib
 import tempfile
@@ -10,6 +11,7 @@ import unittest.mock
 
 # External dependencies.
 import watchdog.events
+import watchdog.observers
 
 # Internal packages.
 import phile.asyncio
@@ -23,6 +25,66 @@ _T = typing.TypeVar('_T')
 
 class StartFailed(Exception):
     pass
+
+
+class TestEventView(unittest.IsolatedAsyncioTestCase):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.called: asyncio.Event
+        self.event_view: phile.watchdog.asyncio.EventView
+        self.next_node: (
+            phile.asyncio.pubsub.Node[watchdog.events.FileSystemEvent]
+        )
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.called = called = asyncio.Event()
+        self.next_node = (
+            phile.asyncio.pubsub.Node[watchdog.events.FileSystemEvent]()
+        )
+        self.event_view = phile.watchdog.asyncio.EventView(
+            next_node=self.next_node
+        )
+
+        async def aclose() -> None:
+            called.set()
+
+        self.event_view.aclose_callback = aclose
+
+    async def test_aclose__calls_given_callable(self) -> None:
+        self.assertFalse(self.called.is_set())
+        await phile.asyncio.wait_for(self.event_view.aclose())
+        self.assertTrue(self.called.is_set())
+
+    async def test_aclose__is_idempotent(self) -> None:
+        self.assertFalse(self.called.is_set())
+        await phile.asyncio.wait_for(self.event_view.aclose())
+        self.assertTrue(self.called.is_set())
+        self.called.clear()
+        await phile.asyncio.wait_for(self.event_view.aclose())
+        self.assertFalse(self.called.is_set())
+
+    async def test_aexit___calls_aclose(self) -> None:
+        async with self.event_view:
+            pass
+        self.assertTrue(self.called.is_set())
+
+
+class TestEventQueue(unittest.IsolatedAsyncioTestCase):
+
+    async def test_put__puts_event(self) -> None:
+        queue = phile.watchdog.asyncio.EventQueue()
+        view = queue.__aiter__()
+        expected_event = watchdog.events.FileCreatedEvent('')
+        queue.put(
+            event_data=(
+                expected_event,
+                watchdog.observers.api.ObservedWatch('', False)
+            )
+        )
+        event = await phile.asyncio.wait_for(view.__anext__())
+        self.assertEqual(event, expected_event)
 
 
 class TestBaseObserver(
@@ -73,39 +135,39 @@ class TestBaseObserver(
     async def test_schedule_returns_queue_and_unschedule_stops_it(
         self
     ) -> None:
-        event_queue = await phile.asyncio.wait_for(
+        event_view = await phile.asyncio.wait_for(
             self.observer.schedule(self.temporary_directory)
         )
         try:
             self.assertIsInstance(
-                event_queue, phile.watchdog.asyncio.EventQueue
+                event_view, phile.watchdog.asyncio.EventView
             )
         finally:
-            view = event_queue.__aiter__()
             await phile.asyncio.wait_for(
                 self.observer.unschedule(self.temporary_directory),
             )
             with self.assertRaises(StopAsyncIteration):
-                await phile.asyncio.wait_for(view.__anext__())
+                await phile.asyncio.wait_for(event_view.__anext__())
 
-    async def test_open_context_manager_starts_and_stops_emitter(
+    async def test_schedule__returns_cm_that_starts_and_stops_emitter(
         self
     ) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
-        async with self.observer.open(self.temporary_directory):
+        async with await phile.asyncio.wait_for(
+            self.observer.schedule(self.temporary_directory)
+        ):
             emitter_mock.start.assert_called_once()
         emitter_mock.stop.assert_called_once()
 
-    async def test_open_returns_queue_and_stops_it_on_exit(self) -> None:
-        async with self.observer.open(
-            self.temporary_directory
-        ) as event_queue:
+    async def test_schedule__returns_view_ending_on_exit(self) -> None:
+        async with await phile.asyncio.wait_for(
+            self.observer.schedule(self.temporary_directory)
+        ) as event_view:
             self.assertIsInstance(
-                event_queue, phile.watchdog.asyncio.EventQueue
+                event_view, phile.watchdog.asyncio.EventView
             )
-            view = event_queue.__aiter__()
         with self.assertRaises(StopAsyncIteration):
-            await phile.asyncio.wait_for(view.__anext__())
+            await phile.asyncio.wait_for(event_view.__anext__())
 
     async def test_schedule_not_stopping_if_start_fails(self) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
@@ -145,13 +207,17 @@ class TestBaseObserver(
 
     async def test_schedule_can_be_stacked(self) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
-        async with self.observer.open(
-            self.temporary_directory
-        ) as event_queue:
-            async with self.observer.open(
-                self.temporary_directory
-            ) as another_queue:
-                self.assertIs(another_queue, event_queue)
+        async with await phile.asyncio.wait_for(
+            self.observer.schedule(self.temporary_directory)
+        ) as event_view:
+            async with await phile.asyncio.wait_for(
+                self.observer.schedule(self.temporary_directory)
+            ) as another_view:
+                self.assertIs(
+                    # pylint: disable=protected-access
+                    another_view._next_node,
+                    event_view._next_node,
+                )
             emitter_mock.stop.assert_not_called()
         emitter_mock.stop.assert_called_once()
 
@@ -176,13 +242,12 @@ class TestObserver(
         )
 
     async def test_detects_create_event(self) -> None:
-        async with self.observer.open(
-            self.temporary_directory
-        ) as event_queue:
-            view = event_queue.__aiter__()
+        async with await phile.asyncio.wait_for(
+            self.observer.schedule(self.temporary_directory)
+        ) as event_view:
             file_path = self.temporary_directory / 'touched.txt'
             file_path.touch()
-            event = await phile.asyncio.wait_for(view.__anext__())
+            event = await phile.asyncio.wait_for(event_view.__anext__())
             self.assertEqual(
                 event,
                 watchdog.events.FileCreatedEvent(str(file_path)),
@@ -228,13 +293,12 @@ class UsesObserver(unittest.IsolatedAsyncioTestCase):
 
     async def schedule_watchdog_observer(
         self, path: pathlib.Path
-    ) -> phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]:
-        observer = self.observer
-        event_queue = await phile.asyncio.wait_for(
-            observer.schedule(path)
+    ) -> phile.watchdog.asyncio.EventView:
+        event_view = await phile.asyncio.wait_for(
+            self.observer.schedule(path)
         )
-        self.addAsyncCleanup(observer.unschedule, str(path))
-        return event_queue.__aiter__()
+        self.addAsyncCleanup(event_view.aclose)
+        return event_view
 
 
 async def to_async_iter(
