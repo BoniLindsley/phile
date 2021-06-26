@@ -39,30 +39,19 @@ async def run(
                 data_directory=notify_directory,
                 data_file_suffix=configuration.notification_suffix
             )
-            watchdog_event_view = await observer.schedule(
-                notify_directory
-            )
+            watchdog_view = await observer.schedule(notify_directory)
             try:
-                ignore_directories = (
-                    phile.watchdog.asyncio.
-                    ignore_directories(watchdog_event_view)
-                )
-                to_paths = phile.watchdog.asyncio.to_paths(
-                    ignore_directories
-                )
-                filter_parent = phile.watchdog.asyncio.filter_parent(
-                    notify_directory, to_paths
-                )
-                filter_suffix = phile.watchdog.asyncio.filter_suffix(
-                    notify_suffix, filter_parent
-                )
-                # Branch: from `for` to `finally` exit.
-                # Covered in `test_stops_gracefully_if_observer_stopped`.
-                # But not detected somehow.
-                async for path in filter_suffix:  # pragma: no branch
+                async for path, exists in (  # pragma: no branch
+                    phile.watchdog.asyncio.monitor_file_existence(
+                        directory_path=notify_directory,
+                        expected_suffix=notify_suffix,
+                        watchdog_view=watchdog_view,
+                    )
+                ):
+                    del exists
                     notify_sorter.update(path)
             finally:
-                await watchdog_event_view.aclose()
+                await watchdog_view.aclose()
         finally:
             notify_sorter.tracked_data.clear()
     finally:

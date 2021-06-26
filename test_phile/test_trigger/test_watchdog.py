@@ -159,8 +159,8 @@ class TestProducer(
         #
         # Not bound. Unbind to mimic a double unbind.
         # pylint: disable=protected-access
-        self.producer._on_path_change(self.trigger_file_path)
-        self.producer._on_path_change(self.trigger_file_path)
+        self.producer._on_path_change(self.trigger_file_path, False)
+        self.producer._on_path_change(self.trigger_file_path, False)
 
     async def test_double_create_should_be_ignored(self) -> None:
         # This can happen if a file is created,
@@ -177,8 +177,8 @@ class TestProducer(
         )
         # Already bound. Force it to try to double bind again.
         # pylint: disable=protected-access
-        self.producer._on_path_change(self.trigger_file_path)
-        self.producer._on_path_change(self.trigger_file_path)
+        self.producer._on_path_change(self.trigger_file_path, True)
+        self.producer._on_path_change(self.trigger_file_path, True)
 
     async def test_activate_trigger_deletes_file(self) -> None:
         self.trigger_file_path.touch()

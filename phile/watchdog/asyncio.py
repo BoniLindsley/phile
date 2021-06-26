@@ -431,46 +431,81 @@ else:  # pragma: no cover
         Observer = PollingObserver
 
 
-async def ignore_directories(
-    events: (
-        collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
-    ),
-) -> collections.abc.AsyncIterator[watchdog.events.FileSystemEvent]:
-    async for next_event in events:
-        if not next_event.is_directory:
-            yield next_event
+def split_file_move_event(
+    event: watchdog.events.FileSystemEvent,
+) -> tuple[watchdog.events.FileSystemEvent, ...]:
+    if event.is_directory:
+        return tuple()
+    if event.event_type != watchdog.events.EVENT_TYPE_MOVED:
+        return (event, )
+    assert isinstance(event, watchdog.events.FileMovedEvent)
+    return (
+        watchdog.events.FileDeletedEvent(event.src_path),
+        watchdog.events.FileCreatedEvent(event.dest_path),
+    )
 
 
-async def to_paths(
-    events: (
-        collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
-    ),
-) -> collections.abc.AsyncIterator[pathlib.Path]:
-    async for next_event in events:
-        yield pathlib.Path(next_event.src_path)
-        if next_event.event_type != watchdog.events.EVENT_TYPE_MOVED:
-            continue
-        assert isinstance(next_event, watchdog.events.FileMovedEvent)
-        yield pathlib.Path(next_event.dest_path)
+def event_to_file_paths(
+    event: watchdog.events.FileSystemEvent,
+) -> tuple[pathlib.Path, ...]:
+    return tuple(
+        pathlib.Path(event.src_path)
+        for event in split_file_move_event(event)
+    )
 
 
-async def filter_parent(
+def filter_path(
+    path: pathlib.Path,
+    *,
     expected_parent: pathlib.Path,
-    paths: collections.abc.AsyncIterable[pathlib.Path],
-) -> collections.abc.AsyncIterable[pathlib.Path]:
-    async for next_path in paths:
-        if next_path.parent == expected_parent:
-            yield next_path
-
-
-async def filter_suffix(
     expected_suffix: str,
-    paths: collections.abc.AsyncIterable[pathlib.Path],
-) -> collections.abc.AsyncIterable[pathlib.Path]:
-    async for next_path in paths:
-        if next_path.suffix == expected_suffix:
-            yield next_path
+) -> bool:
+    if path.parent != expected_parent:
+        return False
+    return path.suffix == expected_suffix
 
 
-# TODO(BoniLindsley): Add iterator that returns path and stream
-# whenever a file is changed.
+async def monitor_file_existence(
+    *,
+    directory_path: pathlib.Path,
+    expected_suffix: str,
+    watchdog_view: (
+        collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
+    ),
+) -> collections.abc.AsyncIterator[tuple[pathlib.Path, bool]]:
+    async for next_event in watchdog_view:
+        for event in split_file_move_event(next_event):
+            path = pathlib.Path(event.src_path)
+            if filter_path(
+                path,
+                expected_parent=directory_path,
+                expected_suffix=expected_suffix,
+            ):
+                yield path, (
+                    event.event_type !=
+                    watchdog.events.EVENT_TYPE_DELETED
+                )
+
+
+async def load_changed_files(
+    *,
+    directory_path: pathlib.Path,
+    expected_suffix: str,
+    watchdog_view: (
+        collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
+    ),
+) -> collections.abc.AsyncIterator[tuple[pathlib.Path,
+                                         typing.Optional[str]]]:
+    async for next_event in watchdog_view:
+        for path in event_to_file_paths(next_event):
+            if filter_path(
+                path,
+                expected_parent=directory_path,
+                expected_suffix=expected_suffix,
+            ):
+                file_content: typing.Optional[str] = None
+                try:
+                    file_content = path.read_text()
+                except OSError:
+                    pass
+                yield path, file_content

@@ -52,46 +52,40 @@ class Producer:
         await asyncio.to_thread(
             self._trigger_directory.mkdir, parents=True, exist_ok=True
         )
-        watchdog_view = await self._observer.schedule(
+        async with await self._observer.schedule(
             self._trigger_directory
-        )
-        try:
+        ) as watchdog_view:
             await asyncio.to_thread(self._bind_existing_triggers)
             try:
-                ignore_directories = (
-                    phile.watchdog.asyncio.
-                    ignore_directories(watchdog_view)
-                )
-                to_paths = phile.watchdog.asyncio.to_paths(
-                    ignore_directories
-                )
-                filter_parent = phile.watchdog.asyncio.filter_parent(
-                    self._trigger_directory, to_paths
-                )
-                filter_suffix = phile.watchdog.asyncio.filter_suffix(
-                    self._trigger_suffix, filter_parent
-                )
-                async for path in filter_suffix:  # pragma: no branch
-                    self._on_path_change(path)
+                async for path, exists in (  # pragma: no branch
+                    phile.watchdog.asyncio.monitor_file_existence(
+                        directory_path=self._trigger_directory,
+                        expected_suffix=self._trigger_suffix,
+                        watchdog_view=watchdog_view,
+                    )
+                ):
+                    self._on_path_change(path, exists)
             finally:
                 await asyncio.to_thread(self._unbind_all_triggers)
-        finally:
-            await watchdog_view.aclose()
 
     def _bind_existing_triggers(self) -> None:
         for trigger in sorted(
             self._trigger_directory.glob('*' + self._trigger_suffix)
         ):
-            self._on_path_change(trigger)
+            self._on_path_change(trigger, True)
 
     def _unbind_all_triggers(self) -> None:
         for name in self._bound_names.copy():
             self._unbind(name)
 
-    def _on_path_change(self, path: pathlib.Path) -> None:
+    def _on_path_change(
+        self,
+        path: pathlib.Path,
+        is_file: bool,
+    ) -> None:
         trigger_name = path.stem
         bound_names = self._bound_names
-        if path.is_file():
+        if is_file:
             if trigger_name not in bound_names:
                 self._registry.bind(
                     trigger_name,
@@ -153,23 +147,17 @@ class View:
             If ``trigger_root`` has a locked PID file already.
         """
         async with self._monitor_directory(
-        ) as event_view, self._monitor_registry_callback():
-            ignore_directories = (
-                phile.watchdog.asyncio.ignore_directories(event_view)
-            )
-            to_paths = phile.watchdog.asyncio.to_paths(
-                ignore_directories
-            )
-            filter_parent = phile.watchdog.asyncio.filter_parent(
-                self._trigger_directory, to_paths
-            )
-            filter_suffix = phile.watchdog.asyncio.filter_suffix(
-                self._trigger_suffix, filter_parent
-            )
+        ) as watchdog_view, self._monitor_registry_callback():
             ready.set_result(None)
-            async for path in filter_suffix:
+            async for path, exists in (
+                phile.watchdog.asyncio.monitor_file_existence(
+                    directory_path=self._trigger_directory,
+                    expected_suffix=self._trigger_suffix,
+                    watchdog_view=watchdog_view,
+                )
+            ):
                 trigger_name = path.stem
-                if not path.is_file():
+                if not exists:
                     with contextlib.suppress(
                         phile.trigger.Registry.NotBound,
                         phile.trigger.Registry.NotShown,
