@@ -16,19 +16,16 @@ from test_phile.test_configuration.test_init import UsesConfiguration
 
 
 class TestCreateArgumentParser(unittest.TestCase):
-    """Tests :func:`~phile.notify.cli.create_argument_parser`."""
 
     def setUp(self) -> None:
         self.argument_parser = create_argument_parser()
 
-    def test_without_argument(self) -> None:
-        """The CLI should be runnable without arguments."""
+    def test_runnable_without_argument(self) -> None:
         # Just make sure it does not cause issues.
         argument_namespace = self.argument_parser.parse_args([])
         self.assertEqual(argument_namespace.command, None)
 
-    def test_append(self) -> None:
-        """The CLI can be given an append command."""
+    def test_append_command_succeeds(self) -> None:
         command = 'append'
         name = 'VeCat'
         content = 'There is a kitty.'
@@ -38,15 +35,13 @@ class TestCreateArgumentParser(unittest.TestCase):
         self.assertEqual(argument_namespace.name, name)
         self.assertEqual(argument_namespace.content, content)
 
-    def test_list(self) -> None:
-        """The CLI can be given a list command."""
+    def test_list_command_succeeds(self) -> None:
         command = 'list'
         arguments = [command]
         argument_namespace = self.argument_parser.parse_args(arguments)
         self.assertEqual(argument_namespace.command, command)
 
-    def test_read(self) -> None:
-        """The CLI can be given a read command."""
+    def test_read_command_succeeds(self) -> None:
         command = 'read'
         name = 'VeCat'
         arguments = [command, name]
@@ -54,8 +49,7 @@ class TestCreateArgumentParser(unittest.TestCase):
         self.assertEqual(argument_namespace.command, command)
         self.assertEqual(argument_namespace.name, name)
 
-    def test_write(self) -> None:
-        """The CLI can be given an write command."""
+    def test_write_command_succeeds(self) -> None:
         command = 'write'
         name = 'VeCat'
         content = 'There is a kitty.'

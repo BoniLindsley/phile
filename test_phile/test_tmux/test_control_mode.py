@@ -22,23 +22,19 @@ from .test_init import UsesTmux
 
 
 class TestArguments(unittest.TestCase):
-    """Tests :class:`~phile.tmux.control_mode.Arguments`."""
 
-    def test_default(self) -> None:
-        """Default joins ``ctrl`` session with no configuration."""
+    def test_default_joins_ctrl_session_with_no_config(self) -> None:
         arguments = phile.tmux.control_mode.Arguments()
         self.assertEqual(
             arguments.to_list(),
             ['-CC', '-u', 'new-session', '-A', '-s', 'ctrl']
         )
 
-    def test_no_session(self) -> None:
-        """Session name can be removed to create a new session."""
+    def test_no_session_creates_a_new_session(self) -> None:
         arguments = phile.tmux.control_mode.Arguments(session_name='')
         self.assertEqual(arguments.to_list(), ['-CC', '-u'])
 
-    def test_custom_configuration(self) -> None:
-        """Server configuration can be changed."""
+    def test_custom_configuration_can_be_provided(self) -> None:
         arguments = phile.tmux.control_mode.Arguments(
             tmux_configuration_path=pathlib.Path('conf')
         )
@@ -51,7 +47,6 @@ class TestArguments(unittest.TestCase):
 
 
 class TestProtocol(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.tmux.control_mode.Protocol`."""
 
     async def asyncSetUp(self) -> None:
         loop = asyncio.get_running_loop()
@@ -66,44 +61,40 @@ class TestProtocol(unittest.IsolatedAsyncioTestCase):
         )
         self.addCleanup(transport.close)
 
-    async def test_data_received(self) -> None:
-        """New lines are detected as data are received."""
+    async def test_new_lines_are_detected_as_data_are_received(
+        self
+    ) -> None:
         self.sender.send(b'\r\n')
         await phile.asyncio.wait_for(
             self.protocol.new_data_received.wait()
         )
 
-    async def test_peek_line(self) -> None:
-        """Can check a line which tmux says ends with ``\\r\\n``."""
+    async def test_can_check_a_line(self) -> None:
         self.sender.send(b'line-1\n\r\n\r')
         line = await phile.asyncio.wait_for(self.protocol.peek_line())
         self.assertEqual(line, b'line-1\n\r\n')
         line = await phile.asyncio.wait_for(self.protocol.peek_line())
         self.assertEqual(line, b'line-1\n\r\n')
 
-    async def test_read_line(self) -> None:
-        """Can read a line defined as ending with ``"\\r\\n"``."""
+    async def test_can_read_a_line(self) -> None:
         self.sender.send(b'line-1\n\r\n\r')
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, 'line-1\n\r\n')
 
-    async def test_read_line_with_two_lines(self) -> None:
-        """Can read each line separately even if received together."""
+    async def test_read_two_lines_separately(self) -> None:
         self.sender.send(b'line-1\n\r\n\nline-2\r\n')
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, 'line-1\n\r\n')
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, '\nline-2\r\n')
 
-    async def test_read_line_merges_trailing_lines(self) -> None:
-        """Can read a line that was broken up when sending."""
+    async def test_read_broken_up_line_as_one_line(self) -> None:
         self.sender.send(b'line-1\n\r')
         self.sender.send(b'\n\nline-2')
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, 'line-1\n\r\n')
 
-    async def test_remove_prefix_after_reading_line(self) -> None:
-        """Remove prefix from the first line."""
+    async def test_remove_prefix_from_the_first_line(self) -> None:
         self.sender.send(b'\x1bP1000p%begin\r\n')
         prefix = b'\x1bP1000p'
         await phile.asyncio.wait_for(self.protocol.remove_prefix(prefix))
@@ -200,8 +191,7 @@ class TestProtocol(unittest.IsolatedAsyncioTestCase):
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, '%endder\r\n')
 
-    async def test_read_lines_until_starts_with(self) -> None:
-        """Record lines until a specifix prefix is found."""
+    async def test_record_lines_until_prefix_is_found(self) -> None:
         self.sender.send(b'line-1\n\r\n%beginner\r\n%endder\r\n')
         lines = await phile.asyncio.wait_for(
             self.protocol.read_lines_until_starts_with('%begin')
@@ -210,8 +200,7 @@ class TestProtocol(unittest.IsolatedAsyncioTestCase):
         line = await phile.asyncio.wait_for(self.protocol.read_line())
         self.assertEqual(line, '%endder\r\n')
 
-    async def test_read_block(self) -> None:
-        """Reading a block between ``%begin`` and ``%end``."""
+    async def test_read_block_between_begin_and_end(self) -> None:
         self.sender.send(b'line-1\n\r\n%begin er\r\n%end er\r\n')
         content = await phile.asyncio.wait_for(
             self.protocol.read_block()
@@ -340,7 +329,6 @@ class TestOpen(UsesTmux, unittest.IsolatedAsyncioTestCase):
         self.client.send_soon(phile.tmux.CommandBuilder.exit_client())
         await phile.asyncio.wait_for(self.run_task)
 
-    async def test_server_terminates_early(self) -> None:
-        """The server sends ``%exit`` when it is terminated."""
+    async def test_server_sends_exit_when_terminated(self) -> None:
         await phile.asyncio.wait_for(phile.tmux.kill_server())
         await phile.asyncio.wait_for(self.run_task)

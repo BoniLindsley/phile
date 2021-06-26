@@ -17,7 +17,6 @@ import phile.signal
 
 
 class TestGetWakeupFd(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.get_wakeup_fd`."""
 
     def test_returns_fd(self) -> None:
         file_socket = socket.socket()
@@ -31,7 +30,6 @@ class TestGetWakeupFd(unittest.TestCase):
 
 
 class TestHandler(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.Handler`."""
 
     def test_lambda_can_be_a_handler(self) -> None:
         _handler: phile.signal.Handler = (
@@ -49,7 +47,6 @@ class TestHandler(unittest.TestCase):
 
 
 class TestSignalHandlerParameter(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.SignalHandlerParameter`."""
 
     def test_special_values(self) -> None:
         _default: phile.signal.SignalHandlerParameter = signal.SIG_DFL
@@ -63,10 +60,9 @@ class TestSignalHandlerParameter(unittest.TestCase):
 
 
 class TestInstallNoopSignalHandler(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.install_noop_signal_handler`."""
 
     def test_replace_sigint_successfully(self) -> None:
-        """For coverage. Unable to test whether a noop is installed."""
+        # For coverage. Unable to test whether a noop is installed.
         self.addCleanup(
             signal.signal, signal.SIGINT,
             signal.getsignal(signal.SIGINT)

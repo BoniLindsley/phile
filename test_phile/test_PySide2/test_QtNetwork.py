@@ -30,7 +30,6 @@ platform_can_handle_sigint = (sys.platform != "win32")
     platform_can_handle_sigint, 'Cannot handle SIGINT on this platform.'
 )
 class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtNetwork.PosixSignal`."""
 
     def setUp(self) -> None:
         """
@@ -54,8 +53,7 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
         # They can create an arbitrary QObject to fake a clean-up.
         self.addCleanup(lambda: self.posix_signal.deleteLater())
 
-    def test_initialisation_and_clean_up(self) -> None:
-        """Remove signal fd when deleted."""
+    def test_remove_signal_fd_when_deleted(self) -> None:
         self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
 
         self.posix_signal.deleteLater()
@@ -65,16 +63,13 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
         # Give the test `tearDown` something to delete.
         self.posix_signal = PySide2.QtCore.QObject()
 
-    def test_double_initialisation(self) -> None:
-        """Initialising twice should fail."""
+    def test_double_initialisation_should_fail(self) -> None:
         self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
         with self.assertRaises(RuntimeError):
             new_posix_signal = phile.PySide2.QtNetwork.PosixSignal()
         self.assertNotEqual(phile.signal.get_wakeup_fd(), -1)
 
     def test_handle_sigint_using_pyside2_signal(self) -> None:
-        """Handle POSIX signals using PySide2 signals."""
-
         # Figure out whether the signal will be called.
         slot_mock = unittest.mock.Mock()
         self.posix_signal.signal_received.connect(slot_mock)

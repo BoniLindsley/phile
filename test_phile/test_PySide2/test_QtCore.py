@@ -60,9 +60,6 @@ class UsesPySide2(unittest.TestCase):
 
 
 class TestProcessDeferredDeleteEvents(UsesPySide2, unittest.TestCase):
-    """
-    Tests :class:`~phile.PySide2.QtCore.process_deferred_delete_events`.
-    """
 
     def test_deletion_are_triggered(self) -> None:
         application = PySide2.QtCore.QCoreApplication()
@@ -76,7 +73,6 @@ class TestProcessDeferredDeleteEvents(UsesPySide2, unittest.TestCase):
 
 
 class TestProcessEvents(UsesPySide2, unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.process_events`."""
 
     def test_timer_events_are_triggered(self) -> None:
         application = PySide2.QtCore.QCoreApplication()
@@ -115,7 +111,6 @@ class UsesQCoreApplication(UsesPySide2, unittest.TestCase):
 
 
 class TestCallRequest(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.CallRequest`."""
 
     def test_requires_callback_argument(self) -> None:
         self.assertRaises(TypeError, phile.PySide2.QtCore.CallRequest)
@@ -129,7 +124,6 @@ class TestCallRequest(unittest.TestCase):
 
 
 class TestCaller(UsesQCoreApplication, unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.Caller`."""
 
     def test_calls_callback_in_call_requests(self) -> None:
         callback = unittest.mock.Mock()
@@ -173,7 +167,6 @@ class TestCaller(UsesQCoreApplication, unittest.TestCase):
 
 
 class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.call_soon_threadsafe`."""
 
     def test_calls_callback_eventually(self) -> None:
         callback = unittest.mock.Mock()
@@ -219,7 +212,7 @@ class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
         callback.assert_called_once_with()
 
     def test_cleans_up_internal_object_if_error(self) -> None:
-        """For coverage. Unable to ensure clean-up is done."""
+        # For coverage. Unable to ensure clean-up is done.
         self.assertRaises(
             TypeError,
             phile.PySide2.QtCore.call_soon_threadsafe,
@@ -229,7 +222,6 @@ class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
 
 
 class TestFuture(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.Future`."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -253,7 +245,6 @@ class UserBaseException(BaseException):
 
 
 class TestTask(unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.Task`."""
 
     def test_run_sets_result(self) -> None:
 
@@ -288,7 +279,6 @@ class TestTask(unittest.TestCase):
 
 
 class TestExecutor(UsesQCoreApplication, unittest.TestCase):
-    """Tests :class:`~phile.PySide2.QtCore.Executor`."""
 
     def test_calls_submitted_callable(self) -> None:
         callback_mock = unittest.mock.Mock()

@@ -21,7 +21,6 @@ import phile.asyncio
 
 
 class TestWaitForTimeout(unittest.TestCase):
-    """Tests :func:`~phile.asyncio.wait_for_timeout`."""
 
     def test_default_value(self) -> None:
         self.assertEqual(
@@ -30,7 +29,7 @@ class TestWaitForTimeout(unittest.TestCase):
         )
 
     def test_get_and_set(self) -> None:
-        """Ensure get/set is detected in CI if somehow missing."""
+        # Ensure get/set is detected in CI if somehow missing.
         timedelta = datetime.timedelta()
         reset_token = phile.asyncio.wait_for_timeout.set(timedelta)
         self.addCleanup(
@@ -46,7 +45,6 @@ class TestNoop(unittest.IsolatedAsyncioTestCase):
 
 
 class TestWaitFor(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.asyncio.wait_for`."""
 
     async def test_with_timeout(self) -> None:
         with self.assertRaises(asyncio.TimeoutError):
@@ -253,7 +251,6 @@ class TestClose(unittest.TestCase):
 
 
 class TestOpenTask(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.asyncio.open_task`."""
 
     async def test_cancels_given_task(self) -> None:
         task: (asyncio.Task[typing.Any]) = asyncio.create_task(
@@ -283,10 +280,8 @@ class TestOpenTask(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
-    """Tests :func:`~phile.asyncio.close_subprocess`."""
 
     async def test_terminates_subprocess(self) -> None:
-        """It should terminate the subprocess."""
         program = sys.executable
         subprocess = await asyncio.create_subprocess_exec(program)
         self.addCleanup(
@@ -303,7 +298,6 @@ class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(subprocess.returncode)
 
     async def test_closes_automatic_pipes(self) -> None:
-        """It should close any automatically created pipes."""
         program = sys.executable
         subprocess = await asyncio.create_subprocess_exec(
             program,
@@ -329,7 +323,6 @@ class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
 
 
 class TestOpenReader(unittest.IsolatedAsyncioTestCase):
-    """Tests :class:`~phile.asyncio.open_reader`."""
 
     def setUp(self) -> None:
         self.read_socket, self.write_socket = socket.socketpair()
@@ -362,7 +355,6 @@ class TestOpenReader(unittest.IsolatedAsyncioTestCase):
 
 
 class TestReadable(unittest.IsolatedAsyncioTestCase):
-    """Tests :class:`~phile.asyncio.readable`."""
 
     def setUp(self) -> None:
         self.read_socket, self.write_socket = socket.socketpair()
@@ -399,7 +391,6 @@ class SomeThreadError(Exception):
 
 
 class TestThread(unittest.IsolatedAsyncioTestCase):
-    """Tests :class:`~phile.asyncio.Thread`."""
 
     async def test_async_join_returns_after_run(self) -> None:
         event = threading.Event()

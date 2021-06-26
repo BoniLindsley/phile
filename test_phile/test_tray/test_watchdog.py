@@ -104,7 +104,6 @@ class TestLoad(phile.unittest.UsesTemporaryDirectory, unittest.TestCase):
 class TestSave(phile.unittest.UsesTemporaryDirectory, unittest.TestCase):
 
     def test_writes_json_data(self) -> None:
-        """Save a tray file with some information."""
         entry_to_save = phile.tray.Entry(
             name='n',
             icon_name='i',

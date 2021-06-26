@@ -222,7 +222,6 @@ class UsesIMAPClient(
 
 
 class TestGetSocket(PreparesIMAPClient, unittest.TestCase):
-    """Tests :func:`phile.imapclient.get_socket`."""
 
     def test_retrieves_implementation_socket(self) -> None:
         imap_client = imapclient.IMAPClient(host='get_socket://')
@@ -234,7 +233,6 @@ class TestGetSocket(PreparesIMAPClient, unittest.TestCase):
 
 
 class TestIsIdle(PreparesIMAPClient, unittest.TestCase):
-    """Tests :func:`phile.imapclient.is_idle`."""
 
     def test_before_and_after_idle_state(self) -> None:
         imap_client = imapclient.IMAPClient(host='is_idle://')
@@ -248,7 +246,6 @@ class TestIsIdle(PreparesIMAPClient, unittest.TestCase):
 
 
 class TestFlagTracker(unittest.TestCase):
-    """Tests :class:`phile.imapclient.FlagTracker`."""
 
     def test_constructor_default(self) -> None:
         flag_tracker = phile.imapclient.FlagTracker()
@@ -260,19 +257,16 @@ class TestFlagTracker(unittest.TestCase):
             }
         )
 
-    def test_constructor_simple(self) -> None:
-        """
-        Construct a tracker with smallest response.
+    def test_constructor_with_smallest_response(self) -> None:
+        # This test constructs an :py:class:`~imap_notifier.IdleChecker`
+        # using the smallest response as specified by the documentation
+        # of :py:meth:`~imapclient.IMAPClient.select_folder`.
+        # The response must contain the following keys:
 
-        This test constructs an :py:class:`~imap_notifier.IdleChecker`
-        using the smallest response as specified by the documentation
-        of :py:meth:`~imapclient.IMAPClient.select_folder`.
-        The response must contain the following keys:
+        #   * `b'EXISTS'`,
+        #   * `b'FLAGS'` and
+        #   * `b'RECENT'`.
 
-          * `b'EXISTS'`,
-          * `b'FLAGS'` and
-          * `b'RECENT'`.
-        """
         # No messages in folder.
         select_response = {b"EXISTS": 0, b"FLAGS": (), b"RECENT": 0}
         flag_tracker = phile.imapclient.FlagTracker(select_response)
@@ -285,14 +279,10 @@ class TestFlagTracker(unittest.TestCase):
             }
         )
 
-    def test_constructor_with_sample_response(self) -> None:
-        """
-        Construct a tracker with documentation response.
-
-        This test constructs a tracker
-        using the example response from the documentation
-        of :py:meth:`~imapclient.IMAPClient.select_folder`.
-        """
+    def test_constructor_with_documentation_response(self) -> None:
+        # This test constructs a tracker
+        # using the example response from the documentation
+        # of :py:meth:`~imapclient.IMAPClient.select_folder`.
 
         # Three messages in folder, with no unread.
         select_response = {
@@ -322,15 +312,12 @@ class TestFlagTracker(unittest.TestCase):
             }
         )
 
-    def test_constructor_with_unseen(self) -> None:
-        """
-        Create a tracker using a response containing unseen messages.
-
-        The response from :py:meth:`~imapclient.IMAPClient.select_folder`
-        can contain an entry indicating which messages are unread
-        in the selected folder.
-        This test whether that entry is respected.
-        """
+    def test_create_using_response_with_unseen_messages(self) -> None:
+        # The response
+        # from :py:meth:`~imapclient.IMAPClient.select_folder`
+        # can contain an entry indicating which messages are unread
+        # in the selected folder.
+        # This test whether that entry is respected.
 
         # Two messages in the folder, and second is unread.
         select_response = {
@@ -440,16 +427,12 @@ class TestFlagTracker(unittest.TestCase):
             }
         )
 
-    def test_add(self) -> None:
-        """
-        Test tracker using a real example.
-
-        This test uses an example response from real usage.
-        The selected folder contains three messages with one unread.
-        The unread message is moved out of the folder.
-        An empty response is then given as a special case.
-        After that, the message is moved back in, and marked as read.
-        """
+    def test_add__using_a_real_example(self) -> None:
+        # This test uses an example response from real usage.
+        # The selected folder contains three messages with one unread.
+        # The unread message is moved out of the folder.
+        # An empty response is then given as a special case.
+        # After that, the message is moved back in, and marked as read.
 
         select_response = {
             b"PERMANENTFLAGS": (

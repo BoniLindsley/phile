@@ -24,11 +24,10 @@ class BasicLoadData(phile.data.SortableLoadData):
 
 
 class TestSortableLoadData(unittest.TestCase):
-    """Tests :data:`~phile.data.SortableLoadData`."""
 
-    def test_subclass(self) -> None:
-        """Subclass of protocol can inherit methods to satisfy it."""
-
+    def test_subclass_can_inherit_methods_to_satisfy_protocol(
+        self
+    ) -> None:
         data = BasicLoadData()
         data == data
         data < data
@@ -129,22 +128,18 @@ class TestFileMakePath(UsesConfiguration, unittest.TestCase):
 
 
 class TestFile(unittest.TestCase):
-    """Tests :data:`~phile.data.File`."""
 
-    def test_init(self) -> None:
-        """Test keyword initialisation."""
+    def test_init__with_keywords(self) -> None:
         file = phile.data.File(path=pathlib.Path())
         self.assertTrue(hasattr(file, 'path'))
         phile.data.File(path=pathlib.Path('a'))
 
-    def test_is_sortable_load_data(self) -> None:
-        """Satisfies :class:`~phile.data.SortableLoadData` protocol."""
+    def test_satisfies_sortable_load_data_protocol(self) -> None:
         _: phile.data.SortableLoadData = phile.data.File(
             path=pathlib.Path()
         )
 
-    def test_compare(self) -> None:
-        """Implements less-than partial order."""
+    def test_implements_less_than_partial_order(self) -> None:
         self.assertEqual(
             phile.data.File(path=pathlib.Path()),
             phile.data.File(path=pathlib.Path())
@@ -154,8 +149,7 @@ class TestFile(unittest.TestCase):
             phile.data.File(path=pathlib.Path('b'))
         )
 
-    def test_compare_with_path(self) -> None:
-        """Implements partial order with :class:~pathlib.Path`."""
+    def test_partial_order_with_path(self) -> None:
         self.assertEqual(
             phile.data.File(path=pathlib.Path()), pathlib.Path()
         )
@@ -163,18 +157,17 @@ class TestFile(unittest.TestCase):
             phile.data.File(path=pathlib.Path('a')), pathlib.Path('b')
         )
 
-    def test_compare_with_object(self) -> None:
-        """Does not implement comparison with arbitrary objects."""
+    def test_does_not_compare_with_arbitrary_objects(self) -> None:
         self.assertNotEqual(phile.data.File(path=pathlib.Path()), 0)
         with self.assertRaises(TypeError):
             self.assertLess(phile.data.File(path=pathlib.Path('a')), 'b')
 
 
 class TestUpdateCallback(unittest.TestCase):
-    """Tests :class:`~phile.data.UpdateCallback`."""
 
-    def test_subclass(self) -> None:
-        """Subclass of protocol can inherit methods to satisfy it."""
+    def test_subclass_can_inherit_methods_to_satisfy_protocol(
+        self
+    ) -> None:
 
         class BasicUpdateCallback(
             phile.data.UpdateCallback[BasicLoadData]
@@ -186,10 +179,10 @@ class TestUpdateCallback(unittest.TestCase):
 
 
 class TestCreateFile(unittest.TestCase):
-    """Tests :class:`~phile.data.CreateFile`."""
 
-    def test_subclass(self) -> None:
-        """Subclass of protocol can inherit methods to satisfy it."""
+    def test_subclass_can_inherit_methods_to_satisfy_protocol(
+        self
+    ) -> None:
 
         class BasicCreateFile(phile.data.CreateFile[BasicLoadData]):
             pass
@@ -199,7 +192,6 @@ class TestCreateFile(unittest.TestCase):
 
 
 class TestSortedLoadCache(unittest.TestCase):
-    """Tests :class:`~phile.data.SortedLoadCache`."""
 
     def setUp(self) -> None:
         """Create cache object with mock callbacks."""
@@ -216,8 +208,7 @@ class TestSortedLoadCache(unittest.TestCase):
             on_set=self.on_set,
         )
 
-    def test_init_callbacks(self) -> None:
-        """Callbacks can be given as functions, lambdas and callables."""
+    def test_callbacks_can_be_any_callables(self) -> None:
 
         class update_callback:
 
@@ -242,11 +233,7 @@ class TestSortedLoadCache(unittest.TestCase):
         )
         self.assertEqual(cache.create_file(pathlib.Path()), data)
 
-    def test_update_with_loaded_untracked_data(self) -> None:
-        """
-        Successful :meth:`~phile.data.SortedLoadCache.update`
-        with untracked data inserts it.
-        """
+    def test_update_with_loaded_untracked_data_inserts_it(self) -> None:
         source_path = self.data_directory_path / 'exists'
         source_path.touch()
         self.cache.update(source_path)
@@ -260,11 +247,9 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_set.assert_not_called()
         self.on_insert.reset_mock()
 
-    def test_update_with_unloaded_untracked_data(self) -> None:
-        """
-        Unsuccessful :meth:`~phile.data.SortedLoadCache.update`
-        with untracked data does nothing.
-        """
+    def test_update_with_unloaded_untracked_data_does_nothing(
+        self
+    ) -> None:
         source_path = self.data_directory_path / 'mising'
         self.cache.update(source_path)
         self.assertEqual(len(self.cache.tracked_data), 0)
@@ -272,12 +257,8 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_pop.assert_not_called()
         self.on_set.assert_not_called()
 
-    def test_update_with_loaded_tracked_data(self) -> None:
-        """
-        Successful re-:meth:`~phile.data.SortedLoadCache.update`
-        with tracked data re-sets it.
-        """
-        self.test_update_with_loaded_untracked_data()
+    def test_update_with_loaded_tracked_data_resets_it(self) -> None:
+        self.test_update_with_loaded_untracked_data_inserts_it()
         source_path = self.cache.tracked_data[0].path
         self.cache.update(source_path)
         self.assertEqual(len(self.cache.tracked_data), 1)
@@ -287,12 +268,8 @@ class TestSortedLoadCache(unittest.TestCase):
             0, phile.data.File(path=source_path), self.cache.tracked_data
         )
 
-    def test_update_with_unloaded_tracked_data(self) -> None:
-        """
-        Unsuccessful :meth:`~phile.data.SortedLoadCache.update`
-        with tracked data pops it.
-        """
-        self.test_update_with_loaded_untracked_data()
+    def test_update_with_unloaded_tracked_data_pops_it(self) -> None:
+        self.test_update_with_loaded_untracked_data_inserts_it()
         source_path = self.cache.tracked_data[0].path
         source_path.unlink()
         self.cache.update(source_path)
@@ -304,10 +281,8 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_set.assert_not_called()
 
     def test_prepend_to_non_empty_tracked_list(self) -> None:
-        """
-        It previously overridden position zero instead of prepending.
-        """
-        self.test_update_with_loaded_untracked_data()
+        # It previously overridden position zero instead of prepending.
+        self.test_update_with_loaded_untracked_data_inserts_it()
         source_path = self.data_directory_path / 'before'
         source_path.touch()
         self.cache.update(source_path)
@@ -318,12 +293,7 @@ class TestSortedLoadCache(unittest.TestCase):
         self.on_pop.assert_not_called()
         self.on_set.assert_not_called()
 
-    def test_update_paths(self) -> None:
-        """
-        :meth:`~phile.data.SortedLoadCache.update_paths`
-        can :meth:`~phile.data.SortedLoadCache.on_insert`
-        and :meth:`~phile.data.SortedLoadCache.on_set`.
-        """
+    def test_update_paths_can_insert_and_set(self) -> None:
         source_path = self.data_directory_path / 'exists'
         source_path.touch()
         self.cache.update_paths([source_path, source_path])
@@ -336,34 +306,22 @@ class TestSortedLoadCache(unittest.TestCase):
             0, phile.data.File(path=source_path), self.cache.tracked_data
         )
 
-    def test_update_no_paths(self) -> None:
-        """
-        :meth:`~phile.data.SortedLoadCache.update_paths`
-        with no paths does nothing.
-        """
+    def test_update_no_paths_does_nothing(self) -> None:
         self.cache.update_paths([])
         self.assertEqual(len(self.cache.tracked_data), 0)
         self.on_insert.assert_not_called()
         self.on_pop.assert_not_called()
         self.on_set.assert_not_called()
 
-    def test_update_tracked_without_tracked(self) -> None:
-        """
-        :meth:`~phile.data.SortedLoadCache.update_tracked` does nothing
-        if :data:`~phile.data.SortedLoadCache.tracked_data` is empty.
-        """
+    def test_update_tracked_without_tracked_does_nothing(self) -> None:
         self.cache.update_tracked()
         self.assertEqual(len(self.cache.tracked_data), 0)
         self.on_insert.assert_not_called()
         self.on_pop.assert_not_called()
         self.on_set.assert_not_called()
 
-    def test_update_tracked_stays_loaded(self) -> None:
-        """
-        Successful :meth:`~phile.data.SortedLoadCache.update_tracked`
-        sets data.
-        """
-        self.test_update_with_loaded_untracked_data()
+    def test_update_tracked_stays_loaded_sets_data(self) -> None:
+        self.test_update_with_loaded_untracked_data_inserts_it()
         source_path = self.cache.tracked_data[0].path
         self.cache.update_tracked()
         self.assertEqual(len(self.cache.tracked_data), 1)
@@ -374,11 +332,7 @@ class TestSortedLoadCache(unittest.TestCase):
         )
 
     def test_refresh_can_unload(self) -> None:
-        """
-        Directory :meth:`~phile.data.SortedLoadCache.refresh`
-        does an :meth:`~phile.data.SortedLoadCache.update`
-        """
-        self.test_update_with_loaded_untracked_data()
+        self.test_update_with_loaded_untracked_data_inserts_it()
         source_path = self.cache.tracked_data[0].path
         source_path.unlink()
         new_source_path = self.data_directory_path / 'two'

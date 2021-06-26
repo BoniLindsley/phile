@@ -23,7 +23,6 @@ IntCallback = (phile.watchdog.SingleParameterCallback[int, None])
 
 
 class TestSingleParameterCallback(unittest.TestCase):
-    """Tests :data:`~phile.watchdog.SingleParameterCallback`."""
 
     def do_callback_test(self, callback: IntCallback) -> None:
         """
@@ -41,8 +40,7 @@ class TestSingleParameterCallback(unittest.TestCase):
         parent = Parent(callback=callback)
         parent.callback(0)
 
-    def test_class_method(self) -> None:
-        """Methods of with proper parameter satisfies the protocol."""
+    def test_class_method_can_satisfy_protocol(self) -> None:
 
         class IntObject:
 
@@ -52,20 +50,17 @@ class TestSingleParameterCallback(unittest.TestCase):
 
         self.do_callback_test(IntObject.int_method)
 
-    def test_function(self) -> None:
-        """Subclass of protocol can inherit methods to satisfy it."""
+    def test_function_can_satisfy_protocol(self) -> None:
 
         def int_function(_: int) -> None:
             pass
 
         self.do_callback_test(int_function)
 
-    def test_lambda(self) -> None:
-        """Lambda without signature satisfies protocol."""
+    def test_lambda_can_satisfy_protocol(self) -> None:
         self.do_callback_test(lambda _: None)
 
-    def test_method(self) -> None:
-        """Methods of with proper parameter satisfies the protocol."""
+    def test_method_can_satisfy_protocol(self) -> None:
 
         class IntObject:
 
@@ -74,8 +69,7 @@ class TestSingleParameterCallback(unittest.TestCase):
 
         self.do_callback_test(IntObject().int_method)
 
-    def test_static_method(self) -> None:
-        """Methods of with proper parameter satisfies the protocol."""
+    def test_static_method_can_satisfy_protocol(self) -> None:
 
         class IntObject:
 
@@ -85,8 +79,9 @@ class TestSingleParameterCallback(unittest.TestCase):
 
         self.do_callback_test(IntObject.int_method)
 
-    def test_subclass(self) -> None:
-        """Subclass of protocol can inherit methods to satisfy it."""
+    def test_subclass_can_inherit_methods_to_satisfy_protocol(
+        self
+    ) -> None:
 
         class Callback(IntCallback):
             pass
@@ -95,12 +90,8 @@ class TestSingleParameterCallback(unittest.TestCase):
 
 
 class TestEventHandler(unittest.TestCase):
-    """Tests :data:`~phile.watchdog.EventHandler`."""
 
-    def test_function(self) -> None:
-        """
-        A function can be a :data:`~phile.watchdog.EventHandler`.
-        """
+    def test_function_can_be_an_event_handler(self) -> None:
 
         def event_handle_function(
             _event: watchdog.events.FileSystemEvent
@@ -113,10 +104,7 @@ class TestEventHandler(unittest.TestCase):
 class TestPathFilter(unittest.TestCase):
     """Tests :data:`~phile.watchdog.PathFilter`."""
 
-    def test_function(self) -> None:
-        """
-        A function can be a :data:`~phile.watchdog.PathFilter`.
-        """
+    def test_function_can_be_a_filter(self) -> None:
 
         def path_handle_function(_path: pathlib.Path) -> bool:
             return True
@@ -128,10 +116,7 @@ class TestPathFilter(unittest.TestCase):
 class TestPathHandler(unittest.TestCase):
     """Tests :data:`~phile.watchdog.PathHandler`."""
 
-    def test_function(self) -> None:
-        """
-        A function can be a :data:`~phile.watchdog.PathHandler`.
-        """
+    def test_function_can_be_a_handler(self) -> None:
 
         def path_handle_function(_path: pathlib.Path) -> None:
             pass
@@ -141,10 +126,8 @@ class TestPathHandler(unittest.TestCase):
 
 
 class TestScheduler(unittest.TestCase):
-    """Unit test for :class:`~phile.watchdog.Scheduler`."""
 
     def setUp(self) -> None:
-        """Create a handler to forward to."""
         self.observer = observer = watchdog.observers.Observer()
         self.addCleanup(self.observer.stop)
         self.watched_path = watched_path = pathlib.Path()
@@ -158,16 +141,12 @@ class TestScheduler(unittest.TestCase):
         )
 
     def test_init_with_path_and_observer(self) -> None:
-        """
-        Provides a constructor without callbacks.
-
-        So that other properties can be provided later,
-        making the constructor less of a mess.
-        Observer and paths are mandatory
-        since creating a new constructor
-        means creating a possibly unused thread
-        and there is no good default paths to use as a default.
-        """
+        # So that other properties can be provided later,
+        # making the constructor less of a mess.
+        # Observer and paths are mandatory
+        # since creating a new constructor
+        # means creating a possibly unused thread
+        # and there is no good default paths to use as a default.
         other_scheduler = phile.watchdog.Scheduler(
             watched_path=self.watched_path,
             watching_observer=self.observer,
@@ -176,25 +155,25 @@ class TestScheduler(unittest.TestCase):
         source_event = watchdog.events.FileCreatedEvent(str(file_path))
         other_scheduler.dispatch(source_event)
 
-    def test_is_scheduled(self) -> None:
-        """Dispatching calls the given handler."""
+    def test_is_scheduled__changes_based_on_schedule_and_unschedule(
+        self
+    ) -> None:
         self.assertTrue(not self.scheduler.is_scheduled)
         self.scheduler.schedule()
         self.assertTrue(self.scheduler.is_scheduled)
         self.scheduler.unschedule()
         self.assertTrue(not self.scheduler.is_scheduled)
 
-    def test_sheduled_when_already_scheduled(self) -> None:
-        """Scheduling a second time gets ignored."""
+    def test_shedule__ignored_if_already_scheduled(self) -> None:
         self.scheduler.schedule()
         self.scheduler.schedule()
 
-    def test_unsheduled_without_scheduling(self) -> None:
-        """Unscheduling an unscheduled handle gets ignored"""
+    def test_unshedule__ignored_if_not_scheduled(self) -> None:
         self.scheduler.unschedule()
 
-    def test_unschedule_with_other_handlers(self) -> None:
-        """Do not remove emitter when there are other handlers."""
+    def test_unschedule__no_removing_emitter_when_not_last_handler(
+        self
+    ) -> None:
         other_scheduler = phile.watchdog.Scheduler(
             watched_path=self.watched_path,
             watching_observer=self.observer,
@@ -213,12 +192,6 @@ class TestScheduler(unittest.TestCase):
         )
 
     def test_unschedule_manually_unscheduled_handler(self) -> None:
-        """
-        Unschedule manually unschedule handler should be fine.
-
-        Already satisfied the postcondition of being unscheduled.
-        So just say it is succeeded.
-        """
         self.scheduler.schedule()
         self.assertTrue(self.scheduler.is_scheduled)
         self.assertIsNotNone(self.scheduler.watchdog_watch)
@@ -234,21 +207,18 @@ class TestScheduler(unittest.TestCase):
         self.assertTrue(not scheduler.is_scheduled)
 
     def test_dispatch_file_creation_events(self) -> None:
-        """File creation events passes through."""
         file_path = pathlib.Path('created')
         source_event = watchdog.events.FileCreatedEvent(str(file_path))
         self.scheduler.dispatch(source_event)
         self.assertEqual(self.path_handler.call_args.args[0], file_path)
 
     def test_dispatch_ignores_directory_events(self) -> None:
-        """Directory events are not considered as file events here."""
         file_path = pathlib.Path('directory')
         source_event = watchdog.events.DirCreatedEvent(str(file_path))
         self.scheduler.dispatch(source_event)
         self.path_handler.assert_not_called()
 
     def test_dispatch_splits_move_events(self) -> None:
-        """Move events should be split into two paths."""
         source_path = pathlib.Path('source')
         dest_path = pathlib.Path('dest')
         source_event = watchdog.events.FileMovedEvent(
@@ -263,7 +233,6 @@ class TestScheduler(unittest.TestCase):
         )
 
     def test_dispatch_ignores_directory_move_events(self) -> None:
-        """Directory events should be ignored even for move events."""
         source_path = pathlib.Path('source')
         dest_path = pathlib.Path('dest')
         source_event = watchdog.events.DirMovedEvent(
@@ -272,8 +241,7 @@ class TestScheduler(unittest.TestCase):
         self.scheduler.dispatch(source_event)
         self.path_handler.assert_not_called()
 
-    def test_filter_fails_path(self) -> None:
-        """Paths that fails the filter are not passed to the handler."""
+    def test_ignores_path_failing_filter(self) -> None:
         self.path_filter.side_effect = [False, False]
         source_path = pathlib.Path('source')
         dest_path = pathlib.Path('dest')
@@ -289,8 +257,7 @@ class TestScheduler(unittest.TestCase):
         )
         self.path_handler.assert_not_called()
 
-    def test_filter_passes_path(self) -> None:
-        """Paths that pass the filter goes to the handler."""
+    def test_path_that_passes_filter_goes_to_handler(self) -> None:
         self.path_filter.side_effect = [True, True]
         source_path = pathlib.Path('source')
         dest_path = pathlib.Path('dest')

@@ -34,7 +34,6 @@ from test_phile.test_configuration.test_init import UsesConfiguration
 
 
 class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
-    """Tests :class:`~phile.notify.gui.NotificationMdiSubWindow`."""
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -81,7 +80,6 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
         )
 
     def test_initialisation(self) -> None:
-        """Create a NotificationMdiSubWindow object."""
         # The object is created in `setUp`.
         # This tests flags up whether the constructor itself fails.
         notification_sub_window = self.notification_sub_window
@@ -94,15 +92,13 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
         # It should not be marked as read by default.
         self.assertTrue(not notification_sub_window.is_read)
 
-    def test_content(self) -> None:
-        """Check that content set requests are processed."""
+    def test_content_set_requests_are_processed(self) -> None:
         notification_sub_window = self.notification_sub_window
         new_content = 'This is not content.'
         notification_sub_window.content = new_content
         self.assertEqual(notification_sub_window.content, new_content)
 
-    def test_modified_at(self) -> None:
-        """Check that creation datetime set requests are processed."""
+    def test_modified_at_requests_are_processed(self) -> None:
         notification_sub_window = self.notification_sub_window
         new_modified_at = datetime.datetime(year=1999, month=9, day=9)
         notification_sub_window.modified_at = new_modified_at
@@ -111,28 +107,24 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
         )
 
     def test_event_handling_without_parent_mdi(self) -> None:
-        """Check that basic events are processed without issues."""
         notification_sub_window = self.notification_sub_window
         notification_sub_window.showMaximized()
         notification_sub_window.hide()
 
-    def test_is_read(self) -> None:
-        """Check that mark as read requests are processed."""
+    def test_mark_as_read_are_processed(self) -> None:
         notification_sub_window = self.notification_sub_window
         notification_sub_window.is_read = True
         self.assertTrue(notification_sub_window.is_read)
         notification_sub_window.is_read = False
         self.assertTrue(not notification_sub_window.is_read)
 
-    def test_title(self) -> None:
-        """Check that content path set requests are processed."""
+    def test_title_set_requests_are_processed(self) -> None:
         notification_sub_window = self.notification_sub_window
         new_title = 'What title?'
         notification_sub_window.title = new_title
         self.assertEqual(notification_sub_window.title, new_title)
 
-    def test_closed_signal(self) -> None:
-        """Check that closing emits a closed signal."""
+    def test_closing_emits_closed_signal(self) -> None:
         listener = QObject()
         listener.on_closed_slot = unittest.mock.Mock()
         self.notification_sub_window.closed.connect(
@@ -144,7 +136,6 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
 
 
 class TestNotificationMdi(UsesQApplication, unittest.TestCase):
-    """Tests :class:`~phile.notify.gui.NotificationMdi`."""
 
     def setUp(self) -> None:
         """
@@ -161,12 +152,11 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         self.addCleanup(self.notification_mdi.deleteLater)
 
     def test_initialisation(self) -> None:
-        """Create a NotificationMdiSubWindow object."""
         # The object is created in `setUp`.
         # This tests flags up whether the constructor itself fails.
+        pass
 
-    def test_show_and_hide(self) -> None:
-        """Make sure both showing re-tiles but hiding does not."""
+    def test_show_retiles_but_hide_does_not(self) -> None:
         notification_mdi = self.notification_mdi
         notification_sub_window = notification_mdi.add_notification(
             title='WatZap',
@@ -207,8 +197,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         notification_mdi.show()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
-    def test_show_and_hide_sub_window(self) -> None:
-        """Make sure both showing and hiding a sub-window retiles."""
+    def test_show_and_hide_sub_window_retiles(self) -> None:
         notification_mdi = self.notification_mdi
 
         notification_sub_window = notification_mdi.add_notification(
@@ -267,8 +256,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         notification_sub_window_2.hide()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
-    def test_close_sub_window(self) -> None:
-        """Closing sub-window retiles."""
+    def test_close_sub_window_retiles(self) -> None:
 
         notification_mdi = self.notification_mdi
 
@@ -319,8 +307,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         phile.PySide2.QtCore.process_deferred_delete_events()
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
-    def test_maximise_and_minimise_sub_window(self) -> None:
-        """Maximising and minimising a sub-window should re-tile."""
+    def test_maximise_and_minimise_sub_window_retiles(self) -> None:
         notification_mdi = self.notification_mdi
         notification_sub_window = notification_mdi.add_notification(
             title='WatZap',
@@ -385,8 +372,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         notification_sub_window.showMinimized()
         self.assertEqual(notification_sub_window_2.pos().x(), 0)
 
-    def test_resizeEvent(self) -> None:
-        """Resizing should retile sub-windows."""
+    def test_resizeEvent_retiles_subwindows(self) -> None:
         notification_mdi = self.notification_mdi
         notification_sub_window = notification_mdi.add_notification(
             title='WatZap',
@@ -428,8 +414,9 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         notification_mdi.resize(mdi_size.width() - 1, mdi_size.height())
         self.assertEqual(notification_sub_window.pos().x(), 0)
 
-    def test_resizeEvent_in_tabbed_view_mode(self) -> None:
-        """No retiling should happen in tabbed view mode."""
+    def test_resizeEvent_in_tabbed_view_mode_does_not_retile(
+        self
+    ) -> None:
         notification_mdi = self.notification_mdi
         notification_mdi.setViewMode(QMdiArea.TabbedView)
         notification_sub_window = notification_mdi.add_notification(
@@ -520,7 +507,6 @@ class TestMainWindow(
         )
 
     def test_initialisation(self) -> None:
-        """Create a MainWindow object."""
         self.assertTrue(self.main_window.isHidden())
         self.assertTrue(
             not self.main_window._notify_scheduler.is_scheduled
@@ -539,8 +525,7 @@ class TestMainWindow(
             len(self.main_window.sorter.tracked_data), length
         )
 
-    def test_show_and_hide_without_notifications(self) -> None:
-        """Showing and hiding should start and stop file monitoring."""
+    def test_show_and_hide_start_and_stops_monitoring(self) -> None:
         # Showing should start monitoring.
         self.main_window.show()
         self.assert_tracked_data_length(0)
@@ -588,16 +573,14 @@ class TestMainWindow(
             ('hide' + self.configuration.trigger_suffix)
         ).is_file())
 
-    def test_hide_without_show(self) -> None:
-        """Calling hide without showing should just not do anything."""
+    def test_hide_without_show_does_nothing(self) -> None:
         self.main_window.hide()
         self.assert_tracked_data_length(0)
         self.assertTrue(
             not self.main_window._notify_scheduler.is_scheduled
         )
 
-    def test_show_with_notifications(self) -> None:
-        """Showing should list existing notifications."""
+    def test_show_with_notifications_lists_them(self) -> None:
         # Create a notification.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -645,8 +628,7 @@ class TestMainWindow(
             self.main_window.sorter.tracked_data[1].sub_window
         )
 
-    def test_close_notification_sub_window(self) -> None:
-        """Closing sub-window should delete notification."""
+    def test_close_notification_sub_window_deletes_it(self) -> None:
         main_window = self.main_window
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -667,8 +649,7 @@ class TestMainWindow(
             self.assertTrue(not main_window.isHidden())
             self.assert_tracked_data_length(0)
 
-    def test_triggers(self) -> None:
-        """Notify GUI has show, hide and close triggers."""
+    def test_notify_gui_has_show_hide_and_close_triggers(self) -> None:
         main_window = self.main_window
         trigger_directory = self.trigger_directory
         trigger_suffix = self.configuration.trigger_suffix
@@ -699,7 +680,6 @@ class TestMainWindow(
         self.main_window = unittest.mock.Mock()
 
     def test_new_notification_creates_sub_window(self) -> None:
-        """Writing a new notification creates a sub-window."""
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -724,7 +704,6 @@ class TestMainWindow(
         )
 
     def test_deleting_notification_destroys_sub_window(self) -> None:
-        """Removing a notification destroys its sub-window."""
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -746,7 +725,6 @@ class TestMainWindow(
         self.assert_tracked_data_length(0)
 
     def test_modifying_notification_updates_sub_window(self) -> None:
-        """Modifying a notification updates sub-window content."""
         # There should be no sub-window at the beginning.
         content = 'Happy birthday!\n'
         notification = phile.notify.File.from_path_stem(
@@ -774,7 +752,6 @@ class TestMainWindow(
         )
 
     def test_moving_notification_recreates_sub_window(self) -> None:
-        """Moving a notification is treated as delete and create."""
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -805,14 +782,10 @@ class TestMainWindow(
         )
 
     def test_create_and_delete_before_processing(self) -> None:
-        """
-        Create and delete a notification before event processing.
-
-        Event processing may be slow, and it is possible
-        for a file to be created and deleted
-        before its creation event is processed.
-        Such a case should be handled.
-        """
+        # Event processing may be slow, and it is possible
+        # for a file to be created and deleted
+        # before its creation event is processed.
+        # Such a case should be handled.
         main_window = self.main_window
         main_window.show()
         # Create the notification.

@@ -92,7 +92,6 @@ class TestFileCheckPath(UsesConfiguration, unittest.TestCase):
 
 
 class TestFile(UsesConfiguration, unittest.TestCase):
-    """Tests :data:`~phile.notify.File`."""
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -105,8 +104,7 @@ class TestFile(UsesConfiguration, unittest.TestCase):
             self.configuration.notification_directory
         )
 
-    def test_inherited_init(self) -> None:
-        """Has default and keyword initialisation."""
+    def test_has_default_and_keyword_initialisation(self) -> None:
         file = phile.notify.File(path=pathlib.Path())
         self.assertTrue(hasattr(file, 'path'))
         self.assertTrue(hasattr(file, 'modified_at'))
@@ -118,8 +116,7 @@ class TestFile(UsesConfiguration, unittest.TestCase):
             text='This is a big paragraph.',
         )
 
-    def test_from_path_stem(self) -> None:
-        """Create from configuration and path stem."""
+    def test_from_path_stem__create_from_config_and_stem(self) -> None:
         file = phile.notify.File.from_path_stem(
             'config',
             configuration=self.configuration,
@@ -130,8 +127,9 @@ class TestFile(UsesConfiguration, unittest.TestCase):
             )
         )
 
-    def test_from_path_stem_accpets_init_arguments(self) -> None:
-        """Create from configuration, forwards argument to init."""
+    def test_from_path_stem__accepts_config_and_init_arguments(
+        self
+    ) -> None:
         text = 'from_path_stem'
         file = phile.notify.File.from_path_stem(
             configuration=self.configuration,
@@ -140,14 +138,12 @@ class TestFile(UsesConfiguration, unittest.TestCase):
         )
         self.assertEqual(file.text, text)
 
-    def test_is_sortable_load_notify(self) -> None:
-        """Satisfies :class:`~phile.data.SortableLoadData` protocol."""
+    def test_satisfies_sortable_load_data_protocol(self) -> None:
         _: phile.data.SortableLoadData = phile.notify.File(
             path=pathlib.Path()
         )
 
-    def test_compare(self) -> None:
-        """Partial order uses :data:`~phile.notify.File.path`."""
+    def test_partial_order_using_path(self) -> None:
         file_1 = phile.notify.File(
             path=pathlib.Path('a/b'),
             modified_at=datetime.datetime(year=2001, month=1, day=1),
@@ -164,8 +160,7 @@ class TestFile(UsesConfiguration, unittest.TestCase):
         file_1.path = pathlib.Path('b/a')
         self.assertLess(file_1, file_2)
 
-    def test_title(self) -> None:
-        """Title is path stem."""
+    def test_title_is_path_stem(self) -> None:
         title = 'b'
         file = phile.notify.File(path=pathlib.Path('a') / (title + '.n'))
         self.assertEqual(file.title, title)
@@ -173,8 +168,7 @@ class TestFile(UsesConfiguration, unittest.TestCase):
         file.title = title
         self.assertEqual(file.title, title)
 
-    def test_title_for_path_without_suffix(self) -> None:
-        """Title is path stem, even without path suffix."""
+    def test_title_is_path_stem_even_without_suffix(self) -> None:
         title = 'b'
         file = phile.notify.File(path=pathlib.Path('a') / title)
         self.assertEqual(file.title, title)
@@ -182,8 +176,7 @@ class TestFile(UsesConfiguration, unittest.TestCase):
         file.title = title
         self.assertEqual(file.title, title)
 
-    def test_load(self) -> None:
-        """Load retrieves file content and modified time."""
+    def test_load_retrieves_file_content_and_modified_time(self) -> None:
         text = 'Reminder.'
         self.notification_directory.mkdir()
         path = self.notification_directory / 'b'
@@ -199,22 +192,19 @@ class TestFile(UsesConfiguration, unittest.TestCase):
         self.assertGreaterEqual(file.modified_at, before)
 
     def test_load_fails_if_missing(self) -> None:
-        """Load fails but returns if file is missing."""
         name = 'missing'
         path = self.notification_directory / name
         file = phile.notify.File(path=path)
         self.assertTrue(not file.load())
 
     def test_load_fails_if_is_directory(self) -> None:
-        """Load fails but returns file path resolves to a directory."""
         name = 'missing'
         path = self.notification_directory / name
         path.mkdir(parents=True)
         file = phile.notify.File(path=path)
         self.assertTrue(not file.load())
 
-    def test_save(self) -> None:
-        """Save sets file content and modified time."""
+    def test_save_sets_file_content_and_modified_time(self) -> None:
         text = 'Reminder.'
         path = self.notification_directory / 'b'
         file = phile.notify.File(path=path, text=text)
