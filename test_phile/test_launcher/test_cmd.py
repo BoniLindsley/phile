@@ -82,31 +82,47 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
             )
         )
 
+    async def assert_get_event_soon(
+        self,
+        event_view: phile.asyncio.pubsub.View[phile.launcher.Event],
+        expected_event: phile.launcher.Event,
+    ) -> None:
+        received_events: list[phile.launcher.Event] = []
+        try:
+
+            async def run() -> None:
+                async for next_event in event_view:
+                    received_events.append(next_event)
+                    if next_event == expected_event:
+                        break
+
+            await phile.asyncio.wait_for(run())
+        except BaseException as error:
+            message = (
+                'Did not receive {expected_event}\n'
+                'Received\n{received_events}'.format(
+                    expected_event=expected_event,
+                    received_events=received_events,
+                )
+            )
+            raise self.failureException(message) from error
+
     async def test_do_start_starts_launcher(self) -> None:
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertFalse(
-            self.launcher_registry.state_machine.is_running(
-                self.launcher_name_1
-            )
+            self.launcher_registry.is_running(self.launcher_name_1)
         )
+        event_view = self.launcher_registry.event_queue.__aiter__()
         self.assertFalse(self.cmd.onecmd('start 0'))
-        subscriber = (
-            self.launcher_registry.state_machine.event_publishers[
-                phile.launcher.Registry.start].__aiter__()
-        )
-
-        async def wait_for_launcher_to_start(launcher_name: str) -> None:
-            async for next_name in subscriber:
-                if launcher_name == next_name:
-                    break
-
-        await phile.asyncio.wait_for(
-            wait_for_launcher_to_start(self.launcher_name_1)
+        await self.assert_get_event_soon(
+            event_view,
+            phile.launcher.Event(
+                phile.launcher.EventType.START,
+                self.launcher_name_1,
+            ),
         )
         self.assertTrue(
-            self.launcher_registry.state_machine.is_running(
-                self.launcher_name_1
-            )
+            self.launcher_registry.is_running(self.launcher_name_1)
         )
 
     async def test_do_start_writes_to_stdout(self) -> None:
@@ -138,40 +154,28 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
 
     async def test_do_stop_stops_launcher(self) -> None:
         await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.start(
-                self.launcher_name_1
-            )
+            self.launcher_registry.start(self.launcher_name_1)
         )
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertTrue(
-            self.launcher_registry.state_machine.is_running(
-                self.launcher_name_1
-            )
+            self.launcher_registry.is_running(self.launcher_name_1)
         )
+        event_view = self.launcher_registry.event_queue.__aiter__()
         self.assertFalse(self.cmd.onecmd('stop 0'))
-
-        async def wait_for_launcher_to_stop(launcher_name: str) -> None:
-            async for next_name in (
-                self.launcher_registry.state_machine.event_publishers[
-                    phile.launcher.Registry.stop]
-            ):
-                if launcher_name == next_name:
-                    break
-
-        await phile.asyncio.wait_for(
-            wait_for_launcher_to_stop(self.launcher_name_1)
+        await self.assert_get_event_soon(
+            event_view,
+            phile.launcher.Event(
+                phile.launcher.EventType.STOP,
+                self.launcher_name_1,
+            ),
         )
         self.assertFalse(
-            self.launcher_registry.state_machine.is_running(
-                self.launcher_name_1
-            )
+            self.launcher_registry.is_running(self.launcher_name_1)
         )
 
     async def test_do_stop_writes_to_stdout(self) -> None:
         await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.start(
-                self.launcher_name_1
-            )
+            self.launcher_registry.start(self.launcher_name_1)
         )
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertFalse(self.cmd.onecmd('stop 0'))
@@ -214,9 +218,7 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
 
     async def test_do_list_prints_running_launchers(self) -> None:
         await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.start(
-                self.launcher_name_1
-            )
+            self.launcher_registry.start(self.launcher_name_1)
         )
         self.assertFalse(self.cmd.onecmd('list'))
         self.assertEqual(

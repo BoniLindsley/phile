@@ -7,6 +7,7 @@ Trigger for launcher manipulations
 
 # Standard libraries.
 import asyncio
+import collections.abc
 import contextlib
 import functools
 import types
@@ -35,26 +36,27 @@ class Producer:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._bound_launchers = set[str]()
-        self._event_processing_tasks: list[asyncio.Task[typing.Any]] = []
         self._launcher_registry = launcher_registry
+        self._registry_event_processing_tasks: asyncio.Task[typing.Any]
         self._trigger_registry = trigger_registry
 
     async def __aenter__(self: __Self) -> __Self:
         """Not reentrant."""
-        async with contextlib.AsyncExitStack() as stack:
-            stack.push_async_exit(self)
-            self._create_event_loop_tasks()
-            bind = self._bind
-            is_running = self._launcher_registry.state_machine.is_running
-            on_start = self._on_start
-            on_stop = self._on_stop
+        try:
+            self._registry_event_processing_tasks = (
+                asyncio.get_running_loop().create_task(
+                    self._process_registry_events()
+                )
+            )
             for name in self._launcher_registry.database.type.copy():
-                bind(name)
-                if is_running(name):
-                    on_start(name)
+                self._bind(name)
+                if self._launcher_registry.is_running(name):
+                    self._on_start(name)
                 else:
-                    on_stop(name)
-            stack.pop_all()
+                    self._on_stop(name)
+        except:  # pragma: no cover  # Defensive.
+            await self.__aexit__(None, None, None)
+            raise
         return self
 
     async def __aexit__(
@@ -63,13 +65,9 @@ class Producer:
         traceback: typing.Optional[types.TracebackType]
     ) -> None:
         try:
-            current_tasks = self._event_processing_tasks.copy()
-            for task in current_tasks:
-                task.cancel()
-            for task in current_tasks:
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-            self._event_processing_tasks.clear()
+            await phile.asyncio.cancel_and_wait(
+                self._registry_event_processing_tasks
+            )
         finally:
             bound_launchers = self._bound_launchers
             unbind = self._unbind
@@ -77,45 +75,22 @@ class Producer:
                 unbind(name)
             assert not bound_launchers
 
-    def _create_event_loop_tasks(self) -> None:
-        append = self._event_processing_tasks.append
-        create_task = asyncio.get_running_loop().create_task
-        append(create_task(self._process_database_add_events()))
-        append(create_task(self._process_database_remove_events()))
-        append(create_task(self._process_state_machine_start_events()))
-        append(create_task(self._process_state_machine_stop_events()))
-
-    async def _process_database_add_events(self) -> None:
-        bind = self._bind
-        async for launcher_name in (
-            self._launcher_registry.event_publishers[
-                phile.launcher.Registry.add]
-        ):
-            bind(launcher_name)
-
-    async def _process_database_remove_events(self) -> None:
-        unbind = self._unbind
-        async for launcher_name in (
-            self._launcher_registry.event_publishers[
-                phile.launcher.Registry.remove]
-        ):
-            unbind(launcher_name)
-
-    async def _process_state_machine_start_events(self) -> None:
-        on_start = self._on_start
-        async for launcher_name in (
-            self._launcher_registry.state_machine.event_publishers[
-                phile.launcher.Registry.start]
-        ):
-            on_start(launcher_name)
-
-    async def _process_state_machine_stop_events(self) -> None:
-        on_stop = self._on_stop
-        async for launcher_name in (
-            self._launcher_registry.state_machine.event_publishers[
-                phile.launcher.Registry.stop]
-        ):
-            on_stop(launcher_name)
+    async def _process_registry_events(self) -> None:
+        known_handlers: (
+            dict[phile.launcher.EventType,
+                 collections.abc.Callable[[str], typing.Any]]
+        ) = {
+            phile.launcher.EventType.START: self._on_start,
+            phile.launcher.EventType.STOP: self._on_stop,
+            phile.launcher.EventType.ADD: self._bind,
+            phile.launcher.EventType.REMOVE: self._unbind,
+        }
+        async for event in (self._launcher_registry.event_queue):
+            try:
+                handler = known_handlers[event.type]
+            except KeyError:  # pragma: no cover  # Defensive.
+                continue
+            handler(event.entry_name)
 
     def _on_start(self, launcher_name: str) -> None:
         start_trigger, stop_trigger = self._trigger_names(launcher_name)
@@ -139,18 +114,18 @@ class Producer:
             start_trigger, stop_trigger = self._trigger_names(
                 launcher_name
             )
-            state_machine = self._launcher_registry.state_machine
+            launcher_registry = self._launcher_registry
             bound_launchers.add(launcher_name)
             bind(
                 start_trigger,
                 functools.partial(
-                    call_soon, state_machine.start, launcher_name
+                    call_soon, launcher_registry.start, launcher_name
                 ),
             )
             bind(
                 stop_trigger,
                 functools.partial(
-                    call_soon, state_machine.stop, launcher_name
+                    call_soon, launcher_registry.stop, launcher_name
                 ),
             )
         else:  # pragma: no cover  # Defensive.

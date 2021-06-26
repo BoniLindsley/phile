@@ -98,7 +98,7 @@ class TestProducer(
     async def test_start_launcher_toggles_trigger(self) -> None:
         await self.test_add_launcher_binds_triggers()
         await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.start(self.entry_name)
+            self.launcher_registry.start(self.entry_name)
         )
         await phile.asyncio.wait_for(
             self.wait_for_start_trigger_showing()
@@ -107,7 +107,7 @@ class TestProducer(
     async def test_stop_launcher_toggles_trigger(self) -> None:
         await self.test_start_launcher_toggles_trigger()
         await phile.asyncio.wait_for(
-            self.launcher_registry.state_machine.stop(self.entry_name)
+            self.launcher_registry.stop(self.entry_name)
         )
         await phile.asyncio.wait_for(
             self.wait_for_stop_trigger_showing()
@@ -136,9 +136,7 @@ class TestProducer(
         try:
             self.set_up_launcher_entry()
             await phile.asyncio.wait_for(
-                self.launcher_registry.state_machine.start(
-                    self.entry_name
-                )
+                self.launcher_registry.start(self.entry_name)
             )
         finally:
             await phile.asyncio.wait_for(

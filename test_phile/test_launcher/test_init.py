@@ -455,6 +455,36 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class TestEventType(unittest.TestCase):
+
+    def test_members_exist(self) -> None:
+        EventType = phile.launcher.EventType
+        members = {
+            EventType.START,
+            EventType.STOP,
+            EventType.ADD,
+            EventType.REMOVE,
+        }
+        self.assertEqual(len(EventType), len(members))
+
+
+class TestEvent(unittest.TestCase):
+
+    def test_initialisation(self) -> None:
+        phile.launcher.Event(
+            type=phile.launcher.EventType.START,
+            entry_name='test_init',
+        )
+
+    def test_members(self) -> None:
+        event = phile.launcher.Event(
+            type=phile.launcher.EventType.STOP,
+            entry_name='test_members',
+        )
+        self.assertEqual(event.type, phile.launcher.EventType.STOP)
+        self.assertEqual(event.entry_name, 'test_members')
+
+
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -470,6 +500,10 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         self.launcher_database = launcher_registry.database
 
     def test_available_attributes(self) -> None:
+        self.assertIsInstance(
+            self.launcher_registry.event_queue,
+            phile.asyncio.pubsub.Queue,
+        )
         self.assertIsInstance(
             self.launcher_registry.capability_registry,
             phile.capability.Registry,
@@ -502,13 +536,17 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def test_add_nowait__emits_events(self) -> None:
         entry_name = 'add_emits_events'
-        view = self.launcher_registry.event_publishers[
-            phile.launcher.Registry.add].__aiter__()
+        view = self.launcher_registry.event_queue.__aiter__()
         self.launcher_registry.add_nowait(
             entry_name, {'exec_start': [noop]}
         )
         message = await phile.asyncio.wait_for(view.__anext__())
-        self.assertEqual(message, entry_name)
+        self.assertEqual(
+            message,
+            phile.launcher.Event(
+                type=phile.launcher.EventType.ADD, entry_name=entry_name
+            )
+        )
 
     def test_remove_nowait__removes_given_launcher(self) -> None:
         entry_name = 'remove_nowait__removes_given_launcher'
@@ -535,11 +573,16 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         self.launcher_registry.add_nowait(
             entry_name, {'exec_start': [noop]}
         )
-        view = self.launcher_registry.event_publishers[
-            phile.launcher.Registry.remove].__aiter__()
+        view = self.launcher_registry.event_queue.__aiter__()
         self.launcher_registry.remove_nowait(entry_name)
         message = await phile.asyncio.wait_for(view.__anext__())
-        self.assertEqual(message, entry_name)
+        self.assertEqual(
+            message,
+            phile.launcher.Event(
+                type=phile.launcher.EventType.REMOVE,
+                entry_name=entry_name
+            )
+        )
 
     def test_remove_nowait__ignores_if_missing(self) -> None:
         entry_name = 'remove_nowait__ignores_if_missing'
@@ -1083,16 +1126,21 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
 
     async def test_start__emits_events(self) -> None:
         entry_name = 'start_emits_events'
-        view = self.launcher_registry.event_publishers[
-            phile.launcher.Registry.start].__aiter__()
         self.launcher_registry.add_nowait(
             entry_name, {'exec_start': [noop]}
         )
+        view = self.launcher_registry.event_queue.__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_registry.start(entry_name)
         )
         message = await phile.asyncio.wait_for(view.__anext__())
-        self.assertEqual(message, entry_name)
+        self.assertEqual(
+            message,
+            phile.launcher.Event(
+                type=phile.launcher.EventType.START,
+                entry_name=entry_name
+            )
+        )
 
     async def test_stop__emits_events(self) -> None:
         entry_name = 'remove_emits_events'
@@ -1102,13 +1150,18 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_registry.start(entry_name)
         )
-        view = self.launcher_registry.event_publishers[
-            phile.launcher.Registry.stop].__aiter__()
+        view = self.launcher_registry.event_queue.__aiter__()
         await phile.asyncio.wait_for(
             self.launcher_registry.stop(entry_name)
         )
         message = await phile.asyncio.wait_for(view.__anext__())
-        self.assertEqual(message, entry_name)
+        self.assertEqual(
+            message,
+            phile.launcher.Event(
+                type=phile.launcher.EventType.STOP,
+                entry_name=entry_name
+            ),
+        )
 
     async def test_remove__stops_launcher(self) -> None:
         name = 'to_be_stopped_when_deregistering'

@@ -13,6 +13,7 @@ import asyncio
 import collections
 import collections.abc
 import contextlib
+import dataclasses
 import enum
 import functools
 import itertools
@@ -285,6 +286,19 @@ class Database:
         return entry_name in self.remover
 
 
+class EventType(enum.Enum):
+    START = enum.auto()
+    STOP = enum.auto()
+    ADD = enum.auto()
+    REMOVE = enum.auto()
+
+
+@dataclasses.dataclass
+class Event:
+    type: EventType
+    entry_name: str
+
+
 class Registry:
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -292,20 +306,10 @@ class Registry:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._capability_registry = phile.capability.Registry()
         self._database = Database()
-        # TODO(BoniLindsley): Merge publishers into a single event_queue.
-        self.event_publishers: (
-            dict[collections.abc.Callable[..., typing.Any],
-                 phile.asyncio.pubsub.Queue[str]]
-        ) = {
-            Registry.start: phile.asyncio.pubsub.Queue[str](),
-            Registry.stop: phile.asyncio.pubsub.Queue[str](),
-            Registry.add: phile.asyncio.pubsub.Queue[str](),
-            Registry.remove: phile.asyncio.pubsub.Queue[str](),
-        }
-        """Pushes events to subscribers."""
         self._running_tasks: dict[str, asyncio.Future[typing.Any]] = {}
         self._start_tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._stop_tasks: dict[str, asyncio.Task[typing.Any]] = {}
+        self.event_queue = phile.asyncio.pubsub.Queue[Event]()
         self.add_default_launchers()
 
     @property
@@ -328,7 +332,9 @@ class Registry:
         self, entry_name: str, descriptor: Descriptor
     ) -> None:
         self._database.add(entry_name=entry_name, descriptor=descriptor)
-        self.event_publishers[Registry.add].put(entry_name)
+        self.event_queue.put(
+            Event(type=EventType.ADD, entry_name=entry_name)
+        )
 
     async def remove(self, entry_name: str) -> None:
         await self.stop(entry_name=entry_name)
@@ -340,7 +346,9 @@ class Registry:
         if self.is_running(entry_name=entry_name):
             raise RuntimeError('Cannot remove a running launcher.')
         self._database.remove(entry_name=entry_name)
-        self.event_publishers[Registry.remove].put(entry_name)
+        self.event_queue.put(
+            Event(type=EventType.REMOVE, entry_name=entry_name)
+        )
 
     def contains(self, entry_name: str) -> bool:
         return self._database.contains(entry_name)
@@ -400,10 +408,14 @@ class Registry:
         runner_task.add_done_callback(
             functools.partial(running_tasks.pop, entry_name)
         )
-        self.event_publishers[Registry.start].put(entry_name)
+        self.event_queue.put(
+            Event(type=EventType.START, entry_name=entry_name)
+        )
         runner_task.add_done_callback(
-            lambda _task:
-            (self.event_publishers[Registry.stop].put(entry_name))
+            lambda _task: (
+                self.event_queue.
+                put(Event(type=EventType.STOP, entry_name=entry_name))
+            )
         )
 
     async def _do_stop(self, entry_name: str) -> None:

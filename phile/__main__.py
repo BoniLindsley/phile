@@ -22,11 +22,7 @@ async def async_run(
         launcher_registry.capability_registry[phile.configuration.Entries
                                               ]
     )
-    event_publisher = (
-        launcher_registry.event_publishers[phile.launcher.Registry.stop]
-    )
-    event_view = event_publisher.__aiter__()
-    del event_publisher
+    event_view = launcher_registry.event_queue.__aiter__()
     await asyncio.gather(
         *(start(name) for name in configurations.main_autostart),
         start(cmd_name := 'phile.launcher.cmd'),
@@ -34,8 +30,11 @@ async def async_run(
     )
     if not launcher_registry.is_running(cmd_name):
         return 1
+    expected_event = phile.launcher.Event(
+        type=phile.launcher.EventType.STOP, entry_name=cmd_name
+    )
     async for event in event_view:
-        if event == cmd_name:
+        if event == expected_event:
             break
     return 0
 
