@@ -44,7 +44,7 @@ class TestUnseenNotifier(unittest.TestCase):
 
     def test_constructor_with_just_notify_path(self) -> None:
         phile.tray.imapclient.UnseenNotifier(
-            notification_path=self.notify_path
+            notify_path=self.notify_path
         )
         self.assertFalse(self.notify_path.exists())
 
@@ -56,14 +56,14 @@ class TestUnseenNotifier(unittest.TestCase):
             b"UNSEEN": [b"2"],
         }
         phile.tray.imapclient.UnseenNotifier(
-            notification_path=self.notify_path,
+            notify_path=self.notify_path,
             select_response=select_response
         )
         self.assertTrue(self.notify_path.exists())
 
     def test_add_with_unseen_messages(self) -> None:
         unseen_notifier = phile.tray.imapclient.UnseenNotifier(
-            notification_path=self.notify_path,
+            notify_path=self.notify_path,
         )
         response_lines = [
             (1, b"RECENT"),
@@ -413,11 +413,11 @@ class TestRun(
         )
         self.notify_directory = (
             self.configuration.state_directory_path /
-            self.configuration.notification_directory
+            self.configuration.notify_directory
         )
         self.notify_directory.mkdir()
         self.notify_path = self.notify_directory / (
-            '20-imap-idle' + self.configuration.notification_suffix
+            '20-imap-idle' + self.configuration.notify_suffix
         )
 
     async def asyncSetUp(self) -> None:

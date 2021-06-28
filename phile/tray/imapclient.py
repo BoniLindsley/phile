@@ -32,34 +32,32 @@ class UnseenNotifier(phile.imapclient.FlagTracker):
     """Create a notification to indicate unread emails."""
 
     def __init__(
-        self, *args: typing.Any, notification_path: pathlib.Path,
+        self, *args: typing.Any, notify_path: pathlib.Path,
         **kwargs: typing.Any
     ):
-        self._notification_path = notification_path
-        _logger.info(
-            "Using notification path: %s", self._notification_path
-        )
+        self._notify_path = notify_path
+        _logger.info("Using notification path: %s", self._notify_path)
         super().__init__(*args, **kwargs)
         # Ensure any existing notification file is cleared
         # if there are no new messages.
-        self.update_notification_file()
+        self.update_notify_file()
 
     def select(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().select(*args, **kwargs)
-        self.update_notification_file()
+        self.update_notify_file()
 
     def add(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().add(*args, **kwargs)
-        self.update_notification_file()
+        self.update_notify_file()
 
-    def update_notification_file(self) -> None:
+    def update_notify_file(self) -> None:
         message_counts = self.message_counts
         unknown_count = message_counts['unknown']
         unseen_count = message_counts['unseen']
         _logger.debug("Message status: %s", message_counts)
         if unknown_count or unseen_count:
             _logger.debug("Creating notification file.")
-            self._notification_path.write_text(
+            self._notify_path.write_text(
                 "There are {} + {} unseen messages.".format(
                     unseen_count, unknown_count
                 )
@@ -67,7 +65,7 @@ class UnseenNotifier(phile.imapclient.FlagTracker):
         else:
             try:
                 _logger.debug("Removing notification file.")
-                self._notification_path.unlink()
+                self._notify_path.unlink()
             except FileNotFoundError:
                 _logger.debug("Notification file not found. Ignoring.")
 
@@ -279,17 +277,15 @@ async def run(
                 loop.call_soon_threadsafe(event_queue.put_done)
 
         worker_thread = phile.asyncio.Thread(target=handle_event)
-        notification_directory = (
+        notify_directory = (
             configuration.state_directory_path /
-            configuration.notification_directory
+            configuration.notify_directory
         )
-        notification_directory.mkdir(parents=True, exist_ok=True)
+        notify_directory.mkdir(parents=True, exist_ok=True)
         imap_response_handler = UnseenNotifier(
-            notification_path=(
-                notification_directory / "20-imap-idle.notify"
-            )
+            notify_path=(notify_directory / "20-imap-idle.notify")
         )
-        del notification_directory
+        del notify_directory
         event_reader = event_queue.__aiter__()
         worker_thread.start()
         try:

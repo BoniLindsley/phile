@@ -21,9 +21,9 @@ async def run(
 ) -> None:
     notify_directory = (
         configuration.state_directory_path /
-        configuration.notification_directory
+        configuration.notify_directory
     )
-    notify_suffix = configuration.notification_suffix
+    notify_suffix = configuration.notify_suffix
     notify_directory.mkdir(parents=True, exist_ok=True)
     try:
         notify_sorter = phile.data.SortedLoadCache[phile.notify.File](
@@ -37,7 +37,7 @@ async def run(
         try:
             notify_sorter.refresh(
                 data_directory=notify_directory,
-                data_file_suffix=configuration.notification_suffix
+                data_file_suffix=configuration.notify_suffix
             )
             watchdog_view = await observer.schedule(notify_directory)
             try:

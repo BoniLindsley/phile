@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
--------------------------------
-Test :mod:`phile.configuration`
--------------------------------
-"""
 
 # Standard library.
 import datetime
@@ -124,10 +119,8 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertIsInstance(entries.log_file_path, pathlib.Path)
         self.assertIsInstance(entries.log_stderr_level, int)
         self.assertIsInstance(entries.main_autostart, set)
-        self.assertIsInstance(
-            entries.notification_directory, pathlib.Path
-        )
-        self.assertIsInstance(entries.notification_suffix, str)
+        self.assertIsInstance(entries.notify_directory, pathlib.Path)
+        self.assertIsInstance(entries.notify_suffix, str)
         self.assertIsInstance(entries.pid_path, pathlib.Path)
         self.assertIsInstance(entries.state_directory_path, pathlib.Path)
         self.assertIsInstance(entries.tray_icon_name, str)
@@ -154,9 +147,9 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertEqual(entries.log_stderr_level, 30)
         self.assertEqual(entries.main_autostart, set[str]())
         self.assertEqual(
-            entries.notification_directory, pathlib.Path('notify')
+            entries.notify_directory, pathlib.Path('notify')
         )
-        self.assertEqual(entries.notification_suffix, '.notify')
+        self.assertEqual(entries.notify_suffix, '.notify')
         self.assertEqual(entries.pid_path, pathlib.Path('pid'))
         self.assertEqual(
             entries.state_directory_path, self.state_directory_path
@@ -186,8 +179,8 @@ class TestEntries(PreparesEntries, unittest.TestCase):
             PHILE_LOG_FILE_PATH='lo',
             PHILE_LOG_STDERR_LEVEL='3',
             PHILE_MAIN_AUTOSTART='["au"]',
-            PHILE_NOTIFICATION_DIRECTORY='n',
-            PHILE_NOTIFICATION_SUFFIX='.n',
+            PHILE_NOTIFY_DIRECTORY='n',
+            PHILE_NOTIFY_SUFFIX='.n',
             PHILE_PID_PATH='p',
             PHILE_STATE_DIRECTORY_PATH=str(state_directory_path),
             PHILE_TRAY_ICON_NAME='empty',
@@ -208,10 +201,8 @@ class TestEntries(PreparesEntries, unittest.TestCase):
         self.assertEqual(entries.log_file_path, pathlib.Path('lo'))
         self.assertEqual(entries.log_stderr_level, 3)
         self.assertEqual(entries.main_autostart, set(('au', )))
-        self.assertEqual(
-            entries.notification_directory, pathlib.Path('n')
-        )
-        self.assertEqual(entries.notification_suffix, '.n')
+        self.assertEqual(entries.notify_directory, pathlib.Path('n'))
+        self.assertEqual(entries.notify_suffix, '.n')
         self.assertEqual(entries.pid_path, pathlib.Path('p'))
         self.assertEqual(
             entries.state_directory_path, state_directory_path
@@ -242,8 +233,8 @@ class TestLoad(PreparesEntries, unittest.TestCase):
             'log_file_path': str('lg'),
             'log_stderr_level': 13,
             'main_autostart': ['as'],
-            'notification_directory': 'not',
-            'notification_suffix': '.not',
+            'notify_directory': 'not',
+            'notify_suffix': '.not',
             'pid_path': 'pi',
             'state_directory_path': str(state_directory_path),
             'tray_icon_name': 'tray-empty',
@@ -267,10 +258,8 @@ class TestLoad(PreparesEntries, unittest.TestCase):
         self.assertEqual(entries.log_file_path, pathlib.Path('lg'))
         self.assertEqual(entries.log_stderr_level, 13)
         self.assertEqual(entries.main_autostart, set(('as', )))
-        self.assertEqual(
-            entries.notification_directory, pathlib.Path('not')
-        )
-        self.assertEqual(entries.notification_suffix, '.not')
+        self.assertEqual(entries.notify_directory, pathlib.Path('not'))
+        self.assertEqual(entries.notify_suffix, '.not')
         self.assertEqual(entries.pid_path, pathlib.Path('pi'))
         self.assertEqual(
             entries.state_directory_path, state_directory_path

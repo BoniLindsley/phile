@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
                 ),
                 watched_path=(
                     configuration.state_directory_path /
-                    configuration.notification_directory
+                    configuration.notify_directory
                 ),
                 watching_observer=watching_observer,
             )
@@ -383,9 +383,9 @@ class MainWindow(QMainWindow):
         self.sorter.refresh(
             data_directory=(
                 configuration.state_directory_path /
-                configuration.notification_directory
+                configuration.notify_directory
             ),
-            data_file_suffix=configuration.notification_suffix
+            data_file_suffix=configuration.notify_suffix
         )
         self._entry_point.remove_trigger('show')
         self._entry_point.add_trigger('hide')
@@ -416,7 +416,7 @@ class MainWindow(QMainWindow):
             self.centralWidget().add_notification(**new_data)
         )
         sub_window.show()
-        sub_window.closed.connect(self.on_notification_sub_window_closed)
+        sub_window.closed.connect(self.on_notify_sub_window_closed)
 
     def get_data(
         self,
@@ -428,11 +428,9 @@ class MainWindow(QMainWindow):
             "title": content.title,
         }
 
-    def on_notification_sub_window_closed(
-        self, notification_title: str
-    ) -> None:
+    def on_notify_sub_window_closed(self, notify_title: str) -> None:
         notification = phile.notify.File.from_path_stem(
-            notification_title, configuration=self._configuration
+            notify_title, configuration=self._configuration
         )
         notification.path.unlink(missing_ok=True)
 

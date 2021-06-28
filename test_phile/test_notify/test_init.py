@@ -41,25 +41,25 @@ class TestFileCheckPath(UsesConfiguration, unittest.TestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.notification_directory: pathlib.Path
-        self.notification_suffix: str
+        self.notify_directory: pathlib.Path
+        self.notify_suffix: str
         self.path_filter: collections.abc.Callable[[pathlib.Path], bool]
 
     def setUp(self) -> None:
         super().setUp()
-        self.notification_directory = (
+        self.notify_directory = (
             self.configuration.state_directory_path /
-            self.configuration.notification_directory
+            self.configuration.notify_directory
         )
-        self.notification_suffix = self.configuration.notification_suffix
+        self.notify_suffix = self.configuration.notify_suffix
         self.path_filter = functools.partial(
             phile.notify.File.check_path,
             configuration=self.configuration
         )
 
     def test_check_path__that_passes(self) -> None:
-        name = 'name' + self.notification_suffix
-        path = self.notification_directory / name
+        name = 'name' + self.notify_suffix
+        path = self.notify_directory / name
         self.assertTrue(
             phile.notify.File.check_path(
                 configuration=self.configuration, path=path
@@ -69,8 +69,8 @@ class TestFileCheckPath(UsesConfiguration, unittest.TestCase):
     def test_check_path__is_a_filter_that_uses_configuration(
         self
     ) -> None:
-        name = 'name' + self.notification_suffix
-        path = self.notification_directory / name
+        name = 'name' + self.notify_suffix
+        path = self.notify_directory / name
         self.assertTrue(self.path_filter(path))
 
     def test_make_path__return_value_passes_check_path(self) -> None:
@@ -81,13 +81,13 @@ class TestFileCheckPath(UsesConfiguration, unittest.TestCase):
         self.assertTrue(self.path_filter(path))
 
     def test_check_path__fails_if_wrong_directory(self) -> None:
-        name = 'name' + self.notification_suffix
-        path = self.notification_directory / name / name
+        name = 'name' + self.notify_suffix
+        path = self.notify_directory / name / name
         self.assertTrue(not self.path_filter(path))
 
     def test_check_path__fails_if_wrong_suffix(self) -> None:
-        name = 'name' + self.notification_suffix + '_not'
-        path = self.notification_directory / name
+        name = 'name' + self.notify_suffix + '_not'
+        path = self.notify_directory / name
         self.assertTrue(not self.path_filter(path))
 
 
@@ -95,13 +95,13 @@ class TestFile(UsesConfiguration, unittest.TestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.notification_directory: pathlib.Path
+        self.notify_directory: pathlib.Path
 
     def setUp(self) -> None:
         super().setUp()
-        self.notification_directory = (
+        self.notify_directory = (
             self.configuration.state_directory_path /
-            self.configuration.notification_directory
+            self.configuration.notify_directory
         )
 
     def test_has_default_and_keyword_initialisation(self) -> None:
@@ -178,8 +178,8 @@ class TestFile(UsesConfiguration, unittest.TestCase):
 
     def test_load_retrieves_file_content_and_modified_time(self) -> None:
         text = 'Reminder.'
-        self.notification_directory.mkdir()
-        path = self.notification_directory / 'b'
+        self.notify_directory.mkdir()
+        path = self.notify_directory / 'b'
         # The largest resolution mentioned in Python3 docs
         # is two second for FAT32.
         before = round_down_to_two_seconds(datetime.datetime.now())
@@ -193,20 +193,20 @@ class TestFile(UsesConfiguration, unittest.TestCase):
 
     def test_load_fails_if_missing(self) -> None:
         name = 'missing'
-        path = self.notification_directory / name
+        path = self.notify_directory / name
         file = phile.notify.File(path=path)
         self.assertTrue(not file.load())
 
     def test_load_fails_if_is_directory(self) -> None:
         name = 'missing'
-        path = self.notification_directory / name
+        path = self.notify_directory / name
         path.mkdir(parents=True)
         file = phile.notify.File(path=path)
         self.assertTrue(not file.load())
 
     def test_save_sets_file_content_and_modified_time(self) -> None:
         text = 'Reminder.'
-        path = self.notification_directory / 'b'
+        path = self.notify_directory / 'b'
         file = phile.notify.File(path=path, text=text)
         before = round_down_to_two_seconds(datetime.datetime.now())
         file.save()

@@ -4,7 +4,6 @@
 import argparse
 import io
 import pathlib
-import tempfile
 import typing
 import unittest
 
@@ -64,15 +63,15 @@ class TestProcessArguments(UsesConfiguration, unittest.TestCase):
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.notification_directory_path: pathlib.Path
+        self.notify_directory_path: pathlib.Path
 
     def setUp(self) -> None:
         super().setUp()
-        self.notification_directory_path = (
+        self.notify_directory_path = (
             self.configuration.state_directory_path /
-            self.configuration.notification_directory
+            self.configuration.notify_directory
         )
-        self.notification_directory_path.mkdir()
+        self.notify_directory_path.mkdir()
 
     def test_fails_if_no_arguments_are_given(self) -> None:
         argument_namespace = argparse.Namespace(command=None)
@@ -111,12 +110,12 @@ class TestProcessArguments(UsesConfiguration, unittest.TestCase):
     def test_process_list_request(self) -> None:
         names = [
             'file_with.bad_extension',
-            'this_is_a' + self.configuration.notification_suffix,
-            'another' + self.configuration.notification_suffix,
+            'this_is_a' + self.configuration.notify_suffix,
+            'another' + self.configuration.notify_suffix,
             'not_really_a.notification.just_a_fake_one',
         ]
         for name in names:
-            (self.notification_directory_path / name).touch()
+            (self.notify_directory_path / name).touch()
         argument_namespace = argparse.Namespace(command='list')
         output_stream = io.StringIO()
         return_value = process_arguments(
@@ -216,12 +215,12 @@ class TestProcessArguments(UsesConfiguration, unittest.TestCase):
             notification.text, argument_namespace.content + '\n'
         )
 
-    def test_creates_notification_directory_if_missing(self) -> None:
-        self.notification_directory_path.rmdir()
+    def test_creates_notify_directory_if_missing(self) -> None:
+        self.notify_directory_path.rmdir()
         argument_namespace = argparse.Namespace(command='list')
         return_value = process_arguments(
             argument_namespace=argument_namespace,
             configuration=self.configuration
         )
         self.assertEqual(return_value, 0)
-        self.assertTrue(self.notification_directory_path.is_dir())
+        self.assertTrue(self.notify_directory_path.is_dir())

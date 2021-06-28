@@ -39,14 +39,14 @@ class TestRun(
         self.tray_target = phile.tray.watchdog.Target(
             configuration=self.configuration
         )
-        notification_directory = (
+        notify_directory = (
             self.state_directory_path /
-            self.configuration.notification_directory
+            self.configuration.notify_directory
         )
-        notification_directory.mkdir()
+        notify_directory.mkdir()
         self.notify_path = (
-            notification_directory /
-            ('init' + self.configuration.notification_suffix)
+            notify_directory /
+            ('init' + self.configuration.notify_suffix)
         )
         tray_directory = (
             self.state_directory_path / self.configuration.tray_directory
@@ -121,7 +121,7 @@ class TestRun(
         await phile.asyncio.wait_for(
             self.observer.unschedule(
                 self.state_directory_path /
-                self.configuration.notification_directory
+                self.configuration.notify_directory
             )
         )
         await phile.asyncio.wait_for(self.worker_task)

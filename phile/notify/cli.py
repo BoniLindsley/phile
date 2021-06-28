@@ -35,11 +35,11 @@ def process_arguments(
     if configuration is None:
         configuration = phile.configuration.load()
     command = argument_namespace.command
-    notification_directory = (
+    notify_directory = (
         configuration.state_directory_path /
-        configuration.notification_directory
+        configuration.notify_directory
     )
-    notification_directory.mkdir(parents=True, exist_ok=True)
+    notify_directory.mkdir(parents=True, exist_ok=True)
     if command == 'append':
         notification = phile.notify.File.from_path_stem(
             argument_namespace.name, configuration=configuration
@@ -48,9 +48,9 @@ def process_arguments(
         notification.text += argument_namespace.content + '\n'
         notification.save()
     elif command == 'list':
-        notification_suffix = configuration.notification_suffix
-        for notificaton_file in notification_directory.iterdir():
-            if notificaton_file.suffix == notification_suffix:
+        notify_suffix = configuration.notify_suffix
+        for notificaton_file in notify_directory.iterdir():
+            if notificaton_file.suffix == notify_suffix:
                 print(notificaton_file.stem, file=output_stream)
     elif command == 'read':
         notification = phile.notify.File.from_path_stem(

@@ -41,8 +41,8 @@ class Entries(pydantic.BaseSettings):
     log_file_path = pathlib.Path('phile.log')
     log_stderr_level = 30
     main_autostart = set[str]()
-    notification_directory = pathlib.Path('notify')
-    notification_suffix = '.notify'
+    notify_directory = pathlib.Path('notify')
+    notify_suffix = '.notify'
     pid_path = pathlib.Path('pid')
     state_directory_path = pathlib.Path(
         appdirs.user_state_dir(**_app_meta_data)

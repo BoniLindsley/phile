@@ -30,8 +30,8 @@ class File(phile.data.File):
     ) -> pathlib.Path:
         return (
             configuration.state_directory_path /
-            configuration.notification_directory /
-            (path_stem + configuration.notification_suffix)
+            configuration.notify_directory /
+            (path_stem + configuration.notify_suffix)
         )
 
     def save(self) -> None:

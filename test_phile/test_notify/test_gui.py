@@ -40,9 +40,7 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
         self.content: str
         self.modified_at: datetime.datetime
         self.title: str
-        self.notification_sub_window: (
-            phile.notify.gui.NotificationMdiSubWindow
-        )
+        self.notify_sub_window: phile.notify.gui.NotificationMdiSubWindow
 
     def setUp(self) -> None:
         """
@@ -71,7 +69,7 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
             microsecond=4,
         )
         self.title = 'VaceBook'
-        self.notification_sub_window = (
+        self.notify_sub_window = (
             phile.notify.gui.NotificationMdiSubWindow(
                 content=self.content,
                 modified_at=self.modified_at,
@@ -82,56 +80,50 @@ class TestNotificationMdiSubWindow(UsesQApplication, unittest.TestCase):
     def test_initialisation(self) -> None:
         # The object is created in `setUp`.
         # This tests flags up whether the constructor itself fails.
-        notification_sub_window = self.notification_sub_window
+        notify_sub_window = self.notify_sub_window
         # Check the parameters given in the constructor.
-        self.assertEqual(notification_sub_window.content, self.content)
-        self.assertEqual(
-            notification_sub_window.modified_at, self.modified_at
-        )
-        self.assertEqual(notification_sub_window.title, self.title)
+        self.assertEqual(notify_sub_window.content, self.content)
+        self.assertEqual(notify_sub_window.modified_at, self.modified_at)
+        self.assertEqual(notify_sub_window.title, self.title)
         # It should not be marked as read by default.
-        self.assertTrue(not notification_sub_window.is_read)
+        self.assertTrue(not notify_sub_window.is_read)
 
     def test_content_set_requests_are_processed(self) -> None:
-        notification_sub_window = self.notification_sub_window
+        notify_sub_window = self.notify_sub_window
         new_content = 'This is not content.'
-        notification_sub_window.content = new_content
-        self.assertEqual(notification_sub_window.content, new_content)
+        notify_sub_window.content = new_content
+        self.assertEqual(notify_sub_window.content, new_content)
 
     def test_modified_at_requests_are_processed(self) -> None:
-        notification_sub_window = self.notification_sub_window
+        notify_sub_window = self.notify_sub_window
         new_modified_at = datetime.datetime(year=1999, month=9, day=9)
-        notification_sub_window.modified_at = new_modified_at
-        self.assertEqual(
-            notification_sub_window.modified_at, new_modified_at
-        )
+        notify_sub_window.modified_at = new_modified_at
+        self.assertEqual(notify_sub_window.modified_at, new_modified_at)
 
     def test_event_handling_without_parent_mdi(self) -> None:
-        notification_sub_window = self.notification_sub_window
-        notification_sub_window.showMaximized()
-        notification_sub_window.hide()
+        notify_sub_window = self.notify_sub_window
+        notify_sub_window.showMaximized()
+        notify_sub_window.hide()
 
     def test_mark_as_read_are_processed(self) -> None:
-        notification_sub_window = self.notification_sub_window
-        notification_sub_window.is_read = True
-        self.assertTrue(notification_sub_window.is_read)
-        notification_sub_window.is_read = False
-        self.assertTrue(not notification_sub_window.is_read)
+        notify_sub_window = self.notify_sub_window
+        notify_sub_window.is_read = True
+        self.assertTrue(notify_sub_window.is_read)
+        notify_sub_window.is_read = False
+        self.assertTrue(not notify_sub_window.is_read)
 
     def test_title_set_requests_are_processed(self) -> None:
-        notification_sub_window = self.notification_sub_window
+        notify_sub_window = self.notify_sub_window
         new_title = 'What title?'
-        notification_sub_window.title = new_title
-        self.assertEqual(notification_sub_window.title, new_title)
+        notify_sub_window.title = new_title
+        self.assertEqual(notify_sub_window.title, new_title)
 
     def test_closing_emits_closed_signal(self) -> None:
         listener = QObject()
         listener.on_closed_slot = unittest.mock.Mock()
-        self.notification_sub_window.closed.connect(
-            listener.on_closed_slot
-        )
-        self.notification_sub_window.show()
-        self.notification_sub_window.close()
+        self.notify_sub_window.closed.connect(listener.on_closed_slot)
+        self.notify_sub_window.show()
+        self.notify_sub_window.close()
         self.assertTrue(listener.on_closed_slot.called)
 
 
@@ -148,8 +140,8 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         would interfere with each other.
         """
         super().setUp()
-        self.notification_mdi = phile.notify.gui.NotificationMdi()
-        self.addCleanup(self.notification_mdi.deleteLater)
+        self.notify_mdi = phile.notify.gui.NotificationMdi()
+        self.addCleanup(self.notify_mdi.deleteLater)
 
     def test_initialisation(self) -> None:
         # The object is created in `setUp`.
@@ -157,8 +149,8 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         pass
 
     def test_show_retiles_but_hide_does_not(self) -> None:
-        notification_mdi = self.notification_mdi
-        notification_sub_window = notification_mdi.add_notification(
+        notify_mdi = self.notify_mdi
+        notify_sub_window = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -172,35 +164,35 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 1)
+        self.assertEqual(len(notify_mdi.subWindowList()), 1)
 
         # This triggers resize events which re-tiles.
         # We want to test that adding and showing a sub-window re-tiles.
         # This is to make sure the retile we get later
         # is from adding a sub-window.
-        notification_mdi.show()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        notify_mdi.show()
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
         # Move the sub-window.
         # It will be checked later that it is moved.
-        notification_sub_window.resize(0, 0)
-        notification_sub_window.move(1, 1)
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_sub_window.resize(0, 0)
+        notify_sub_window.move(1, 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
         # Test hiding first since setting up has already shown the MDI.
         # There is no point in repositioning when hiding.
-        notification_mdi.hide()
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_mdi.hide()
+        self.assertEqual(notify_sub_window.pos().x(), 1)
 
         # Try showing it again.
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
         # This time there shouls be a re-tiling.
-        notification_mdi.show()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        notify_mdi.show()
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
     def test_show_and_hide_sub_window_retiles(self) -> None:
-        notification_mdi = self.notification_mdi
+        notify_mdi = self.notify_mdi
 
-        notification_sub_window = notification_mdi.add_notification(
+        notify_sub_window = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -214,26 +206,26 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 1)
+        self.assertEqual(len(notify_mdi.subWindowList()), 1)
 
         # This triggers resize events which re-tiles.
         # We want to test that adding and showing a sub-window re-tiles.
         # This is to make sure the retile we get later
         # is from adding a sub-window.
-        notification_mdi.show()
+        notify_mdi.show()
 
         # Move the sub-window.
         # It will be checked later that it is moved.
-        notification_sub_window.resize(0, 0)
-        notification_sub_window.move(1, 1)
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_sub_window.resize(0, 0)
+        notify_sub_window.move(1, 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
 
         # We cannot tell whether the adding the first sub-window
         # did activate a re-tile or not
         # since the first sub-window typically goes to the top left.
         # Adding another sub-window should trigger a re-tile
         # and move the first sub-window back to the top left.
-        notification_sub_window_2 = notification_mdi.add_notification(
+        notify_sub_window_2 = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -243,24 +235,24 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 2)
-        notification_sub_window_2.show()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        self.assertEqual(len(notify_mdi.subWindowList()), 2)
+        notify_sub_window_2.show()
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
         # Move the sub-window.
         # It will be checked later that it is moved.
-        notification_sub_window.resize(0, 0)
-        notification_sub_window.move(1, 1)
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_sub_window.resize(0, 0)
+        notify_sub_window.move(1, 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
 
-        notification_sub_window_2.hide()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        notify_sub_window_2.hide()
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
     def test_close_sub_window_retiles(self) -> None:
 
-        notification_mdi = self.notification_mdi
+        notify_mdi = self.notify_mdi
 
-        notification_sub_window = notification_mdi.add_notification(
+        notify_sub_window = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -274,7 +266,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        notification_sub_window_2 = notification_mdi.add_notification(
+        notify_sub_window_2 = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -284,7 +276,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 2)
+        self.assertEqual(len(notify_mdi.subWindowList()), 2)
 
         # Showing the MDI triggers resize event which retiles.
         # Also showing after adding sub-windows to the MDI changes
@@ -293,23 +285,23 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # These appear as window state change events.
         # Every change also queues events into the event queue.
         # They are all processed when showing the MDI.
-        notification_mdi.show()
+        notify_mdi.show()
 
         # Move the sub-window.
         # It will be checked later that it will be moved again.
-        notification_sub_window.resize(0, 0)
-        notification_sub_window.move(1, 1)
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_sub_window.resize(0, 0)
+        notify_sub_window.move(1, 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
         # Check that closing the window re-tiles.
         # Closing the window `deleteLater` the window.
         # Handle the event to trigger retiling.
-        notification_sub_window_2.close()
+        notify_sub_window_2.close()
         phile.PySide2.QtCore.process_deferred_delete_events()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
     def test_maximise_and_minimise_sub_window_retiles(self) -> None:
-        notification_mdi = self.notification_mdi
-        notification_sub_window = notification_mdi.add_notification(
+        notify_mdi = self.notify_mdi
+        notify_sub_window = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -323,11 +315,11 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 1)
+        self.assertEqual(len(notify_mdi.subWindowList()), 1)
 
         # Create a second window to check that it will later get re-tiled
         # when the first one will be maximised.
-        notification_sub_window_2 = notification_mdi.add_notification(
+        notify_sub_window_2 = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -337,44 +329,44 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 2)
+        self.assertEqual(len(notify_mdi.subWindowList()), 2)
 
         # Showing the MDI triggers resize event which retiles.
         # The steps here is to get these events out of the way,
         # to make sure that the retile we get later
         # will really be from the maximising.
-        notification_mdi.show()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
-        self.assertEqual(notification_sub_window_2.pos().x(), 0)
+        notify_mdi.show()
+        self.assertEqual(notify_sub_window.pos().x(), 0)
+        self.assertEqual(notify_sub_window_2.pos().x(), 0)
         # Empty the event queue.
         phile.PySide2.QtCore.process_events()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
-        self.assertEqual(notification_sub_window_2.pos().x(), 0)
+        self.assertEqual(notify_sub_window.pos().x(), 0)
+        self.assertEqual(notify_sub_window_2.pos().x(), 0)
 
         # Move the second sub-window.
-        notification_sub_window_2.resize(0, 0)
-        notification_sub_window_2.move(1, 1)
-        self.assertEqual(notification_sub_window_2.pos().x(), 1)
+        notify_sub_window_2.resize(0, 0)
+        notify_sub_window_2.move(1, 1)
+        self.assertEqual(notify_sub_window_2.pos().x(), 1)
         # Maximise the first sub-window and check that a retile occured.
-        notification_sub_window.showMaximized()
-        self.assertEqual(notification_sub_window_2.pos().x(), 0)
+        notify_sub_window.showMaximized()
+        self.assertEqual(notify_sub_window_2.pos().x(), 0)
 
         # Do the same with minimising.
         # Empty the event queue.
         phile.PySide2.QtCore.process_events()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
-        self.assertEqual(notification_sub_window_2.pos().x(), 0)
+        self.assertEqual(notify_sub_window.pos().x(), 0)
+        self.assertEqual(notify_sub_window_2.pos().x(), 0)
         # Move the second sub-window.
-        notification_sub_window_2.resize(0, 0)
-        notification_sub_window_2.move(1, 1)
-        self.assertEqual(notification_sub_window_2.pos().x(), 1)
+        notify_sub_window_2.resize(0, 0)
+        notify_sub_window_2.move(1, 1)
+        self.assertEqual(notify_sub_window_2.pos().x(), 1)
         # Minimise and check.
-        notification_sub_window.showMinimized()
-        self.assertEqual(notification_sub_window_2.pos().x(), 0)
+        notify_sub_window.showMinimized()
+        self.assertEqual(notify_sub_window_2.pos().x(), 0)
 
     def test_resizeEvent_retiles_subwindows(self) -> None:
-        notification_mdi = self.notification_mdi
-        notification_sub_window = notification_mdi.add_notification(
+        notify_mdi = self.notify_mdi
+        notify_sub_window = notify_mdi.add_notification(
             title='WatZap',
             modified_at=datetime.datetime(
                 year=2001,
@@ -388,7 +380,7 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             content='You have 234 friends.\n'
             'You have 5678 messages.'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 1)
+        self.assertEqual(len(notify_mdi.subWindowList()), 1)
 
         # Showing the MDI triggers resize event which retiles.
         # But we cannot tell whether other events also triggers it,
@@ -397,29 +389,29 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
         # with a manual resize.
         # The steps here is to make sure that the retile we get later
         # is really from a resize.
-        notification_mdi.show()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        notify_mdi.show()
+        self.assertEqual(notify_sub_window.pos().x(), 0)
         # Process all events so we know the re-tile
         # will only be from the resize.
         phile.PySide2.QtCore.process_events()
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
         # Move the sub-window
         # and check that it is re-tiled after a resize.
-        notification_sub_window.resize(0, 0)
-        notification_sub_window.move(1, 1)
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_sub_window.resize(0, 0)
+        notify_sub_window.move(1, 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
         # Trigger a resize and check that a retile occured.
-        mdi_size = notification_mdi.size()
-        notification_mdi.resize(mdi_size.width() - 1, mdi_size.height())
-        self.assertEqual(notification_sub_window.pos().x(), 0)
+        mdi_size = notify_mdi.size()
+        notify_mdi.resize(mdi_size.width() - 1, mdi_size.height())
+        self.assertEqual(notify_sub_window.pos().x(), 0)
 
     def test_resizeEvent_in_tabbed_view_mode_does_not_retile(
         self
     ) -> None:
-        notification_mdi = self.notification_mdi
-        notification_mdi.setViewMode(QMdiArea.TabbedView)
-        notification_sub_window = notification_mdi.add_notification(
+        notify_mdi = self.notify_mdi
+        notify_mdi.setViewMode(QMdiArea.TabbedView)
+        notify_sub_window = notify_mdi.add_notification(
             title='VeeCat',
             modified_at=datetime.datetime(
                 year=2002,
@@ -428,21 +420,21 @@ class TestNotificationMdi(UsesQApplication, unittest.TestCase):
             ),
             content='You have 1 friend(s).\n'
         )
-        self.assertEqual(len(notification_mdi.subWindowList()), 1)
+        self.assertEqual(len(notify_mdi.subWindowList()), 1)
 
         # Move the sub-window.
         # It will be checked later that it will not be moved by `show()`.
-        notification_sub_window.resize(0, 0)
-        notification_sub_window.move(1, 1)
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_sub_window.resize(0, 0)
+        notify_sub_window.move(1, 1)
+        self.assertEqual(notify_sub_window.pos().x(), 1)
 
         # When showing the window, the MDI receives a resize event,
         # which in sub-window mode should re-tile,
         # and that is tested in another test method.
         # Re-tiling should not happen here though
         # because the MDI is in tabbed view mode.
-        notification_mdi.show()
-        self.assertEqual(notification_sub_window.pos().x(), 1)
+        notify_mdi.show()
+        self.assertEqual(notify_sub_window.pos().x(), 1)
 
 
 class TestMainWindow(
@@ -589,33 +581,32 @@ class TestMainWindow(
         )
         notification.save()
         # Show all notifications. Pretend there are more than one.
-        notification_2 = phile.notify.File.from_path_stem(
+        notify_2 = phile.notify.File.from_path_stem(
             'Disco',
             configuration=self.configuration,
             text='Happy April Fools\' Day!\n'
         )
-        notification_2.save()
+        notify_2.save()
         # Throw in a file with a wrong suffix.
-        notification_directory = (
+        notify_directory = (
             self.configuration.state_directory_path /
-            self.configuration.notification_directory
+            self.configuration.notify_directory
         )
         (
-            notification_directory /
-            ('file' + self.configuration.notification_suffix + '_not')
+            notify_directory /
+            ('file' + self.configuration.notify_suffix + '_not')
         ).touch()
         # Also throw in a directory that should be ignored.
         (
-            notification_directory /
-            ('subdirectory' + self.configuration.notification_suffix)
+            notify_directory /
+            ('subdirectory' + self.configuration.notify_suffix)
         ).mkdir()
         # Check that they are all detected when showing the main window.
         self.main_window.show()
         phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(2)
         self.assertEqual(
-            self.main_window.sorter.tracked_data[0].text,
-            notification_2.text
+            self.main_window.sorter.tracked_data[0].text, notify_2.text
         )
         self.assertIsNotNone(
             self.main_window.sorter.tracked_data[0].sub_window
@@ -628,7 +619,7 @@ class TestMainWindow(
             self.main_window.sorter.tracked_data[1].sub_window
         )
 
-    def test_close_notification_sub_window_deletes_it(self) -> None:
+    def test_close_notify_sub_window_deletes_it(self) -> None:
         main_window = self.main_window
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -679,7 +670,7 @@ class TestMainWindow(
         # Give cleanup something to delete.
         self.main_window = unittest.mock.Mock()
 
-    def test_new_notification_creates_sub_window(self) -> None:
+    def test_new_notify_creates_sub_window(self) -> None:
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -703,7 +694,7 @@ class TestMainWindow(
             notification.text
         )
 
-    def test_deleting_notification_destroys_sub_window(self) -> None:
+    def test_deleting_notify_destroys_sub_window(self) -> None:
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
@@ -724,7 +715,7 @@ class TestMainWindow(
         phile.PySide2.QtCore.process_events()
         self.assert_tracked_data_length(0)
 
-    def test_modifying_notification_updates_sub_window(self) -> None:
+    def test_modifying_notify_updates_sub_window(self) -> None:
         # There should be no sub-window at the beginning.
         content = 'Happy birthday!\n'
         notification = phile.notify.File.from_path_stem(
@@ -751,7 +742,7 @@ class TestMainWindow(
             content + new_content
         )
 
-    def test_moving_notification_recreates_sub_window(self) -> None:
+    def test_moving_notify_recreates_sub_window(self) -> None:
         # There should be no sub-window at the beginning.
         notification = phile.notify.File.from_path_stem(
             'VeCat',
