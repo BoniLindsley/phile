@@ -160,7 +160,6 @@ class Source:
         assert isinstance(event, watchdog.events.FileMovedEvent)
         self.process_path(path=pathlib.Path(event.dest_path))
 
-    # TODO(BoniLindsley): This does not seem to process deletion.
     def process_path(self, path: pathlib.Path) -> None:
         tray_entry: typing.Optional[phile.tray.Entry] = None
         try:
