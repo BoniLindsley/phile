@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-# TODO(BoniLindsley): Write unittest.
 # TODO(BoniLindsley): Separate non-watchdog content.
 
 # Standard library.

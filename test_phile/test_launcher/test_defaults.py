@@ -664,7 +664,6 @@ class TestAdd(
                 'phile.tray.psutil',
                 'pyside2',
                 'phile.hotkey.pynput',
-                'watchdog.observer',
                 'watchdog.asyncio.observer',
                 'phile.tray.text',
                 'phile.trigger',

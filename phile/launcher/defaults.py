@@ -797,31 +797,6 @@ def add_watchdog_asyncio_observer(
     )
 
 
-# TODO(BoniLindsley): Remove as unused launcher.
-def add_watchdog_observer(
-    launcher_registry: phile.launcher.Registry
-) -> None:
-
-    async def run() -> None:
-        import watchdog.observers
-        import phile.trigger.watchdog
-        async with phile.watchdog.observers.async_open() as observer:
-            with launcher_registry.capability_registry.provide(
-                observer,
-                watchdog.observers.api.BaseObserver,
-            ):
-                await asyncio.get_running_loop().create_future()
-
-    launcher_registry.add_nowait(
-        'watchdog.observer',
-        phile.launcher.Descriptor(
-            capability_name='watchdog.observers.api.BaseObserver',
-            exec_start=[run],
-            type=phile.launcher.Type.CAPABILITY,
-        )
-    )
-
-
 def add(launcher_registry: phile.launcher.Registry) -> None:
     add_configuration(launcher_registry=launcher_registry)
     add_hotkey_gui(launcher_registry=launcher_registry)
@@ -849,4 +824,3 @@ def add(launcher_registry: phile.launcher.Registry) -> None:
     add_trigger_launcher(launcher_registry=launcher_registry)
     add_trigger_watchdog(launcher_registry=launcher_registry)
     add_watchdog_asyncio_observer(launcher_registry=launcher_registry)
-    add_watchdog_observer(launcher_registry=launcher_registry)
