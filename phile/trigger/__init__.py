@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 .. automodule:: phile.trigger.cli
+.. automodule:: phile.trigger.launcher
+.. automodule:: phile.trigger.pyside2
 .. automodule:: phile.trigger.watchdog
 
 --------------

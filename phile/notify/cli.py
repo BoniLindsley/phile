@@ -8,6 +8,7 @@ import typing
 # Internal packages.
 import phile.configuration
 import phile.notify
+import phile.notify.watchdog
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -27,13 +28,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
     return argument_parser
 
 
+# TODO(BoniLindsley): Make async and use notify.Registry for consistency.
 def process_arguments(
     argument_namespace: argparse.Namespace,
-    configuration: typing.Optional[phile.configuration.Entries] = None,
+    configuration: phile.configuration.Entries,
     output_stream: typing.TextIO = sys.stdout
 ) -> int:
-    if configuration is None:
-        configuration = phile.configuration.load()
     command = argument_namespace.command
     notify_directory = (
         configuration.state_directory_path /
@@ -41,35 +41,76 @@ def process_arguments(
     )
     notify_directory.mkdir(parents=True, exist_ok=True)
     if command == 'append':
-        notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
+        try:
+            notify_entry = phile.notify.watchdog.load(
+                name=argument_namespace.name,
+                configuration=configuration,
+            )
+        except FileNotFoundError:
+            notify_entry = phile.notify.Entry(
+                name=argument_namespace.name
+            )
+        notify_entry.text += argument_namespace.content + '\n'
+        phile.notify.watchdog.save(
+            entry=notify_entry, configuration=configuration
         )
-        notification.load()
-        notification.text += argument_namespace.content + '\n'
-        notification.save()
+        #notification = phile.notify.File.from_path_stem(
+        #    argument_namespace.name, configuration=configuration
+        #)
+        #notification.load()
+        #notification.text += argument_namespace.content + '\n'
+        #notification.save()
     elif command == 'list':
+        notify_directory = phile.notify.watchdog.get_directory(
+            configuration=configuration
+        )
         notify_suffix = configuration.notify_suffix
-        for notificaton_file in notify_directory.iterdir():
-            if notificaton_file.suffix == notify_suffix:
-                print(notificaton_file.stem, file=output_stream)
+        for path in notify_directory.glob('*' + notify_suffix):
+            print(
+                path.name.removesuffix(notify_suffix),
+                file=output_stream,
+            )
+        #notify_suffix = configuration.notify_suffix
+        #for notificaton_file in notify_directory.iterdir():
+        #    if notificaton_file.suffix == notify_suffix:
+        #        print(notificaton_file.stem, file=output_stream)
     elif command == 'read':
-        notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
-        )
-        if not notification.load():
+        try:
+            notify_entry = phile.notify.watchdog.load(
+                name=argument_namespace.name,
+                configuration=configuration,
+            )
+        except FileNotFoundError:
             return 1
-        print(notification.text, end='', file=output_stream)
+        print(notify_entry.text, end='', file=output_stream)
+        #notification = phile.notify.File.from_path_stem(
+        #    argument_namespace.name, configuration=configuration
+        #)
+        #if not notification.load():
+        #    return 1
+        #print(notification.text, end='', file=output_stream)
     elif command == 'remove':
-        notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
+        path = phile.notify.watchdog.get_path(
+            name=argument_namespace.name, configuration=configuration
         )
-        notification.path.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
+        #notification = phile.notify.File.from_path_stem(
+        #    argument_namespace.name, configuration=configuration
+        #)
+        #notification.path.unlink(missing_ok=True)
     elif command == 'write':
-        notification = phile.notify.File.from_path_stem(
-            argument_namespace.name, configuration=configuration
+        notify_entry = phile.notify.Entry(
+            name=argument_namespace.name,
+            text=argument_namespace.content + '\n',
         )
-        notification.text = argument_namespace.content + '\n'
-        notification.save()
+        phile.notify.watchdog.save(
+            entry=notify_entry, configuration=configuration
+        )
+        #notification = phile.notify.File.from_path_stem(
+        #    argument_namespace.name, configuration=configuration
+        #)
+        #notification.text = argument_namespace.content + '\n'
+        #notification.save()
     # The following two scopes should be unreachable,
     # since the commands are filtered by ArgumentParser
     # and "no command" is filtered manually before calling this.
@@ -91,7 +132,10 @@ def main(
     if argument_namespace.command is None:
         argument_parser.print_usage()
         return 1
-    return process_arguments(argument_namespace)
+    configuration = phile.configuration.load()
+    return process_arguments(
+        argument_namespace, configuration=configuration
+    )
 
 
 if __name__ == '__main__':  # pragma: no cover

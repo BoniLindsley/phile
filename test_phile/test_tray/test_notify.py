@@ -2,6 +2,7 @@
 
 # Standard library.
 import asyncio
+import datetime
 import pathlib
 import typing
 import unittest
@@ -27,7 +28,8 @@ class TestRun(
         self.default_tray_entry = phile.tray.Entry(
             name='not', text_icon=' M'
         )
-        self.notify_path: pathlib.Path
+        self.notify_entry: phile.notify.Entry
+        self.notify_registry: phile.notify.Registry
         self.tray_target: phile.tray.watchdog.Target
         self.watchdog_view: (
             phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
@@ -44,10 +46,10 @@ class TestRun(
             self.configuration.notify_directory
         )
         notify_directory.mkdir()
-        self.notify_path = (
-            notify_directory /
-            ('init' + self.configuration.notify_suffix)
+        self.notify_entry = phile.notify.Entry(
+            name='a', text='c', modified_at=datetime.datetime.now()
         )
+        self.notify_registry = phile.notify.Registry()
         tray_directory = (
             self.state_directory_path / self.configuration.tray_directory
         )
@@ -59,18 +61,20 @@ class TestRun(
     async def set_up_worker(self) -> None:
         self.worker_task = worker_task = asyncio.create_task(
             phile.tray.notify.run(
-                configuration=self.configuration,
-                observer=self.observer,
+                notify_registry=self.notify_registry,
                 tray_entry=self.default_tray_entry,
                 tray_target=self.tray_target,
             )
         )
-        self.addAsyncCleanup(phile.asyncio.cancel_and_wait, worker_task)
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            phile.asyncio.cancel_and_wait(worker_task)
+        )
         await asyncio.sleep(0)  # Give worker a chance to start.
 
-    async def test_detects_new_notify_file(self) -> None:
+    async def test_detects_new_notifications(self) -> None:
         await self.set_up_worker()
-        self.notify_path.write_text('first')
+        self.notify_registry.add_entry(self.notify_entry)
         await self.assert_watchdog_emits(
             source_view=self.watchdog_view,
             expected_event=watchdog.events.FileCreatedEvent(
@@ -84,8 +88,8 @@ class TestRun(
             ),
         )
 
-    async def test_init_with_existing_notify_file(self) -> None:
-        self.notify_path.write_text('first')
+    async def test_detects_existing_notifications(self) -> None:
+        self.notify_registry.add_entry(self.notify_entry)
         await self.set_up_worker()
         await self.assert_watchdog_emits(
             source_view=self.watchdog_view,
@@ -101,8 +105,8 @@ class TestRun(
         )
 
     async def test_detects_file_removal(self) -> None:
-        await self.test_detects_new_notify_file()
-        self.notify_path.unlink()
+        await self.test_detects_new_notifications()
+        self.notify_registry.discard(self.notify_entry.name)
         await self.assert_watchdog_emits(
             source_view=self.watchdog_view,
             expected_event=watchdog.events.FileDeletedEvent(
@@ -116,12 +120,9 @@ class TestRun(
             ),
         )
 
-    async def test_stops_gracefully_if_observer_stopped(self) -> None:
+    async def test_stops_gracefully_if_notify_registry_closes(
+        self
+    ) -> None:
         await self.set_up_worker()
-        await phile.asyncio.wait_for(
-            self.observer.unschedule(
-                self.state_directory_path /
-                self.configuration.notify_directory
-            )
-        )
+        self.notify_registry.close()
         await phile.asyncio.wait_for(self.worker_task)

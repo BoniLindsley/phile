@@ -126,12 +126,19 @@ class UsesRunningTmuxServer(UsesTmux, unittest.IsolatedAsyncioTestCase):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        self.addCleanup(
-            lambda: tmux_client_one.kill()
-            if tmux_client_one.returncode is None else None
-        )
-        await phile.asyncio.wait_for(tmux_client_one.wait())
+        try:
+            await phile.asyncio.wait_for(tmux_client_one.wait())
+        except:
+            if tmux_client_one.returncode is None:
+                tmux_client_one.kill()
+            raise
         self.assertEqual(tmux_client_one.returncode, 0)
+
+        async def kill_server() -> None:
+            killer = await phile.tmux.kill_server()
+            await killer.wait()
+
+        self.addAsyncCleanup(phile.asyncio.wait_for, kill_server())
 
 
 class TestKillServer(

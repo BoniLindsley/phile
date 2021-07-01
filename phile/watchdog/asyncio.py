@@ -462,7 +462,7 @@ def filter_path(
 ) -> bool:
     if path.parent != expected_parent:
         return False
-    return path.suffix == expected_suffix
+    return path.name.endswith(expected_suffix)
 
 
 async def monitor_file_existence(

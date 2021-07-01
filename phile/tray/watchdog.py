@@ -160,18 +160,20 @@ class Source:
         assert isinstance(event, watchdog.events.FileMovedEvent)
         self.process_path(path=pathlib.Path(event.dest_path))
 
+    # TODO(BoniLindsley): This does not seem to process deletion.
     def process_path(self, path: pathlib.Path) -> None:
-        if path.name.endswith(self._tray_suffix):
-            try:
-                tray_entry = load(
-                    path=path, tray_suffix=self._tray_suffix
-                )
-            except FileNotFoundError:
-                return
-            except json.decoder.JSONDecodeError:
-                _logger.debug('Tray file JSON is ill-formed: %s', path)
-                return
-            self._tray_registry.set(tray_entry)
+        tray_entry: typing.Optional[phile.tray.Entry] = None
+        try:
+            tray_entry = load(path=path, tray_suffix=self._tray_suffix)
+        except (FileNotFoundError, NotADirectoryError):
+            pass
+        except json.decoder.JSONDecodeError:
+            _logger.debug('Tray file JSON is ill-formed: %s', path)
+        entry_name = path.name.removesuffix(self._tray_suffix)
+        if tray_entry is None:
+            self._tray_registry.discard(entry_name)
+            return
+        self._tray_registry.add_entry(tray_entry)
 
 
 @contextlib.asynccontextmanager

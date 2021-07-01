@@ -2,236 +2,133 @@
 
 # Standard library.
 import bisect
-import contextlib
 import dataclasses
-import itertools
-import pathlib
+import enum
+import logging
 import typing
+import warnings
 
 # Internal packages.
-import phile.configuration
+import phile.asyncio.pubsub
+
+# TODO[mypy issue #1422]: __loader__ not defined
+_loader_name: str = __loader__.name  # type: ignore[name-defined]
+_logger = logging.getLogger(_loader_name)
 
 
-class SortableLoadData(typing.Protocol):
-    """Requirements for use in :class:`~phile.data.SortedLoadCache`."""
-
-    path: pathlib.Path
-    """Path from which the data was loaded."""
+class Bisectable(typing.Protocol):
 
     def __eq__(self, other: object) -> bool:
-        ...
+        ...  # pragma: no cover
 
-    def __lt__(self, other: object) -> bool:
-        ...
-
-    def load(self) -> bool:
-        return self.path.is_file()
+    def __lt__(self, other: typing.Any) -> bool:
+        ...  # pragma: no cover
 
 
-_F = typing.TypeVar('_F', bound='File')
+_ValueT = typing.TypeVar('_ValueT')
+_KeyT = typing.TypeVar('_KeyT', bound=Bisectable)
+
+
+class EventType(enum.Enum):
+    DISCARD = enum.auto()
+    INSERT = enum.auto()
+    SET = enum.auto()
 
 
 @dataclasses.dataclass
-class File(SortableLoadData):
-    """Initialisers are expected to use keyword arguments."""
+class Event(typing.Generic[_KeyT, _ValueT]):
+    type: EventType
+    index: int
+    key: _KeyT
+    value: _ValueT
+    current_keys: list[_KeyT]
+    current_values: list[_ValueT]
 
-    path: pathlib.Path
-    """Path from which the data was loaded."""
 
-    def __eq__(self, other: object) -> bool:
-        pair = (self.path.name, self.path.parent)
-        if isinstance(other, File):
-            return pair == (other.path.name, other.path.parent)
-        elif isinstance(other, pathlib.Path):
-            return pair == (other.name, other.parent)
-        else:
-            return NotImplemented
+class Registry(typing.Generic[_KeyT, _ValueT]):
 
-    def __lt__(self, other: object) -> bool:
-        pair = (self.path.name, self.path.parent)
-        if isinstance(other, File):
-            return pair < (other.path.name, other.path.parent)
-        elif isinstance(other, pathlib.Path):
-            return pair < (other.name, other.parent)
-        else:
-            return NotImplemented
-
-    @classmethod
-    def from_path_stem(
-        cls: typing.Type[_F],
-        path_stem: str,
-        *args: typing.Any,
-        configuration: phile.configuration.Entries,
-        **kwargs: typing.Any,
-    ) -> _F:
-        """Dataclasses do not allow keyword-only arguments."""
-        assert 'path' not in kwargs
-        kwargs['path'] = cls.make_path(
-            path_stem, *args, configuration=configuration, **kwargs
-        )
-        return cls(*args, **kwargs)
-
-    @classmethod
-    def check_path(
-        cls, path: pathlib.Path, *args: typing.Any, **kwargs: typing.Any
-    ) -> bool:
-        return cls.make_path(path.stem, *args, **kwargs) == path
-
-    @staticmethod
-    def make_path(
-        path_stem: str,
-        *args: typing.Any,
-        configuration: phile.configuration.Entries,
-        **kwargs: typing.Any,
-    ) -> pathlib.Path:
-        return configuration.state_directory_path / (
-            path_stem + '.phile'
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # TODO[mypy issue 4001]: Remove type ignore.
+        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+        self.current_keys: list[_KeyT] = []
+        """Read-only for user."""
+        self.current_values: list[_ValueT] = []
+        """Read-only for user."""
+        self.event_queue = (
+            phile.asyncio.pubsub.Queue[Event[_KeyT, _ValueT]]()
         )
 
+    def close(self) -> None:
+        self.event_queue.close()
 
-_D = typing.TypeVar('_D', bound=SortableLoadData)
-_D_co = typing.TypeVar('_D_co', bound=SortableLoadData, covariant=True)
-
-
-class UpdateCallback(typing.Protocol[_D]):
-    """
-    Replacement for ``Callable[[int, _D, List[_D]], None]``.
-
-    Calling a callable member is not handled correctly by mypy yet.
-    Specifically, ``self.load(0)`` is treated as a two-argument call
-    even if ``self.load`` is a callable variable.
-    See: https://github.com/python/mypy/issues/708#issuecomment-667989040
-    """
-
-    def __call__(
-        self, __index: int, __changed_data: _D,
-        __tracked_data: typing.List[_D]
-    ) -> None:
-        ...
-
-
-class CreateFile(typing.Protocol[_D_co]):
-    """Replacement for ``Callable[[pathlib.Path], _D_co]``."""
-
-    def __call__(self, __source_path: pathlib.Path) -> _D_co:
-        ...
-
-
-@dataclasses.dataclass
-class SortedLoadCache(typing.Generic[_D]):
-    """Collects loadable files into a sorted list."""
-
-    @staticmethod
-    def _noop_update(
-        index: int, changed_data: _D, tracked_data: typing.List[_D]
-    ) -> None:
-        pass
-
-    create_file: CreateFile[_D]
-    """
-    Called to create  a file object, possibly to be added to the cache.
-    """
-    on_insert: UpdateCallback[_D] = _noop_update
-    """
-    Called when an untracked file is found.
-
-    :param index:
-        The position at which the new data was inserted.
-        So ``tracked_data[index] == changed_data``.
-    :param changed_data:
-        Content of the newly loaded data.
-    :param tracked_data:
-        The cache list after insertion.
-    """
-    on_pop: UpdateCallback[_D] = _noop_update
-    """
-    Called when a tracked notify file is deleted.
-
-    :param index:
-        The position at which the removed data was at.
-        So ``tracked_data[index] != changed_data``.
-    :param changed_data:
-        Content of the removed data.
-    :param tracked_data:
-        The cache list after removal.
-    """
-    on_set: UpdateCallback[_D] = _noop_update
-    """
-    Called when a tracked notify file is modified.
-
-    :param index:
-        The position at which the update data was at.
-        So ``tracked_data[index] != changed_data``.
-    :param changed_data:
-        Content of the updated data.
-    :param tracked_data:
-        The cache list after update.
-    """
-    tracked_data: typing.List[_D] = dataclasses.field(
-        default_factory=list
-    )
-    """Keeps track of known data files."""
-
-    def refresh(
-        self, data_directory: pathlib.Path, data_file_suffix: str
-    ) -> None:
-        """
-        Refresh :data:`tracked_data`
-        to match the content of the given ``data_directory``.
-
-        :param data_directory: The directory to search for files in.
-        :param data_file_suffix:
-            Files of the given suffix in ``data_directory`` are loaded.
-        """
-        tracked_paths = [data.path for data in self.tracked_data]
-        globbed_paths = data_directory.glob('*' + data_file_suffix)
-        self.update_paths(itertools.chain(tracked_paths, globbed_paths))
-
-    def update_tracked(self) -> None:
-        """Try to :meth:`update` every path of :data:`tracked_data`."""
-        tracked_paths = [data.path for data in self.tracked_data]
-        self.update_paths(tracked_paths)
-
-    def update_paths(
-        self, data_paths: typing.Iterable[pathlib.Path]
-    ) -> None:
-        """Try to :meth:`update` the given ``data_paths``."""
-        for data_path in data_paths:
-            self.update(data_path)
-
-    def update(self, data_path: pathlib.Path) -> None:
-        """
-        Try to :data:`create` File` of ``data_path``
-        and then load and add it to :data:`tracked_data`.
-
-        :param data_path:
-            Path of file to be loaded from.
-            It is up to the :data:`create` callback
-            to validate the name if necessary.
-
-        Calls to :data:`on_insert`, :data:`on_pop` and :data:`on_set`
-        depending on how :data:`tracked_data` is changed
-        from the data load attempt.
-        The :data:`tracked_data` is updated before the calls.
-        """
-        index = bisect.bisect_left(self.tracked_data, data_path)
-        is_tracked = False
-        file: _D
+    def discard(self, key: _KeyT) -> None:
+        index = bisect.bisect_left(self.current_keys, key)
         try:
-            file = self.tracked_data[index]
+            if self.current_keys[index] != key:
+                return
         except IndexError:
-            pass
-        else:
-            is_tracked = (file.path == data_path)
-        if not is_tracked:
-            file = self.create_file(data_path)
-        if not file.load():
-            if is_tracked:
-                file = self.tracked_data.pop(index)
-                self.on_pop(index, file, self.tracked_data)
-        elif is_tracked:
-            self.tracked_data[index] = file
-            self.on_set(index, file, self.tracked_data)
-        else:
-            self.tracked_data.insert(index, file)
-            self.on_insert(index, file, self.tracked_data)
+            return
+        _logger.debug('Removing notification %s', key)
+        old_value = self.current_values.pop(index)
+        self.current_keys.pop(index)
+        self._put_event(
+            type=EventType.DISCARD,
+            index=index,
+            key=key,
+            value=old_value,
+        )
+
+    def set(self, key: _KeyT, value: _ValueT) -> None:
+        index = bisect.bisect_left(self.current_keys, key)
+        try:
+            old_key = self.current_keys[index]
+        except IndexError:
+            self._insert(index, key, value)
+            return
+        if old_key != key:
+            self._insert(index, key, value)
+            return
+        if self.current_values[index] == value:
+            return
+        _logger.debug('Updating notification %s', key)
+        self.current_values[index] = value
+        self._put_event(
+            type=EventType.SET,
+            index=index,
+            key=key,
+            value=value,
+        )
+
+    def _insert(self, index: int, key: _KeyT, value: _ValueT) -> None:
+        _logger.debug('Inserting notification %s', key)
+        self.current_values.insert(index, value)
+        self.current_keys.insert(index, key)
+        self._put_event(
+            type=EventType.INSERT,
+            index=index,
+            key=key,
+            value=value,
+        )
+
+    def _put_event(
+        self,
+        type: EventType,  # pylint: disable=redefined-builtin
+        index: int,
+        key: _KeyT,
+        value: _ValueT,
+    ) -> None:
+        try:
+            self.event_queue.put(
+                Event[_KeyT, _ValueT](
+                    type=type,
+                    index=index,
+                    key=key,
+                    value=value,
+                    current_keys=self.current_keys.copy(),
+                    current_values=self.current_values.copy(),
+                )
+            )
+        except phile.asyncio.pubsub.Node.AlreadySet:
+            warnings.warn(
+                'Registry should not be changed after closing.'
+            )

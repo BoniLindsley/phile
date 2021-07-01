@@ -147,6 +147,50 @@ class TestAddKeyring(
         self.assertTrue(self.launcher_registry.contains('keyring'))
 
 
+class TestAddNotify(
+    UsesLauncherRegistry,
+    unittest.IsolatedAsyncioTestCase,
+):
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.launcher_name: str
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.launcher_name = 'phile.notify'
+
+    def test_add_launcher(self) -> None:
+        phile.launcher.defaults.add_notify(
+            launcher_registry=self.launcher_registry
+        )
+        self.assertTrue(
+            self.launcher_registry.contains(self.launcher_name)
+        )
+
+    async def test_start_launcher(self) -> None:
+        self.test_add_launcher()
+        await phile.asyncio.wait_for(
+            self.launcher_registry.state_machine.start(
+                self.launcher_name
+            )
+        )
+        self.addAsyncCleanup(
+            phile.asyncio.wait_for,
+            self.launcher_registry.state_machine.stop(
+                self.launcher_name
+            )
+        )
+
+    async def test_provides_notify_registry(self) -> None:
+        await self.test_start_launcher()
+        capability_type = phile.notify.Registry
+        self.assertIsInstance(
+            self.capability_registry.get(capability_type),
+            capability_type,
+        )
+
+
 class TestAddTray(
     UsesLauncherRegistry,
     unittest.IsolatedAsyncioTestCase,
@@ -437,6 +481,9 @@ class TestAddTrayNotify(
         phile.launcher.defaults.add_configuration(
             launcher_registry=self.launcher_registry
         )
+        phile.launcher.defaults.add_notify(
+            launcher_registry=self.launcher_registry
+        )
         phile.launcher.defaults.add_tray(
             launcher_registry=self.launcher_registry
         )
@@ -465,12 +512,8 @@ class TestAddTrayTmux(
     unittest.IsolatedAsyncioTestCase,
 ):
 
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.launcher_name: str
-
-    async def asyncSetUp(self) -> None:
-        await super().asyncSetUp()
+    def setUp(self) -> None:
+        super().setUp()
         self.launcher_name = 'phile.tray.tmux'
 
     def test_add_launcher(self) -> None:
@@ -603,6 +646,7 @@ class TestAdd(
         self.assertEqual(
             set(self.launcher_registry.database.remover.keys()),
             {
+                # TODO(BoniLindsley): Sort this list.
                 'phile.tray.pyside2.window',
                 'phile.log.file',
                 'phile.trigger.watchdog',
@@ -628,5 +672,8 @@ class TestAdd(
                 'phile.configuration',
                 'phile.tray.datetime',
                 'phile.tray',
+                'phile.notify',
+                'phile.notify.pyside2',
+                'phile.notify.watchdog',
             },
         )

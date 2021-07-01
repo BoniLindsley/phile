@@ -22,6 +22,7 @@ import PySide2.QtWidgets
 import phile.configuration
 import phile.PySide2.QtCore
 import phile.trigger
+import phile.trigger.pyside2
 
 # TODO[mypy issue #1422]: __loader__ not defined
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
@@ -294,69 +295,12 @@ class HotkeyInput(PressedKeySequence, PySide2.QtWidgets.QLabel):
                 self._trigger_registry.activate_if_shown(target)
 
 
-class TriggerControlled:
-
-    def __init__(
-        self,
-        *args: typing.Any,
-        pyside2_executor: phile.PySide2.QtCore.Executor,
-        trigger_prefix: typing.Optional[str] = None,
-        trigger_registry: phile.trigger.Registry,
-        **kwargs: typing.Any,
-    ) -> None:
-        # TODO[mypy issue 4001]: Remove type ignore.
-        super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        # Pylint is ignoring the type cast.
-        assert widget.isWidgetType()  # pylint: disable=no-member
-        self._trigger_prefix = (
-            _loader_name if trigger_prefix is None else trigger_prefix
-        )
-        self.trigger_producer = phile.trigger.Provider(
-            callback_map={
-                self._trigger_prefix + '.show':
-                    functools.partial(
-                        pyside2_executor.submit,
-                        widget.show,  # pylint: disable=no-member
-                    ),
-                self._trigger_prefix + '.hide':
-                    functools.partial(
-                        pyside2_executor.submit,
-                        widget.hide,  # pylint: disable=no-member
-                    ),
-            },
-            registry=trigger_registry
-        )
-        self.trigger_producer.bind()
-        self.trigger_producer.show(self._trigger_prefix + '.show')
-
-    def closeEvent(self, event: PySide2.QtGui.QCloseEvent) -> None:
-        widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        # Pylint is ignoring the type cast.
-        widget.closeEvent(event)  # pylint: disable=no-member
-        self.trigger_producer.unbind()
-
-    def hideEvent(self, event: PySide2.QtGui.QHideEvent) -> None:
-        widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        # Pylint is ignoring the type cast.
-        widget.hideEvent(event)  # pylint: disable=no-member
-        self.trigger_producer.hide(self._trigger_prefix + '.hide')
-        self.trigger_producer.show(self._trigger_prefix + '.show')
-
-    def showEvent(self, event: PySide2.QtGui.QShowEvent) -> None:
-        widget = typing.cast(PySide2.QtWidgets.QWidget, super())
-        # Pylint is ignoring the type cast.
-        widget.showEvent(event)  # pylint: disable=no-member
-        self.trigger_producer.hide(self._trigger_prefix + '.show')
-        self.trigger_producer.show(self._trigger_prefix + '.hide')
-
-
 # A little difficult to test this.
 # Using layout triggers warnings in stdout logs.
 # Should be okay to not test this,
 # since it is just a wrapper window to use a widget.
 class HotkeyDialog(
-    TriggerControlled, PySide2.QtWidgets.QDialog
+    phile.trigger.pyside2.TriggerControlled, PySide2.QtWidgets.QDialog
 ):  # pragma: no cover
 
     def __init__(
@@ -368,6 +312,7 @@ class HotkeyDialog(
     ) -> None:
         super().__init__(
             *args,
+            trigger_prefix=_loader_name,
             trigger_registry=trigger_registry,
             **kwargs,
         )

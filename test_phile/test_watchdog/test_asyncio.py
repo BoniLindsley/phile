@@ -555,6 +555,15 @@ class TestFilterPath(
         )
         self.assertFalse(passes_filter)
 
+    def test_returns_true_if_expected_suffix_is_blank(self) -> None:
+        event_path = (self.temporary_directory / 'something.file_wrong')
+        passes_filter = phile.watchdog.asyncio.filter_path(
+            event_path,
+            expected_parent=self.temporary_directory,
+            expected_suffix=''
+        )
+        self.assertTrue(passes_filter)
+
 
 async def to_async_iter(
     source: collections.abc.Iterable[_T]

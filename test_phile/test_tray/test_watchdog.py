@@ -21,6 +21,7 @@ import phile
 import phile.asyncio
 import phile.asyncio.pubsub
 import phile.configuration
+import phile.data
 import phile.watchdog.asyncio
 import phile.tray
 import phile.tray.watchdog
@@ -210,12 +211,13 @@ class TestSource(
         event = await phile.asyncio.wait_for(event_view.__anext__())
         expected_entry = phile.tray.Entry(name='n', text_icon='')
         self.assertEqual(
-            event,
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            event, phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=0,
-                changed_entry=expected_entry,
-                current_entries=[expected_entry],
+                key='n',
+                value=expected_entry,
+                current_keys=['n'],
+                current_values=[expected_entry],
             )
         )
 
@@ -260,12 +262,13 @@ class TestSource(
         event = await phile.asyncio.wait_for(event_view.__anext__())
         expected_entry = phile.tray.Entry(name='n', text_icon='')
         self.assertEqual(
-            event,
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            event, event, phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=0,
-                changed_entry=expected_entry,
-                current_entries=[expected_entry],
+                key='n',
+                value=expected_entry,
+                current_keys=['n'],
+                current_values=[expected_entry],
             )
         )
 
@@ -284,9 +287,11 @@ class TestSource(
         expected_entry = phile.tray.Entry(name='n', text_icon='')
 
         async def assert_contains(
-            expected_event: phile.tray.Event
+            expected_event: phile.data.Event[str, phile.tray.Entry]
         ) -> None:
-            received_events: list[phile.tray.Event] = []
+            received_events: (
+                list[phile.data.Event[str, phile.tray.Entry]]
+            ) = []
 
             async def run() -> None:
                 async for event in event_view:
@@ -307,11 +312,13 @@ class TestSource(
                 raise self.failureException(message) from error
 
         await assert_contains(
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=0,
-                changed_entry=expected_entry,
-                current_entries=[expected_entry],
+                key='n',
+                value=expected_entry,
+                current_keys=['n'],
+                current_values=[expected_entry],
             )
         )
 
@@ -364,23 +371,25 @@ class TestSource(
         event = await phile.asyncio.wait_for(event_view.__anext__())
         expected_entry = phile.tray.Entry(name='n', text_icon='')
         self.assertEqual(
-            event,
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            event, phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=0,
-                changed_entry=expected_entry,
-                current_entries=[expected_entry],
+                key='n',
+                value=expected_entry,
+                current_keys=['n'],
+                current_values=[expected_entry],
             )
         )
         event_2 = await phile.asyncio.wait_for(event_view.__anext__())
         expected_entry_2 = phile.tray.Entry(name='p', text_icon='')
         self.assertEqual(
-            event_2,
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            event_2, phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=1,
-                changed_entry=expected_entry_2,
-                current_entries=[expected_entry, expected_entry_2],
+                key='p',
+                value=expected_entry_2,
+                current_keys=['n', 'p'],
+                current_values=[expected_entry, expected_entry_2],
             )
         )
         self.tray_registry.close()
@@ -398,7 +407,10 @@ class TestAsyncOpen(
         self.observer: phile.watchdog.asyncio.Observer
         self.tray_directory: pathlib.Path
         self.tray_registry: phile.tray.Registry
-        self.tray_event_view: phile.asyncio.pubsub.View[phile.tray.Event]
+        self.tray_event_view: phile.asyncio.pubsub.View[phile.data.Event[
+            str,
+            phile.tray.Entry,
+        ]]
         self.tray_source: phile.tray.watchdog.Source
 
     async def asyncSetUp(self) -> None:
@@ -428,7 +440,8 @@ class TestAsyncOpen(
         )
 
     async def wait_for_event(
-        self, expected_event: phile.tray.Event
+        self,
+        expected_event: phile.data.Event[str, phile.tray.Entry],
     ) -> None:
 
         async def wait() -> None:
@@ -445,19 +458,23 @@ class TestAsyncOpen(
         tray_path_2.touch()
         expected_entry = phile.tray.Entry(name='n', text_icon='')
         await self.wait_for_event(
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=0,
-                changed_entry=expected_entry,
-                current_entries=[expected_entry],
+                key='n',
+                value=expected_entry,
+                current_keys=['n'],
+                current_values=[expected_entry],
             )
         )
         expected_entry_2 = phile.tray.Entry(name='p', text_icon='')
         await self.wait_for_event(
-            phile.tray.Event(
-                type=phile.tray.EventType.INSERT,
+            phile.data.Event[str, phile.tray.Entry](
+                type=phile.data.EventType.INSERT,
                 index=1,
-                changed_entry=expected_entry_2,
-                current_entries=[expected_entry, expected_entry_2],
+                key='p',
+                value=expected_entry_2,
+                current_keys=['n', 'p'],
+                current_values=[expected_entry, expected_entry_2],
             )
         )

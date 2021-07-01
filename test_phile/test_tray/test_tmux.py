@@ -58,7 +58,7 @@ class TestRun(
         self.addAsyncCleanup(phile.asyncio.cancel_and_wait, run_task)
 
     async def test_checks_for_existing_files(self) -> None:
-        self.tray_registry.set(
+        self.tray_registry.add_entry(
             phile.tray.Entry(name='year', text_icon='2345')
         )
         await self.async_set_up_run()
@@ -69,7 +69,7 @@ class TestRun(
     async def test_checks_for_file_changes(self) -> None:
         await self.async_set_up_run()
         await phile.asyncio.wait_for(self.check_status_right_set_to(''))
-        self.tray_registry.set(
+        self.tray_registry.add_entry(
             phile.tray.Entry(name='year', text_icon='3456')
         )
         await self.check_status_right_set_to('3456')

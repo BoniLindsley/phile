@@ -267,6 +267,106 @@ def add_keyring(launcher_registry: phile.launcher.Registry) -> None:
     )
 
 
+def add_notify(launcher_registry: phile.launcher.Registry) -> None:
+
+    async def run() -> None:
+        import phile.notify
+        notify_registry = phile.notify.Registry()
+        try:
+            with launcher_registry.capability_registry.provide(
+                notify_registry
+            ):
+                await asyncio.get_running_loop().create_future()
+        finally:
+            notify_registry.close()
+
+    launcher_registry.add_nowait(
+        'phile.notify',
+        phile.launcher.Descriptor(
+            capability_name='phile.notify.Registry',
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
+        )
+    )
+
+
+def add_notify_pyside2(
+    launcher_registry: phile.launcher.Registry
+) -> None:
+
+    async def run() -> None:
+        import phile.PySide2.QtCore
+        import phile.notify
+        import phile.notify.pyside2
+        import phile.trigger
+        capability_registry = launcher_registry.capability_registry
+        await phile.notify.pyside2.run(
+            notify_registry=capability_registry[phile.notify.Registry],
+            trigger_registry=capability_registry[phile.trigger.Registry],
+            pyside2_executor=(
+                capability_registry[phile.PySide2.QtCore.Executor]
+            ),
+        )
+
+    launcher_registry.add_nowait(
+        'phile.notify.pyside2',
+        phile.launcher.Descriptor(
+            after={
+                'phile.notify',
+                'phile.trigger',
+                'pyside2',
+            },
+            binds_to={
+                'phile.notify',
+                'phile.trigger',
+                'pyside2',
+            },
+            exec_start=[run],
+        )
+    )
+
+
+def add_notify_watchdog(
+    launcher_registry: phile.launcher.Registry
+) -> None:
+
+    async def run() -> None:
+        import phile.configuration
+        import phile.notify.watchdog
+        import phile.watchdog.asyncio
+        capability_registry = launcher_registry.capability_registry
+        async with phile.notify.watchdog.async_open(
+            configuration=(
+                capability_registry[phile.configuration.Entries]
+            ),
+            observer=(
+                capability_registry[phile.watchdog.asyncio.BaseObserver]
+            ),
+            notify_registry=capability_registry[phile.notify.Registry],
+        ) as notify_target:
+            with capability_registry.provide(notify_target):
+                await asyncio.get_running_loop().create_future()
+
+    launcher_registry.add_nowait(
+        'phile.notify.watchdog',
+        phile.launcher.Descriptor(
+            after={
+                'phile.configuration',
+                'phile.notify',
+                'watchdog.asyncio.observer',
+            },
+            binds_to={
+                'phile.configuration',
+                'phile.notify',
+                'watchdog.asyncio.observer',
+            },
+            capability_name='phile.notify.watchdog.Target',
+            exec_start=[run],
+            type=phile.launcher.Type.CAPABILITY,
+        )
+    )
+
+
 def add_tmux(launcher_registry: phile.launcher.Registry) -> None:
 
     async def run() -> None:
@@ -365,36 +465,20 @@ def add_tray_imap(launcher_registry: phile.launcher.Registry) -> None:
 def add_tray_notify(launcher_registry: phile.launcher.Registry) -> None:
 
     async def run() -> None:
-        import phile.configuration
+        import phile.notify
         import phile.tray.notify
         import phile.tray.watchdog
-        import phile.watchdog.asyncio
         capability_registry = launcher_registry.capability_registry
         await phile.tray.notify.run(
-            configuration=(
-                capability_registry[phile.configuration.Entries]
-            ),
-            observer=(
-                capability_registry[phile.watchdog.asyncio.BaseObserver]
-            ),
-            tray_target=(
-                capability_registry[phile.tray.watchdog.Target]
-            ),
+            notify_registry=capability_registry[phile.notify.Registry],
+            tray_target=capability_registry[phile.tray.watchdog.Target],
         )
 
     launcher_registry.add_nowait(
         'phile.tray.notify',
         phile.launcher.Descriptor(
-            after={
-                'phile.configuration',
-                'phile.tray.watchdog',
-                'watchdog.asyncio.observer',
-            },
-            binds_to={
-                'phile.configuration',
-                'phile.tray.watchdog',
-                'watchdog.asyncio.observer',
-            },
+            after={'phile.notify', 'phile.tray.watchdog'},
+            binds_to={'phile.notify', 'phile.tray.watchdog'},
             exec_start=[run],
         )
     )
@@ -713,6 +797,7 @@ def add_watchdog_asyncio_observer(
     )
 
 
+# TODO(BoniLindsley): Remove as unused launcher.
 def add_watchdog_observer(
     launcher_registry: phile.launcher.Registry
 ) -> None:
@@ -746,6 +831,9 @@ def add(launcher_registry: phile.launcher.Registry) -> None:
     add_log_stderr(launcher_registry=launcher_registry)
     add_keyring(launcher_registry=launcher_registry)
     add_launcher_cmd(launcher_registry=launcher_registry)
+    add_notify(launcher_registry=launcher_registry)
+    add_notify_pyside2(launcher_registry=launcher_registry)
+    add_notify_watchdog(launcher_registry=launcher_registry)
     add_pyside2(launcher_registry=launcher_registry)
     add_tmux(launcher_registry=launcher_registry)
     add_tray(launcher_registry=launcher_registry)
