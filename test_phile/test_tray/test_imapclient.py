@@ -227,42 +227,76 @@ class TestIdle(PreparesIMAPClient, unittest.TestCase):
     def is_idle(self) -> bool:
         return phile.imapclient.is_idle(self.imap_client)
 
+    def assert_is_idle_soon(self, iteration_limit: int = 4) -> None:
+        for response in self.responses:
+            del response
+            if self.is_idle():
+                return
+            iteration_limit -= 1
+            if iteration_limit <= 0:
+                break
+        raise self.failureException('Did not become idle.')
+
+    def assert_not_idle_soon(self, iteration_limit: int = 4) -> None:
+        for response in self.responses:
+            del response
+            if not self.is_idle():
+                return
+            iteration_limit -= 1
+            if iteration_limit <= 0:
+                break
+        raise self.failureException('Did not stop idle.')
+
+    def assert_stops_soon(self, iteration_limit: int = 4) -> None:
+        for response in self.responses:
+            del response
+            iteration_limit -= 1
+            if iteration_limit <= 0:
+                raise self.failureException('Did not stop.')
+
     def test_stops_if_stop_socket_has_data(self) -> None:
         self.stop_writer.sendall(b'\0')
         self.assertTrue(not self.is_idle())
-
-        next(self.responses)  # Exit IDLE state.
-        self.assertTrue(not self.is_idle())
-
-        with self.assertRaises(StopIteration):
-            next(self.responses)
+        self.assert_not_idle_soon()
+        self.assert_stops_soon()
 
     def test_yields_responses_until_stop(self) -> None:
         self.imap_client._imap._server_socket.sendall(b'\0')
-
-        next(self.responses)  # IDLE check response.
-        self.assertTrue(self.is_idle())
-
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock.idle_check',
+            return_value=[(1, b'EXISTS')],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        self.assert_is_idle_soon()  # IDLE check response.
+        self.assert_is_idle_soon()  # IDLE check response.
         self.stop_writer.sendall(b'\0')
-        next(self.responses)  # IDLE check response.
-        self.assertTrue(self.is_idle())
+        self.assert_not_idle_soon()  # Exit IDLE state.
+        self.assert_stops_soon()
 
-        next(self.responses)  # Exit IDLE state.
-        self.assertTrue(not self.is_idle())
-
-        with self.assertRaises(StopIteration):
-            next(self.responses)
+    def test_gives_up_if_empty_response_returned(self) -> None:
+        self.imap_client._imap._server_socket.sendall(b'\0')
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock.idle_check',
+            return_value=[(1, b'EXISTS')],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        self.assert_is_idle_soon()
+        patcher = unittest.mock.patch(
+            'test_phile.test_imapclient.IMAPClientMock.idle_check',
+            return_value=[],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        self.assert_not_idle_soon()
+        self.assert_stops_soon()
 
     def test_refreshes_idle_state_if_timeout(self) -> None:
-        next(self.responses)  # Exit IDLE state from timeout
-        self.assertTrue(not self.is_idle())
-
+        self.assert_not_idle_soon()  # Exit IDLE state from timeout.
         self.stop_writer.sendall(b'\0')
-        next(self.responses)  # Exit IDLE state.
-        self.assertTrue(not self.is_idle())
-
-        with self.assertRaises(StopIteration):
-            next(self.responses)
+        self.assert_not_idle_soon()  # Exit IDLE state.
+        self.assert_stops_soon()
 
 
 class TestEventType(unittest.TestCase):
@@ -339,51 +373,58 @@ class TestReadFromServer(UsesIMAPClient, unittest.TestCase):
             )
         )
 
+    def assert_returns_event_type_soon(
+        self,
+        expected_event_type: phile.tray.imapclient.EventType,
+        iteration_limit: int = 4,
+    ) -> None:
+        received_events: list[phile.tray.imapclient.Event] = []
+        for event in self.events:
+            received_events.append(event)
+            if event['type'] == expected_event_type:
+                return
+            iteration_limit -= 1
+            if iteration_limit <= 0:
+                break
+        raise self.failureException(
+            'Expected event type:\n  {}\n'
+            'Received:\n  {}'.format(
+                expected_event_type, received_events
+            )
+        )
+
+    def assert_stops_soon(self, iteration_limit: int = 4) -> None:
+        received_events: list[phile.tray.imapclient.Event] = []
+        for event in self.events:
+            received_events.append(event)
+            iteration_limit -= 1
+            if iteration_limit <= 0:
+                raise self.failureException(
+                    'Expected to stop. Not stopped.\n'
+                    'Received:\n  {}'.format(received_events)
+                )
+
     def test_stops_if_stop_socket_has_data(self) -> None:
         self.stop_writer.sendall(b'\0')
-        with self.assertRaises(StopIteration):
-            next(self.events)
+        self.assert_stops_soon()
 
     def test_refreshes_idle_state_if_timeout(self) -> None:
-        event = next(self.events)  # SELECT event on connect.
-        self.assertEqual(
-            event['type'],
-            phile.tray.imapclient.EventType.SELECT,
-        )
-        event = next(self.events)  # Exit IDLE state.
-        self.assertEqual(
-            event['type'],
-            phile.tray.imapclient.EventType.ADD,
+        self.assert_returns_event_type_soon(
+            phile.tray.imapclient.EventType.ADD  # First connect.
         )
         self.stop_writer.sendall(b'\0')
-        event = next(self.events)  # Exit IDLE state.
-        self.assertEqual(
-            event['type'],
-            phile.tray.imapclient.EventType.ADD,
+        self.assert_returns_event_type_soon(
+            phile.tray.imapclient.EventType.ADD  # Refresh idle state.
         )
-        with self.assertRaises(StopIteration):
-            next(self.events)
 
     def test_reconnects_after_disconnect(self) -> None:
-        event = next(self.events)  # SELECT event on connect.
-        self.assertEqual(
-            event['type'],
-            phile.tray.imapclient.EventType.SELECT,
+        self.assert_returns_event_type_soon(
+            phile.tray.imapclient.EventType.ADD  # First connect.
         )
         self.imap_clients[0].shutdown()
-        event = next(self.events)  # SELECT event on reconnect.
-        self.assertEqual(
-            event['type'],
-            phile.tray.imapclient.EventType.SELECT,
+        self.assert_returns_event_type_soon(
+            phile.tray.imapclient.EventType.ADD  # Reconnect.
         )
-        self.stop_writer.sendall(b'\0')
-        event = next(self.events)  # Exit IDLE state.
-        self.assertEqual(
-            event['type'],
-            phile.tray.imapclient.EventType.ADD,
-        )
-        with self.assertRaises(StopIteration):
-            next(self.events)
 
 
 class TestRun(

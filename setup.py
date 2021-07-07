@@ -4,7 +4,7 @@ from setuptools import setup  # type: ignore
 
 setup(
     name='phile',
-    version='0.0.0.1',
+    version='0.0.0.2',
     description='A file-based notification management',
     author='Boni Lindsley',
     author_email='boni.lindsley@gmail.com',

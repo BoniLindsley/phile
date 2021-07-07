@@ -152,6 +152,10 @@ def idle(
                 if imap_socket in rlist:
                     idle_response = imap_client.idle_check(timeout=0)
                     _logger.debug("IDLE response: %s", idle_response)
+                    # If no data is returned, the conenction is closed.
+                    # Try to stop. idle_done will likely error.
+                    if not idle_response:
+                        return
                     yield idle_response
                     del idle_response
                 if stop_socket in rlist:
@@ -186,6 +190,15 @@ def read_from_server(
     # First connect does not need a delay.
     reconnect_delay = datetime.timedelta(seconds=0)
     while True:
+        # Reset the database before waiting.
+        yield Event(
+            type=EventType.SELECT,
+            select_response={
+                b"EXISTS": 0,
+                b"FLAGS": tuple(),
+                b"RECENT": 0,
+            },
+        )
         _logger.info("Connecting in %s.", reconnect_delay)
         rlist, wlist, xlist = select.select([
             stop_socket
