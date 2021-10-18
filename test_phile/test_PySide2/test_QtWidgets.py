@@ -19,7 +19,6 @@ from .test_QtCore import UsesPySide2
 
 
 class UsesQApplication(UsesPySide2, unittest.TestCase):
-
     def setUp(self) -> None:
         """Starts a ``QApplication`` that will be cleaned up."""
         super().setUp()

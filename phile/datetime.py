@@ -6,7 +6,7 @@ import typing
 
 
 def timedelta_to_seconds(
-    timedelta: typing.Optional[datetime.timedelta] = None
+    timedelta: typing.Optional[datetime.timedelta] = None,
 ) -> typing.Optional[float]:
     """Convert timedelta to seconds, preserving :data:`None`."""
     if timedelta is None:

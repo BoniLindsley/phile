@@ -17,7 +17,6 @@ import phile.asyncio.pubsub
 
 
 class TestNode(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.node: phile.asyncio.pubsub.Node[int]
@@ -103,7 +102,6 @@ class TestNode(unittest.IsolatedAsyncioTestCase):
 
 
 class TestView(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.node: phile.asyncio.pubsub.Node[int]
@@ -140,7 +138,6 @@ class TestView(unittest.IsolatedAsyncioTestCase):
 
 
 class TestQueue(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.queue: phile.asyncio.pubsub.Queue[int]
@@ -164,7 +161,6 @@ class TestQueue(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(awaiter)
 
     async def test_is_iterator(self) -> None:
-
         async def fetch() -> list[int]:
             return [value async for value in self.queue]
 

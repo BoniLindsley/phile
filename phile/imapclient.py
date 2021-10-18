@@ -17,9 +17,9 @@ import phile.asyncio
 
 _logger = logging.getLogger(__name__)
 
-ExistsResponse = tuple[int, typing.Literal[b'EXISTS']]
-ExpungeResponse = tuple[int, typing.Literal[b'EXPUNGE']]
-FetchResponse = tuple[int, typing.Literal[b'FETCH'], tuple[typing.Any]]
+ExistsResponse = tuple[int, typing.Literal[b"EXISTS"]]
+ExpungeResponse = tuple[int, typing.Literal[b"EXPUNGE"]]
+FetchResponse = tuple[int, typing.Literal[b"FETCH"], tuple[typing.Any]]
 ResponseLine = typing.Union[
     # Cannot seem to use a union of responses types.
     # mypy casts b'EXPUNGE' to bytes when evaluating a tuple
@@ -47,8 +47,9 @@ def get_socket(imap_client: imapclient.IMAPClient) -> socket.socket:
 
 def is_idle(imap_client: imapclient.IMAPClient) -> bool:
     idle_tag = imap_client._idle_tag
-    return ((idle_tag is not None)
-            and (idle_tag in imap_client._imap.tagged_commands))
+    return (idle_tag is not None) and (
+        idle_tag in imap_client._imap.tagged_commands
+    )
 
 
 class FlagTracker:
@@ -63,8 +64,7 @@ class FlagTracker:
     """
 
     def __init__(
-        self,
-        select_response: typing.Optional[SelectResponse] = None
+        self, select_response: typing.Optional[SelectResponse] = None
     ) -> None:
 
         self._response_handlers: (
@@ -93,10 +93,12 @@ class FlagTracker:
         self._message_count = select_response[b"EXISTS"]
         self._unknown_message_ids.clear()
         self._unseen_message_ids.clear()
-        self._unseen_message_ids.update({
-            int(encoded_id.decode())
-            for encoded_id in select_response.get(b'UNSEEN', [])
-        })
+        self._unseen_message_ids.update(
+            {
+                int(encoded_id.decode())
+                for encoded_id in select_response.get(b"UNSEEN", [])
+            }
+        )
         """A list of IDs of messages whose seen status is unknown."""
 
     def add(self, untagged_response: list[ResponseLine]) -> None:
@@ -168,7 +170,7 @@ class FlagTracker:
             So it must be `b'EXISTS'`.
         """
 
-        assert response_line[1] == b'EXISTS'
+        assert response_line[1] == b"EXISTS"
         new_message_count = response_line[0]
         old_message_count = self._message_count
         for message_id in self._unseen_message_ids:
@@ -202,7 +204,7 @@ class FlagTracker:
             So it must be `b'EXPUNGE'`.
         """
 
-        assert response_line[1] == b'EXPUNGE'
+        assert response_line[1] == b"EXPUNGE"
         message_id_to_remove = response_line[0]
         assert message_id_to_remove <= self._message_count
 
@@ -248,7 +250,7 @@ class FlagTracker:
             Of concern to this function is only the `b'FLAGS'` entry.
         """
 
-        assert response_line[1] == b'FETCH'
+        assert response_line[1] == b"FETCH"
         message_id = response_line[0]
         response_data = response_line[2]
 
@@ -256,11 +258,12 @@ class FlagTracker:
         # Search for all of them, though we expect only one.
         response_data_size = len(response_data)
         flag_name_indices = [
-            index for index, value in enumerate(response_data)
+            index
+            for index, value in enumerate(response_data)
             # Data names only appear with even indicies.
             if index % 2 == 0
             # Only find data about flags.
-            and value == b'FLAGS'
+            and value == b"FLAGS"
             # Index at the end does not make
             # If entry `index` gives a data name,
             # then entry `index + 1` must exist to contain its value,
@@ -282,7 +285,7 @@ class FlagTracker:
             # The message is unseen if the flag is missing.
             # If the mssage is seen, remove its ID from the unseen list.
             # Otherwise, make sure the ID is in the list.
-            if b'\\Seen' in flag_tuple:
+            if b"\\Seen" in flag_tuple:
                 self._unseen_message_ids.discard(message_id)
             else:
                 self._unseen_message_ids.add(message_id)

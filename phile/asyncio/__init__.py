@@ -20,17 +20,17 @@ import socket
 import threading
 import typing
 
-_T = typing.TypeVar('_T')
-_T_co = typing.TypeVar('_T_co', covariant=True)
+_T = typing.TypeVar("_T")
+_T_co = typing.TypeVar("_T_co", covariant=True)
 
 # TODO[mypy issue #1422]: __loader__ not defined
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
 _logger = logging.getLogger(_loader_name)
 
-wait_for_timeout: contextvars.ContextVar[datetime.timedelta] = (
-    contextvars.ContextVar(
-        'wait_for_timeout', default=datetime.timedelta(seconds=2)
-    )
+wait_for_timeout: contextvars.ContextVar[
+    datetime.timedelta
+] = contextvars.ContextVar(
+    "wait_for_timeout", default=datetime.timedelta(seconds=2)
 )
 """Default timeout value for :func:`wait_for`."""
 
@@ -52,7 +52,7 @@ async def wait_for(
 
 
 async def cancel_and_wait(
-    target: asyncio.Future[_T]
+    target: asyncio.Future[_T],
 ) -> typing.Optional[_T]:
     target.cancel()
     try:
@@ -83,29 +83,32 @@ def handle_exceptions(
         task.exception() for task in done_tasks if not task.cancelled()
     )
     raised_exceptions = (
-        exception for exception in possible_exceptions
+        exception
+        for exception in possible_exceptions
         if exception is not None
     )
     handle_exception = loop.call_exception_handler
     for exception in raised_exceptions:
-        handle_exception({
-            'message': 'Unhandled exception during loop shutdown.',
-            'exception': exception,
-        })
+        handle_exception(
+            {
+                "message": "Unhandled exception during loop shutdown.",
+                "exception": exception,
+            }
+        )
 
 
 def close() -> None:
     loop = asyncio.get_event_loop()
     try:
         try:
-            _logger.debug('Cancelling existing asyncio tasks.')
+            _logger.debug("Cancelling existing asyncio tasks.")
             pending_tasks = asyncio.all_tasks(loop)
             if pending_tasks:
                 cancel(pending_tasks)
                 handle_exceptions(pending_tasks)
             del pending_tasks
         finally:
-            _logger.debug('Shutting down asyncio loop states.')
+            _logger.debug("Shutting down asyncio loop states.")
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.run_until_complete(loop.shutdown_default_executor())
     finally:
@@ -185,7 +188,6 @@ async def readable(
 
 
 class Thread(threading.Thread):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.__running_loop = asyncio.get_running_loop()
@@ -212,7 +214,6 @@ class QueueClosed(Exception):
 
 # Pylint does not think it is a type anymore when [_T] is appended.
 class Queue(asyncio.Queue[_T]):  # pylint: disable=inherit-non-class
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self._closed = asyncio.Event()
@@ -227,8 +228,10 @@ class Queue(asyncio.Queue[_T]):  # pylint: disable=inherit-non-class
             pass
         close_checker = asyncio.create_task(self._closed.wait())
         getter = asyncio.create_task(super().get())
-        tasks_to_wait_for: set[asyncio.Task[typing.Any]
-                               ] = {close_checker, getter}
+        tasks_to_wait_for: set[asyncio.Task[typing.Any]] = {
+            close_checker,
+            getter,
+        }
         try:
             done, _pending = await asyncio.wait(
                 tasks_to_wait_for,
@@ -251,12 +254,12 @@ class Queue(asyncio.Queue[_T]):  # pylint: disable=inherit-non-class
 
     async def put(self, item: _T) -> None:
         if self._closed.is_set():
-            raise QueueClosed('Cannot put items into a closed queue.')
+            raise QueueClosed("Cannot put items into a closed queue.")
         await super().put(item)
 
     def put_nowait(self, item: _T) -> None:
         if self._closed.is_set():
-            raise QueueClosed('Cannot put items into a closed queue.')
+            raise QueueClosed("Cannot put items into a closed queue.")
         super().put_nowait(item)
 
 
@@ -275,8 +278,9 @@ class ThreadedTextIOBase:
         self._buffered_lines: Queue[str] = Queue()
         self._loop = asyncio.get_event_loop()
         self._parent_stream = parent_stream
-        self._request_queue: queue.SimpleQueue[bool] = queue.SimpleQueue(
-        )
+        self._request_queue: queue.SimpleQueue[
+            bool
+        ] = queue.SimpleQueue()
         self._worker_thread = Thread(target=self._run, daemon=True)
         self._worker_thread.start()
 
@@ -297,7 +301,7 @@ class ThreadedTextIOBase:
             self._request_queue.put_nowait(True)
             return await self._buffered_lines.get()
         except QueueClosed as error:
-            raise ValueError('No more data available.') from error
+            raise ValueError("No more data available.") from error
 
     def _run(self) -> None:
         try:

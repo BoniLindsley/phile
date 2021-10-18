@@ -5,8 +5,8 @@ import contextlib
 import types
 import typing
 
-_Key = typing.TypeVar('_Key')
-_Value = typing.TypeVar('_Value')
+_Key = typing.TypeVar("_Key")
+_Value = typing.TypeVar("_Value")
 
 
 def provide_item(
@@ -14,9 +14,7 @@ def provide_item(
     key: _Key,
     value: _Value,
 ) -> contextlib.AbstractContextManager[None]:
-
     class Popper(contextlib.AbstractContextManager[None]):
-
         def __exit__(
             self,
             exc_type: typing.Optional[typing.Type[BaseException]],

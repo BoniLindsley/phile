@@ -32,7 +32,6 @@ from test_phile.test_watchdog.test_asyncio import UsesObserver
 class TestProducer(
     UsesObserver, UsesConfiguration, unittest.IsolatedAsyncioTestCase
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.callback_called: asyncio.Event
@@ -64,11 +63,11 @@ class TestProducer(
             side_effect=callback_side_effect
         )
         self.trigger_directory = (
-            self.configuration.state_directory_path /
-            self.configuration.trigger_directory
+            self.configuration.state_directory_path
+            / self.configuration.trigger_directory
         )
         self.trigger_directory.mkdir()
-        self.trigger_name = 'nothing'
+        self.trigger_name = "nothing"
         self.trigger_file_path = self.trigger_directory / (
             self.trigger_name + self.configuration.trigger_suffix
         )
@@ -93,7 +92,7 @@ class TestProducer(
         self.runner = asyncio.create_task(self.producer.run())
         self.addAsyncCleanup(
             phile.asyncio.wait_for,
-            phile.asyncio.cancel_and_wait(self.runner)
+            phile.asyncio.cancel_and_wait(self.runner),
         )
 
     async def assert_called_with_soon(
@@ -193,7 +192,7 @@ class TestProducer(
             self.watchdog_view,
             watchdog.events.FileDeletedEvent(
                 str(self.trigger_file_path)
-            )
+            ),
         )
 
     async def test_run__unbinds_on_exit(self) -> None:
@@ -235,8 +234,8 @@ class TestView(
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.trigger_directory = (
-            self.configuration.state_directory_path /
-            self.configuration.trigger_directory
+            self.configuration.state_directory_path
+            / self.configuration.trigger_directory
         )
         self.trigger_directory.mkdir()
         self.observer = phile.watchdog.asyncio.Observer()
@@ -249,10 +248,9 @@ class TestView(
         )
         self.observer_view = event_queue.__aiter__()
         self.trigger_callback = test_phile.threaded_mock.ThreadedMock()
-        self.trigger_name = 'nothing'
-        self.trigger_file_path = (
-            self.trigger_directory /
-            (self.trigger_name + self.configuration.trigger_suffix)
+        self.trigger_name = "nothing"
+        self.trigger_file_path = self.trigger_directory / (
+            self.trigger_name + self.configuration.trigger_suffix
         )
         self.trigger_registry = phile.trigger.Registry()
         self.trigger_registry.bind(
@@ -287,7 +285,6 @@ class TestView(
     async def wait_for_event(
         self, expected_event: watchdog.events.FileSystemEvent
     ) -> None:
-
         async def get_event_until() -> None:
             async for event in self.observer_view:
                 if event == expected_event:
@@ -317,40 +314,32 @@ class TestView(
         )
         # It should be picked up by the initialisation.
         await self.wait_for_event(
-            watchdog.events.FileCreatedEvent(
-                str(self.trigger_file_path)
-            )
+            watchdog.events.FileCreatedEvent(str(self.trigger_file_path))
         )
 
     async def test_showing_trigger_creates_file(self) -> None:
         self.assertTrue(not self.trigger_file_path.is_file())
         self.trigger_registry.show(self.trigger_name)
         await self.wait_for_event(
-            watchdog.events.FileCreatedEvent(
-                str(self.trigger_file_path)
-            )
+            watchdog.events.FileCreatedEvent(str(self.trigger_file_path))
         )
 
     async def test_activating_trigger_deletes_file(self) -> None:
         self.trigger_registry.show(self.trigger_name)
         self.trigger_registry.activate(self.trigger_name)
         await self.wait_for_event(
-            watchdog.events.FileDeletedEvent(
-                str(self.trigger_file_path)
-            )
+            watchdog.events.FileDeletedEvent(str(self.trigger_file_path))
         )
 
     async def test_hiding_trigger_deletes_file(self) -> None:
         self.trigger_registry.show(self.trigger_name)
         self.trigger_registry.hide(self.trigger_name)
         await self.wait_for_event(
-            watchdog.events.FileDeletedEvent(
-                str(self.trigger_file_path)
-            )
+            watchdog.events.FileDeletedEvent(str(self.trigger_file_path))
         )
 
     async def test_unbinding_trigger_is_ignored(self) -> None:
-        new_trigger_name = 'something'
+        new_trigger_name = "something"
         self.trigger_registry.bind(new_trigger_name, lambda: None)
         self.trigger_registry.unbind(new_trigger_name)
         # Force an action that would produce an event.
@@ -361,20 +350,16 @@ class TestView(
     async def test_deleting_file_activates_trigger(self) -> None:
         self.trigger_registry.show(self.trigger_name)
         await self.wait_for_event(
-            watchdog.events.FileCreatedEvent(
-                str(self.trigger_file_path)
-            )
+            watchdog.events.FileCreatedEvent(str(self.trigger_file_path))
         )
         self.trigger_file_path.unlink()
         await self.wait_for_event(
-            watchdog.events.FileDeletedEvent(
-                str(self.trigger_file_path)
-            )
+            watchdog.events.FileDeletedEvent(str(self.trigger_file_path))
         )
         self.trigger_callback.assert_called_with_soon()
 
     async def test_deleting_non_trigger_file_does_nothing(self) -> None:
-        wrong_file = pathlib.Path(str(self.trigger_file_path) + 'wrong')
+        wrong_file = pathlib.Path(str(self.trigger_file_path) + "wrong")
         wrong_file.touch()
         wrong_file.unlink()
         await self.wait_for_event(
@@ -386,10 +371,10 @@ class TestView(
         await self.test_showing_trigger_creates_file()
 
     async def test_deleting_file_of_unbound_trigger_is_ignored(
-        self
+        self,
     ) -> None:
         unbound_trigger_file_path = self.trigger_directory / (
-            'unbound' + self.configuration.trigger_suffix
+            "unbound" + self.configuration.trigger_suffix
         )
         unbound_trigger_file_path.touch()
         unbound_trigger_file_path.unlink()
@@ -404,5 +389,5 @@ class TestView(
         await self.test_showing_trigger_creates_file()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

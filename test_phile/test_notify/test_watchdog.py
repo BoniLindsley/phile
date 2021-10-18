@@ -22,7 +22,7 @@ from test_phile.test_configuration.test_init import UsesConfiguration
 
 
 def round_down_to_two_seconds(
-    source: datetime.datetime
+    source: datetime.datetime,
 ) -> datetime.datetime:
     return source - datetime.timedelta(
         seconds=source.second % 2, microseconds=source.microsecond
@@ -30,17 +30,17 @@ def round_down_to_two_seconds(
 
 
 def round_up_to_two_seconds(
-    source: datetime.datetime
+    source: datetime.datetime,
 ) -> datetime.datetime:
     return source + (
-        datetime.timedelta(minutes=1) - datetime.timedelta(
+        datetime.timedelta(minutes=1)
+        - datetime.timedelta(
             seconds=source.second, microseconds=source.microsecond
         )
     ) % datetime.timedelta(seconds=2)
 
 
 class TimeInterval:
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -50,8 +50,10 @@ class TimeInterval:
 
 
 def assert_entry_is(
-    test_case: unittest.TestCase, entry: phile.notify.Entry,
-    target_entry: phile.notify.Entry, modified_interval: TimeInterval
+    test_case: unittest.TestCase,
+    entry: phile.notify.Entry,
+    target_entry: phile.notify.Entry,
+    modified_interval: TimeInterval,
 ) -> None:
     test_case.assertEqual(entry.name, target_entry.name)
     test_case.assertEqual(entry.text, target_entry.text)
@@ -61,7 +63,7 @@ def assert_entry_is(
     )
     test_case.assertLessEqual(
         entry.modified_at,
-        round_up_to_two_seconds(modified_interval.after)
+        round_up_to_two_seconds(modified_interval.after),
     )
 
 
@@ -75,7 +77,6 @@ def mark_time_interval() -> collections.abc.Iterator[TimeInterval]:
 
 
 class TestGetDirectory(UsesConfiguration, unittest.TestCase):
-
     def test_returns_path(self) -> None:
         directory_path = phile.notify.watchdog.get_directory(
             configuration=self.configuration
@@ -84,11 +85,10 @@ class TestGetDirectory(UsesConfiguration, unittest.TestCase):
 
 
 class TestGetPath(UsesConfiguration, unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.path = phile.notify.watchdog.get_path(
-            name='n', configuration=self.configuration
+            name="n", configuration=self.configuration
         )
 
     def test_returns_path(self) -> None:
@@ -99,7 +99,7 @@ class TestGetPath(UsesConfiguration, unittest.TestCase):
             self.path.name.removesuffix(
                 self.configuration.notify_suffix
             ),
-            'n',
+            "n",
         )
 
     def test_path_in_get_directory(self) -> None:
@@ -117,10 +117,9 @@ class TestGetPath(UsesConfiguration, unittest.TestCase):
 
 
 class TestLoadFromPath(UsesConfiguration, unittest.TestCase):
-
     def test_reads_from_given_path(self) -> None:
-        notify_name = 'n'
-        notify_text = 't'
+        notify_name = "n"
+        notify_text = "t"
         notify_directory = phile.notify.watchdog.get_directory(
             configuration=self.configuration
         )
@@ -144,9 +143,8 @@ class TestLoadFromPath(UsesConfiguration, unittest.TestCase):
 
 
 class TestLoad(UsesConfiguration, unittest.TestCase):
-
     def test_reads_from_given_path(self) -> None:
-        notify_entry = phile.notify.Entry(name='n', text='t')
+        notify_entry = phile.notify.Entry(name="n", text="t")
         notify_directory = phile.notify.watchdog.get_directory(
             configuration=self.configuration
         )
@@ -168,9 +166,8 @@ class TestLoad(UsesConfiguration, unittest.TestCase):
 
 
 class TestSave(UsesConfiguration, unittest.TestCase):
-
     def test_writes_inside_notify_directory(self) -> None:
-        notify_entry = phile.notify.Entry(name='n', text='t')
+        notify_entry = phile.notify.Entry(name="n", text="t")
         notify_directory = phile.notify.watchdog.get_directory(
             configuration=self.configuration
         )
@@ -186,13 +183,12 @@ class TestSave(UsesConfiguration, unittest.TestCase):
 
 
 class TestTarget(UsesConfiguration, unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.target = phile.notify.watchdog.Target(
             configuration=self.configuration
         )
-        self.notify_entry = phile.notify.Entry(name='n', text='t')
+        self.notify_entry = phile.notify.Entry(name="n", text="t")
         self.notify_path = phile.notify.watchdog.get_path(
             name=self.notify_entry.name,
             configuration=self.configuration,
@@ -207,7 +203,7 @@ class TestTarget(UsesConfiguration, unittest.TestCase):
 
     def test_set__writes_to_file_if_exists(self) -> None:
         self.target.set(entry=self.notify_entry)
-        self.notify_entry.text = 's'
+        self.notify_entry.text = "s"
         self.target.set(entry=self.notify_entry)
         file_content = self.notify_path.read_text()
         self.assertEqual(file_content, self.notify_entry.text)
@@ -223,7 +219,7 @@ class TestTarget(UsesConfiguration, unittest.TestCase):
 
     def test_close__pops_any_entries_set(self) -> None:
         self.target.set(entry=self.notify_entry)
-        notify_entry_2 = phile.notify.Entry(name='m')
+        notify_entry_2 = phile.notify.Entry(name="m")
         self.target.set(entry=notify_entry_2)
         self.target.close()
         self.assertTrue(not self.notify_path.exists())
@@ -240,14 +236,13 @@ class TestTarget(UsesConfiguration, unittest.TestCase):
 class TestUpdatePath(
     UsesConfiguration, unittest.IsolatedAsyncioTestCase
 ):
-
     def setUp(self) -> None:
         super().setUp()
         self.notify_directory = phile.notify.watchdog.get_directory(
             configuration=self.configuration
         )
         self.notify_directory.mkdir()
-        self.notify_entry = phile.notify.Entry(name='n', text='c')
+        self.notify_entry = phile.notify.Entry(name="n", text="c")
         self.notify_path = phile.notify.watchdog.get_path(
             name=self.notify_entry.name,
             configuration=self.configuration,
@@ -258,8 +253,7 @@ class TestUpdatePath(
     async def test_inserts_entry_if_unknown(self) -> None:
         with mark_time_interval() as created_between:
             phile.notify.watchdog.save(
-                entry=self.notify_entry,
-                configuration=self.configuration
+                entry=self.notify_entry, configuration=self.configuration
             )
         await phile.asyncio.wait_for(
             phile.notify.watchdog.update_path(
@@ -289,11 +283,10 @@ class TestUpdatePath(
 
     async def test_sets_entry_if_known(self) -> None:
         await self.test_inserts_entry_if_unknown()
-        self.notify_entry.text = 'd'
+        self.notify_entry.text = "d"
         with mark_time_interval() as created_between:
             phile.notify.watchdog.save(
-                entry=self.notify_entry,
-                configuration=self.configuration
+                entry=self.notify_entry, configuration=self.configuration
             )
         await phile.asyncio.wait_for(
             phile.notify.watchdog.update_path(
@@ -379,14 +372,13 @@ class TestUpdatePath(
 class TestUpdateExistingPaths(
     UsesConfiguration, unittest.IsolatedAsyncioTestCase
 ):
-
     def setUp(self) -> None:
         super().setUp()
         self.notify_directory = phile.notify.watchdog.get_directory(
             configuration=self.configuration
         )
         self.notify_directory.mkdir()
-        self.notify_entry = phile.notify.Entry(name='n', text='c')
+        self.notify_entry = phile.notify.Entry(name="n", text="c")
         self.notify_path = phile.notify.watchdog.get_path(
             name=self.notify_entry.name,
             configuration=self.configuration,
@@ -397,8 +389,7 @@ class TestUpdateExistingPaths(
     async def test_inserts_entry_if_unknown(self) -> None:
         with mark_time_interval() as created_between:
             phile.notify.watchdog.save(
-                entry=self.notify_entry,
-                configuration=self.configuration
+                entry=self.notify_entry, configuration=self.configuration
             )
         await phile.asyncio.wait_for(
             phile.notify.watchdog.update_existing_paths(
@@ -429,7 +420,7 @@ class TestUpdateExistingPaths(
         phile.notify.watchdog.save(
             entry=self.notify_entry, configuration=self.configuration
         )
-        self.notify_entry.name = 'm'
+        self.notify_entry.name = "m"
         phile.notify.watchdog.save(
             entry=self.notify_entry, configuration=self.configuration
         )
@@ -452,7 +443,7 @@ class TestUpdateExistingPaths(
         phile.notify.watchdog.save(
             entry=self.notify_entry, configuration=self.configuration
         )
-        entry_2 = phile.notify.Entry(name='p')
+        entry_2 = phile.notify.Entry(name="p")
         path_2 = phile.notify.watchdog.get_path(
             name=entry_2.name, configuration=self.configuration
         )
@@ -483,14 +474,13 @@ class TestUpdateExistingPaths(
 class TestProcessWatchdogView(
     UsesConfiguration, unittest.IsolatedAsyncioTestCase
 ):
-
     def setUp(self) -> None:
         super().setUp()
         self.notify_directory = phile.notify.watchdog.get_directory(
             configuration=self.configuration
         )
         self.notify_directory.mkdir()
-        self.notify_entry = phile.notify.Entry(name='n', text='c')
+        self.notify_entry = phile.notify.Entry(name="n", text="c")
         self.notify_path = phile.notify.watchdog.get_path(
             name=self.notify_entry.name,
             configuration=self.configuration,
@@ -498,9 +488,9 @@ class TestProcessWatchdogView(
         self.notify_registry = phile.notify.Registry()
         self.notify_view = self.notify_registry.event_queue.__aiter__()
         self.ready = asyncio.Event()
-        self.watchdog_queue = (
-            phile.asyncio.pubsub.Queue[watchdog.events.FileSystemEvent]()
-        )
+        self.watchdog_queue = phile.asyncio.pubsub.Queue[
+            watchdog.events.FileSystemEvent
+        ]()
         self.watchdog_view = self.watchdog_queue.__aiter__()
 
     async def test_exit_invariant(self) -> None:
@@ -582,7 +572,6 @@ class TestProcessWatchdogView(
 
 
 class TestAsyncOpen(UsesConfiguration, unittest.IsolatedAsyncioTestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.observer = phile.watchdog.asyncio.Observer()
@@ -596,7 +585,7 @@ class TestAsyncOpen(UsesConfiguration, unittest.IsolatedAsyncioTestCase):
         async_cm = phile.notify.watchdog.async_open(
             configuration=self.configuration,
             notify_registry=self.notify_registry,
-            observer=self.observer
+            observer=self.observer,
         )
         # Pylint does not know it is an async CM?
         notify_target = await phile.asyncio.wait_for(
@@ -605,7 +594,9 @@ class TestAsyncOpen(UsesConfiguration, unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(
             phile.asyncio.wait_for,
             async_cm.__aexit__(  # pylint: disable=no-member
-                None, None, None,
+                None,
+                None,
+                None,
             ),
         )
         self.assertIsInstance(

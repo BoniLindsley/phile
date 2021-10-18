@@ -23,14 +23,13 @@ import phile.PySide2.QtNetwork
 import phile.signal
 from .test_QtCore import UsesQCoreApplication
 
-platform_can_handle_sigint = (sys.platform != "win32")
+platform_can_handle_sigint = sys.platform != "win32"
 
 
 @unittest.skipUnless(
-    platform_can_handle_sigint, 'Cannot handle SIGINT on this platform.'
+    platform_can_handle_sigint, "Cannot handle SIGINT on this platform."
 )
 class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
-
     def setUp(self) -> None:
         """
         Create a PySide2 application before each method test.
@@ -80,7 +79,7 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
         signal_signal_event = threading.Event()
         signal.signal(
             signal.SIGINT,
-            lambda signal_number, _: signal_signal_event.set()
+            lambda signal_number, _: signal_signal_event.set(),
         )
         # Send the signal.
         os.kill(os.getpid(), signal.SIGINT)
@@ -96,5 +95,5 @@ class TestPosixSignal(UsesQCoreApplication, unittest.TestCase):
         self.assertTrue(slot_mock.called)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

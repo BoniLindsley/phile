@@ -15,7 +15,7 @@ import typing
 import appdirs  # type: ignore[import]
 import pydantic
 
-_app_meta_data = {'appname': 'phile', 'appauthor': 'BoniLindsley'}
+_app_meta_data = {"appname": "phile", "appauthor": "BoniLindsley"}
 """Descriptions of app. Used to form directory paths."""
 
 
@@ -31,31 +31,32 @@ class ImapEntries(pydantic.BaseModel):
 
 
 class Entries(pydantic.BaseSettings):
-    configuration_path = pathlib.Path(
-        appdirs.user_config_dir(**_app_meta_data)
-    ) / 'config.json'
+    configuration_path = (
+        pathlib.Path(appdirs.user_config_dir(**_app_meta_data))
+        / "config.json"
+    )
     hotkey_global_map: dict[str, str] = {}
     hotkey_map: dict[str, str] = {}
     imap: typing.Optional[ImapEntries] = None
     log_file_level = 30
-    log_file_path = pathlib.Path('phile.log')
+    log_file_path = pathlib.Path("phile.log")
     log_stderr_level = 30
     main_autostart = set[str]()
-    notify_directory = pathlib.Path('notify')
-    notify_suffix = '.notify'
-    pid_path = pathlib.Path('pid')
+    notify_directory = pathlib.Path("notify")
+    notify_suffix = ".notify"
+    pid_path = pathlib.Path("pid")
     state_directory_path = pathlib.Path(
         appdirs.user_state_dir(**_app_meta_data)
     )
-    tray_icon_name = 'phile-tray-empty'
-    tray_directory = pathlib.Path('tray')
-    tray_suffix = '.tray'
-    trigger_directory = pathlib.Path('trigger')
-    trigger_suffix = '.trigger'
+    tray_icon_name = "phile-tray-empty"
+    tray_directory = pathlib.Path("tray")
+    tray_suffix = ".tray"
+    trigger_directory = pathlib.Path("trigger")
+    trigger_suffix = ".trigger"
 
     class Config:
         case_sensitive = False
-        env_prefix = 'PHILE_'
+        env_prefix = "PHILE_"
         # Pylint is unable to find Extra.
         extra = pydantic.Extra.allow  # pylint: disable=no-member
 

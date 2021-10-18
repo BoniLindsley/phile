@@ -73,13 +73,13 @@ class NotificationMdiSubWindow(PySide2.QtWidgets.QMdiSubWindow):
         old_min_max_state = change_event.oldState() & min_max_state
         new_min_max_state = self.windowState() & min_max_state
         if old_min_max_state == new_min_max_state:
-            _logger.debug('Sub-window not min-maxiimized.')
+            _logger.debug("Sub-window not min-maxiimized.")
             return
-        _logger.debug('Sub-window min-maximized: re-tiling parent.')
+        _logger.debug("Sub-window min-maximized: re-tiling parent.")
         self._retile_parent()
 
     def closeEvent(self, close_event: PySide2.QtGui.QCloseEvent) -> None:
-        """Internal method to handle the sub-window being closed. """
+        """Internal method to handle the sub-window being closed."""
         del close_event
         self.closed.emit(self.title)
 
@@ -105,9 +105,9 @@ class NotificationMdiSubWindow(PySide2.QtWidgets.QMdiSubWindow):
         # to fill any gaps left by the hidden widget.
         # It is possible to hide without closing a widget.
         # So we need to handle the hide event explicitly.
-        _logger.debug('Sub-window hidden: default handling.')
+        _logger.debug("Sub-window hidden: default handling.")
         super().hideEvent(hide_event)
-        _logger.debug('Sub-window hidden: re-tiling parent.')
+        _logger.debug("Sub-window hidden: re-tiling parent.")
         self._retile_parent()
 
     @property
@@ -129,7 +129,7 @@ class NotificationMdiSubWindow(PySide2.QtWidgets.QMdiSubWindow):
         base_color = content_palette.color(QPalette.Window)
         text_color = content_palette.color(
             QPalette.Disabled if new_is_read else QPalette.Active,
-            QPalette.WindowText
+            QPalette.WindowText,
         )
         content_palette.setColor(QPalette.Text, text_color)
         content_palette.setColor(QPalette.Base, base_color)
@@ -146,7 +146,7 @@ class NotificationMdiSubWindow(PySide2.QtWidgets.QMdiSubWindow):
 
     def refresh_window_title(self) -> None:
         self.setWindowTitle(
-            self.title + '--' + self._modified_at.strftime('%c')
+            self.title + "--" + self._modified_at.strftime("%c")
         )
 
     def _retile_parent(self) -> None:
@@ -155,7 +155,7 @@ class NotificationMdiSubWindow(PySide2.QtWidgets.QMdiSubWindow):
             mdi_area._tile_sub_windows_vertically()
 
     def showEvent(self, show_event: PySide2.QtGui.QShowEvent) -> None:
-        _logger.debug('Sub-window shown: default handling.')
+        _logger.debug("Sub-window shown: default handling.")
         super().showEvent(show_event)
         # Showing a widget typically also activates it by default.
         # So handling activation event (or window state change events)
@@ -164,14 +164,13 @@ class NotificationMdiSubWindow(PySide2.QtWidgets.QMdiSubWindow):
         # So we need to handle show events explicitly.
         # We need to make sure that showing a sub-window would re-tile
         # so it goes into the correct position.
-        _logger.debug('Sub-window shown: re-tiling parent.')
+        _logger.debug("Sub-window shown: re-tiling parent.")
         self._retile_parent()
 
 
 class NotificationMdi(PySide2.QtWidgets.QMdiArea):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any):
-        _logger.debug('Creating notification MDI.')
+        _logger.debug("Creating notification MDI.")
         super().__init__(*args, **kwargs)
         self.setActivationOrder(PySide2.QtWidgets.QMdiArea.CreationOrder)
         self.setHorizontalScrollBarPolicy(
@@ -185,8 +184,8 @@ class NotificationMdi(PySide2.QtWidgets.QMdiArea):
         self, notify_entry: phile.notify.Entry
     ) -> NotificationMdiSubWindow:
         _logger.debug(
-            'Adding notification sub-window. Total will be %s.',
-            len(self.subWindowList()) + 1
+            "Adding notification sub-window. Total will be %s.",
+            len(self.subWindowList()) + 1,
         )
         notification_mdi_sub_window = NotificationMdiSubWindow(
             notify_entry=notify_entry
@@ -198,36 +197,34 @@ class NotificationMdi(PySide2.QtWidgets.QMdiArea):
     def resizeEvent(
         self, resize_event: PySide2.QtGui.QResizeEvent
     ) -> None:
-        _logger.debug('Resized: default handling.')
+        _logger.debug("Resized: default handling.")
         super().resizeEvent(resize_event)
-        _logger.debug('Resized: re-tiling.')
+        _logger.debug("Resized: re-tiling.")
         self._tile_sub_windows_vertically(area_size=resize_event.size())
 
     def showEvent(self, show_event: PySide2.QtGui.QShowEvent) -> None:
-        _logger.debug('Shown: default handling.')
+        _logger.debug("Shown: default handling.")
         super().showEvent(show_event)
-        _logger.debug('Shown: re-tiling.')
+        _logger.debug("Shown: re-tiling.")
         self._tile_sub_windows_vertically()
 
     def _tile_sub_windows_vertically(
-        self,
-        *,
-        area_size: typing.Optional[PySide2.QtCore.QSize] = None
+        self, *, area_size: typing.Optional[PySide2.QtCore.QSize] = None
     ) -> None:
-        _logger.debug('Tiling sub-window vertically.')
+        _logger.debug("Tiling sub-window vertically.")
         # This method gets called many times when shutting down,
         # once for each widget because hiding this widget
         # hides every sub-window.
         # So early exit in those cases,
         # since the effect would not be visible anyway.
         if self.isHidden():
-            _logger.debug('MDI not tiling: hidden.')
+            _logger.debug("MDI not tiling: hidden.")
             return
         # The alternative is TabbedView mode.
         # Moving sub-windows around in that mode
         # would break the tabbbed view.
         if self.viewMode() != PySide2.QtWidgets.QMdiArea.SubWindowView:
-            _logger.debug('MDI not tiling: not in sub-window mode.')
+            _logger.debug("MDI not tiling: not in sub-window mode.")
             return
 
         if area_size is None:
@@ -236,24 +233,25 @@ class NotificationMdi(PySide2.QtWidgets.QMdiArea):
         window_width = area_size.width()
         vertical_offset = 0
         tile_window_list = [
-            window for window in self.subWindowList()
-            if not window.isMinimized() and not window.isMaximized()
+            window
+            for window in self.subWindowList()
+            if not window.isMinimized()
+            and not window.isMaximized()
             and window.isVisible()
         ]
-        _logger.debug('Tiling %s sub-windows.', len(tile_window_list))
+        _logger.debug("Tiling %s sub-windows.", len(tile_window_list))
         for window in tile_window_list:
             height = window.height()
             window.move(0, vertical_offset)
             window.resize(window_width, height)
             vertical_offset += height
-        _logger.debug('Finished tiling.')
+        _logger.debug("Finished tiling.")
 
 
 class MainWindow(
     phile.trigger.pyside2.TriggerControlled,
     PySide2.QtWidgets.QMainWindow,
 ):
-
     def __init__(
         self,
         *args: typing.Any,
@@ -290,8 +288,8 @@ class MainWindow(
 
     def discard_entry(self, notify_entry: phile.notify.Entry) -> None:
         try:
-            sub_window = (
-                self._notify_mdi_sub_windows.pop(notify_entry.name)
+            sub_window = self._notify_mdi_sub_windows.pop(
+                notify_entry.name
             )
         except KeyError:
             return
@@ -299,13 +297,11 @@ class MainWindow(
 
     def set_entry(self, notify_entry: phile.notify.Entry) -> None:
         try:
-            sub_window = (
-                self._notify_mdi_sub_windows[notify_entry.name]
-            )
+            sub_window = self._notify_mdi_sub_windows[notify_entry.name]
         except KeyError:
-            sub_window = (
-                self._notify_mdi_sub_windows[notify_entry.name]
-            ) = self._mdi_area.add_notification(notify_entry)
+            sub_window = self._notify_mdi_sub_windows[
+                notify_entry.name
+            ] = self._mdi_area.add_notification(notify_entry)
             sub_window.closed.connect(
                 functools.partial(
                     self._loop.call_soon_threadsafe,
@@ -403,8 +399,8 @@ async def async_run(
     launcher_registry: phile.launcher.Registry,
 ) -> int:  # pragma: no cover
     event_view = launcher_registry.event_queue.__aiter__()
-    await launcher_registry.start(gui_name := 'phile.notify.watchdog')
-    await launcher_registry.start(gui_name := 'phile.notify.pyside2')
+    await launcher_registry.start(gui_name := "phile.notify.watchdog")
+    await launcher_registry.start(gui_name := "phile.notify.pyside2")
     if not launcher_registry.is_running(gui_name):
         return 1
     expected_event = phile.launcher.Event(
@@ -424,5 +420,5 @@ def main() -> int:  # pragma: no cover
     return 0
 
 
-if __name__ == '__main__':  # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

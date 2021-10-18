@@ -37,7 +37,7 @@ class CommandBuilder:
     @classmethod
     def exit_client(cls) -> str:
         """Let the server know the current client wants to exit."""
-        return ''
+        return ""
 
     @classmethod
     def refresh_client(
@@ -54,13 +54,13 @@ class CommandBuilder:
         :type no_output: :class:`bool` or :class:`None`
         """
         if no_output is None:
-            flags = ''
+            flags = ""
         elif no_output:
-            flags = ' -F no-output'
+            flags = " -F no-output"
         else:
-            flags = ' -F \'\''
-        return '{command}{flags}'.format(
-            command='refresh-client', flags=flags
+            flags = " -F ''"
+        return "{command}{flags}".format(
+            command="refresh-client", flags=flags
         )
 
     @classmethod
@@ -80,29 +80,29 @@ class CommandBuilder:
         and then its parent which can be the tmux server
         if this script is launched from the tmux configuration script.
         """
-        return 'set-option destroy-unattached {}'.format(
-            'on' if to_destroy else 'off'
+        return "set-option destroy-unattached {}".format(
+            "on" if to_destroy else "off"
         )
 
     @classmethod
     def set_global_status_right(cls, new_status_string: str) -> str:
         """Change the tmux status line value to the given string."""
-        return 'set-option -g status-right {}'.format(
+        return "set-option -g status-right {}".format(
             shlex.quote(new_status_string)
         )
 
     @classmethod
     def unset_global_status_right(cls) -> str:
         """Change the tmux status line value to the default."""
-        return 'set-option -gu status-right'
+        return "set-option -gu status-right"
 
 
 async def kill_server() -> asyncio.subprocess.Process:
     """Sends a ``kill-server`` command to the default tmux server."""
     return await asyncio.create_subprocess_exec(
-        'tmux',
-        '-u',
-        'kill-server',
+        "tmux",
+        "-u",
+        "kill-server",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

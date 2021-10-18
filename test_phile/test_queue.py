@@ -25,5 +25,5 @@ class TestIterableSimpleQueue(unittest.TestCase):
             # Force use of `__iter__`.
             # pragma pylint: disable=unnecessary-comprehension
             [number for number in queue],
-            [8, 5, 3, 2]
+            [8, 5, 3, 2],
         )

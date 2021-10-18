@@ -9,12 +9,12 @@ Extension to standard library `queue`
 import queue
 import typing
 
-_T = typing.TypeVar('_T')
+_T = typing.TypeVar("_T")
 
 
 class IterableSimpleQueue(queue.SimpleQueue[_T]):
 
-    __Self = typing.TypeVar('__Self', bound='IterableSimpleQueue[_T]')
+    __Self = typing.TypeVar("__Self", bound="IterableSimpleQueue[_T]")
 
     def __iter__(self: __Self) -> __Self:
         return self

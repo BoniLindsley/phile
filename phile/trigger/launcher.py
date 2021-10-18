@@ -24,7 +24,7 @@ class Producer:
 
     # TODO[Python version 3.10]: Change string to identifier.
     # Annotations are stored as strings and evalated later in 3.10.
-    __Self = typing.TypeVar('__Self', bound='Producer')
+    __Self = typing.TypeVar("__Self", bound="Producer")
 
     def __init__(
         self,
@@ -60,9 +60,10 @@ class Producer:
         return self
 
     async def __aexit__(
-        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
         exc_value: typing.Optional[BaseException],
-        traceback: typing.Optional[types.TracebackType]
+        traceback: typing.Optional[types.TracebackType],
     ) -> None:
         try:
             await phile.asyncio.cancel_and_wait(
@@ -77,8 +78,10 @@ class Producer:
 
     async def _process_registry_events(self) -> None:
         known_handlers: (
-            dict[phile.launcher.EventType,
-                 collections.abc.Callable[[str], typing.Any]]
+            dict[
+                phile.launcher.EventType,
+                collections.abc.Callable[[str], typing.Any],
+            ]
         ) = {
             phile.launcher.EventType.START: self._on_start,
             phile.launcher.EventType.STOP: self._on_stop,
@@ -148,6 +151,6 @@ class Producer:
             self._trigger_registry.unbind(trigger_name)
 
     def _trigger_names(self, launcher_name: str) -> tuple[str, str]:
-        start_trigger = 'launcher_' + launcher_name + '_start'
-        stop_trigger = 'launcher_' + launcher_name + '_stop'
+        start_trigger = "launcher_" + launcher_name + "_start"
+        stop_trigger = "launcher_" + launcher_name + "_stop"
         return start_trigger, stop_trigger

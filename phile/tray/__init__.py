@@ -35,20 +35,19 @@ class Entry(pydantic.BaseModel):  # pylint: disable=no-member
 
 
 def entries_to_text(entries: typing.List[Entry]) -> str:
-    return ''.join(
-        tray_entry.text_icon for tray_entry in entries
+    return "".join(
+        tray_entry.text_icon
+        for tray_entry in entries
         if tray_entry.text_icon is not None
     )
 
 
 class Registry(phile.data.Registry[str, Entry]):
-
     def add_entry(self, entry: Entry) -> None:
         super().set(entry.name, entry)
 
 
 class TextIcons:
-
     def __init__(
         self,
         *args: typing.Any,

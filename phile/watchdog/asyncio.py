@@ -43,7 +43,6 @@ import phile.asyncio.pubsub
 class EventView(
     phile.asyncio.pubsub.View[watchdog.events.FileSystemEvent]
 ):
-
     def __init__(
         self,
         *args: typing.Any,
@@ -57,7 +56,7 @@ class EventView(
             ]
         ) = phile.asyncio.noop
 
-    async def __aenter__(self) -> 'EventView':
+    async def __aenter__(self) -> "EventView":
         return self
 
     async def __aexit__(
@@ -80,7 +79,6 @@ class EventView(
 class EventQueue(
     phile.asyncio.pubsub.Queue[watchdog.events.FileSystemEvent]
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self._loop = asyncio.get_event_loop()
@@ -91,8 +89,10 @@ class EventQueue(
     def put(  # type: ignore[override]
         # pylint: disable=arguments-differ
         self,
-        event_data: tuple[watchdog.events.FileSystemEvent,
-                          watchdog.observers.api.ObservedWatch],
+        event_data: tuple[
+            watchdog.events.FileSystemEvent,
+            watchdog.observers.api.ObservedWatch,
+        ],
     ) -> None:
         """Thread-safe push. Named so to satisfy EventEmitter usage."""
         self._loop.call_soon_threadsafe(super().put, event_data[0])
@@ -106,14 +106,16 @@ class EventEmitter(
 
 
 class BaseObserver:
-
     def __init__(
         self,
-        emitter_class: collections.abc.Callable[[
-            watchdog.observers.api.EventQueue,
-            watchdog.observers.api.ObservedWatch,
-            float,
-        ], EventEmitter],
+        emitter_class: collections.abc.Callable[
+            [
+                watchdog.observers.api.EventQueue,
+                watchdog.observers.api.ObservedWatch,
+                float,
+            ],
+            EventEmitter,
+        ],
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
         *args: typing.Any,
         **kwargs: typing.Any,
@@ -130,7 +132,8 @@ class BaseObserver:
             EventQueue,
         ](EventQueue)
         self._watch_count = collections.defaultdict[
-            watchdog.observers.api.ObservedWatch, int](int)
+            watchdog.observers.api.ObservedWatch, int
+        ](int)
 
     async def schedule(
         self,
@@ -211,7 +214,6 @@ def _get_InotifyEmitter() -> type[EventEmitter]:  # pragma: no cover
 
 
 class InotifyObserver(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
@@ -221,7 +223,8 @@ class InotifyObserver(BaseObserver):  # pragma: no cover
     ):
         Emitter = (
             _get_InotifyFullEmitter()
-            if generate_full_events else _get_InotifyEmitter()
+            if generate_full_events
+            else _get_InotifyEmitter()
         )
         super().__init__(Emitter, timeout, *args, **kwargs)
 
@@ -239,7 +242,6 @@ def _get_PollingEmitter() -> type[EventEmitter]:  # pragma: no cover
 
 
 class PollingObserver(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
@@ -260,7 +262,6 @@ def _get_PollingObserverVFS(
         EventEmitter,
         watchdog.observers.polling.PollingEmitter,
     ):
-
         def __init__(
             self, *args: typing.Any, **kwargs: typing.Any
         ) -> None:
@@ -270,7 +271,6 @@ def _get_PollingObserverVFS(
 
 
 class PollingObserverVFS(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         stat: collections.abc.Callable[[str], typing.Any],
@@ -296,7 +296,6 @@ def _get_FSEventsEmitter() -> type[EventEmitter]:  # pragma: no cover
 
 
 class FSEventsObserver(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
@@ -320,7 +319,6 @@ def _get_FSEventsEmitter2() -> type[EventEmitter]:  # pragma: no cover
 
 
 class FSEventsObserver2(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
@@ -344,7 +342,6 @@ def _get_KqueueEmitter() -> type[EventEmitter]:  # pragma: no cover
 
 
 class KqueueObserver(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
@@ -368,7 +365,6 @@ def _get_WindowsApiEmitter() -> type[EventEmitter]:  # pragma: no cover
 
 
 class WindowsApiObserver(BaseObserver):  # pragma: no cover
-
     def __init__(
         self,
         timeout: float = watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
@@ -384,14 +380,14 @@ if typing.TYPE_CHECKING:  # pragma: no cover
     Observer = PollingObserver
 else:  # pragma: no cover
     _system = platform.system()
-    if _system == 'Linux':
+    if _system == "Linux":
         try:
             _get_InotifyEmitter()
             Observer = InotifyObserver
         except watchdog.utils.UnsupportedLibc:
             _get_PollingEmitter()
             Observer = PollingObserver
-    elif _system == 'Darwin':
+    elif _system == "Darwin":
         try:
             _get_FSEventsEmitter()
             Observer = FSEventsObserver
@@ -402,20 +398,19 @@ else:  # pragma: no cover
                 _get_KqueueEmitter()
                 Observer = KqueueObserver
                 warnings.warn(
-                    'Failed to import fsevents.'
-                    ' Fall back to kqueue'
+                    "Failed to import fsevents." " Fall back to kqueue"
                 )
             except Exception:  # pylint: disable=broad-except
                 _get_PollingEmitter()
                 Observer = PollingObserver
                 warnings.warn(
-                    'Failed to import fsevents and kqueue.'
-                    ' Fall back to polling.'
+                    "Failed to import fsevents and kqueue."
+                    " Fall back to polling."
                 )
-    elif _system == 'FreeBsd':
+    elif _system == "FreeBsd":
         _get_KqueueEmitter()
         Observer = KqueueObserver
-    elif _system == 'Windows':
+    elif _system == "Windows":
         try:
             _get_WindowsApiEmitter()
             Observer = WindowsApiObserver
@@ -423,8 +418,8 @@ else:  # pragma: no cover
             _get_PollingEmitter()
             Observer = PollingObserver
             warnings.warn(
-                'Failed to import read_directory_changes.'
-                ' Fall back to polling.'
+                "Failed to import read_directory_changes."
+                " Fall back to polling."
             )
     else:
         _get_PollingEmitter()
@@ -437,7 +432,7 @@ def split_file_move_event(
     if event.is_directory:
         return tuple()
     if event.event_type != watchdog.events.EVENT_TYPE_MOVED:
-        return (event, )
+        return (event,)
     assert isinstance(event, watchdog.events.FileMovedEvent)
     return (
         watchdog.events.FileDeletedEvent(event.src_path),
@@ -482,8 +477,8 @@ async def monitor_file_existence(
                 expected_suffix=expected_suffix,
             ):
                 yield path, (
-                    event.event_type !=
-                    watchdog.events.EVENT_TYPE_DELETED
+                    event.event_type
+                    != watchdog.events.EVENT_TYPE_DELETED
                 )
 
 
@@ -494,8 +489,9 @@ async def load_changed_files(
     watchdog_view: (
         collections.abc.AsyncIterable[watchdog.events.FileSystemEvent]
     ),
-) -> collections.abc.AsyncIterator[tuple[pathlib.Path,
-                                         typing.Optional[str]]]:
+) -> collections.abc.AsyncIterator[
+    tuple[pathlib.Path, typing.Optional[str]]
+]:
     async for next_event in watchdog_view:
         for path in event_to_file_paths(next_event):
             if filter_path(

@@ -28,12 +28,10 @@ def noop_nullary() -> None:
 
 
 class TestNullaryCallable(unittest.TestCase):
-
     def test_compatible_lambda(self) -> None:
         _: phile.trigger.NullaryCallable = lambda: None
 
     def test_compatible_function(self) -> None:
-
         def constant_function() -> int:
             return 1
 
@@ -46,7 +44,6 @@ class TestNullaryCallable(unittest.TestCase):
 class TestPidLock(
     phile.unittest.UsesTemporaryDirectory, unittest.TestCase
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.pid_lock_path: pathlib.Path
@@ -54,7 +51,7 @@ class TestPidLock(
 
     def setUp(self) -> None:
         super().setUp()
-        self.pid_lock_path = self.temporary_directory / 'pid'
+        self.pid_lock_path = self.temporary_directory / "pid"
         self.pid_lock = phile.trigger.PidLock(self.pid_lock_path)
 
     def test_acquire_and_release_and_locked(self) -> None:
@@ -66,7 +63,7 @@ class TestPidLock(
         )
         self.pid_lock.release()
         self.assertFalse(self.pid_lock.locked())
-        self.assertEqual(self.pid_lock_path.read_text(), '')
+        self.assertEqual(self.pid_lock_path.read_text(), "")
 
     def test_acquire_twice_warns(self) -> None:
         self.pid_lock.acquire()
@@ -96,23 +93,22 @@ class TestPidLock(
 
 
 class TestEntryPoint(UsesConfiguration, unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.user_state_directory = (
             self.configuration.state_directory_path
         )
-        self.trigger_directory_name = 'tr'
+        self.trigger_directory_name = "tr"
         self.trigger_directory = (
-            self.state_directory_path /
-            self.configuration.trigger_directory /
-            self.trigger_directory_name
+            self.state_directory_path
+            / self.configuration.trigger_directory
+            / self.trigger_directory_name
         )
         self.entry_point = phile.trigger.EntryPoint(
             configuration=self.configuration,
             trigger_directory=pathlib.Path(self.trigger_directory_name),
         )
-        self.trigger_name = 'thing'
+        self.trigger_name = "thing"
         self.trigger_path = self.trigger_directory / (
             self.trigger_name + self.configuration.trigger_suffix
         )
@@ -127,9 +123,9 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
 
     def test_init__with_bind_and_available_triggers(self) -> None:
         entry_point = phile.trigger.EntryPoint(
-            available_triggers=set('t'),
+            available_triggers=set("t"),
             bind=True,
-            callback_map={'t': lambda: None},
+            callback_map={"t": lambda: None},
             configuration=self.configuration,
             trigger_directory=pathlib.Path(self.trigger_directory_name),
         )
@@ -142,7 +138,7 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
 
     def test_can_use_absolute_directory(self) -> None:
         trigger_directory = (
-            self.configuration.state_directory_path / 'ttgg'
+            self.configuration.state_directory_path / "ttgg"
         )
         entry_point = phile.trigger.EntryPoint(
             configuration=self.configuration,
@@ -190,13 +186,13 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
         self.assertEqual(trigger_path, self.trigger_path)
 
     def test_check_path__checks_directory(self) -> None:
-        invalid_path = self.user_state_directory / 'ttgg'
+        invalid_path = self.user_state_directory / "ttgg"
         self.assertTrue(self.entry_point.check_path(self.trigger_path))
         self.assertTrue(not self.entry_point.check_path(invalid_path))
 
     def test_check_path__checks_suffix(self) -> None:
         invalid_path = self.trigger_directory / (
-            'a' + self.configuration.trigger_suffix + '_not'
+            "a" + self.configuration.trigger_suffix + "_not"
         )
         self.assertTrue(self.entry_point.check_path(self.trigger_path))
         self.assertTrue(not self.entry_point.check_path(invalid_path))
@@ -230,21 +226,18 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
 
     def test_add_trigger__inside_init(self) -> None:
         entry_point = phile.trigger.EntryPoint(
-            available_triggers={'red', 'yellow'},
+            available_triggers={"red", "yellow"},
             bind=True,
-            callback_map={
-                'red': noop_nullary,
-                'yellow': noop_nullary
-            },
+            callback_map={"red": noop_nullary, "yellow": noop_nullary},
             configuration=self.configuration,
             trigger_directory=pathlib.Path(self.trigger_directory_name),
         )
         self.addCleanup(entry_point.unbind)
-        self.assertTrue(entry_point.get_trigger_path('red').is_file())
-        self.assertTrue(entry_point.get_trigger_path('yellow').is_file())
+        self.assertTrue(entry_point.get_trigger_path("red").is_file())
+        self.assertTrue(entry_point.get_trigger_path("yellow").is_file())
 
     def test_activate_trigger__calls_callback_if_trigger_file_deleted(
-        self
+        self,
     ) -> None:
         trigger_callback = unittest.mock.Mock()
         self.entry_point.callback_map = {
@@ -258,7 +251,7 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
         trigger_callback.assert_called_once_with()
 
     def test_activate_trigger__ignores_if_trigger_file_not_deleted(
-        self
+        self,
     ) -> None:
         trigger_callback = unittest.mock.Mock()
         self.entry_point.callback_map = {
@@ -271,7 +264,7 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
         trigger_callback.assert_not_called()
 
     def test_activate_trigger__ignores_if_trigger_not_available(
-        self
+        self,
     ) -> None:
         trigger_callback = unittest.mock.Mock()
         self.entry_point.callback_map = {
@@ -281,7 +274,7 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
         trigger_callback.assert_not_called()
 
     def test_activate_trigger__ignores_trigger_without_callback(
-        self
+        self,
     ) -> None:
         self.entry_point.callback_map = {self.trigger_name: noop_nullary}
         self.addCleanup(self.entry_point.unbind)
@@ -302,7 +295,6 @@ class TestEntryPoint(UsesConfiguration, unittest.TestCase):
 
 
 class TestRegistry(unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.registry = phile.trigger.Registry()
@@ -316,31 +308,31 @@ class TestRegistry(unittest.TestCase):
             raise phile.trigger.Registry.NotShown()
 
     def test_event_handler_type(self) -> None:
-
         def handler(
             method: collections.abc.Callable[..., typing.Any],
-            registry: phile.trigger.Registry, name: str
+            registry: phile.trigger.Registry,
+            name: str,
         ) -> None:
             del method
             del registry
             del name
 
         callback: phile.trigger.Registry.EventHandler = handler
-        callback(phile.trigger.Registry.bind, self.registry, 'quit')
+        callback(phile.trigger.Registry.bind, self.registry, "quit")
 
     def test_default_initialisable(self) -> None:
         isinstance(self.registry.event_callback_map, list)
 
     def test_bind_binds(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.assertTrue(not self.registry.is_bound(name))
         self.registry.bind(name, callback)
         self.assertTrue(self.registry.is_bound(name))
 
     def test_binding_same_callback_twice_is_okay(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(self.registry.is_bound(name))
         self.registry.bind(name, callback)
@@ -348,7 +340,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_double_bind_raises(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(self.registry.is_bound(name))
         fail_callback = unittest.mock.Mock()
@@ -357,20 +349,20 @@ class TestRegistry(unittest.TestCase):
 
     def test_unbind_after_bind(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(self.registry.is_bound(name))
         self.registry.unbind(name)
         self.assertTrue(not self.registry.is_bound(name))
 
     def test_unbind_unbound_is_okay(self) -> None:
-        name = 'increase'
+        name = "increase"
         self.assertTrue(not self.registry.is_bound(name))
         self.registry.unbind(name)
 
     def test_show_shows(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(not self.registry.is_shown(name))
         self.registry.show(name)
@@ -378,7 +370,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_double_show_is_fine(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.registry.show(name)
         self.assertTrue(self.registry.is_shown(name))
@@ -386,14 +378,14 @@ class TestRegistry(unittest.TestCase):
         self.assertTrue(self.registry.is_shown(name))
 
     def test_show_unbound_raises(self) -> None:
-        name = 'increase'
+        name = "increase"
         self.assertTrue(not self.registry.is_bound(name))
         with self.assertRaises(phile.trigger.Registry.NotBound):
             self.registry.show(name)
 
     def test_hide_after_show(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.registry.show(name)
         self.assertTrue(self.registry.is_shown(name))
@@ -402,21 +394,21 @@ class TestRegistry(unittest.TestCase):
 
     def test_hide_hidden_is_fine(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(not self.registry.is_shown(name))
         self.registry.hide(name)
         self.assertTrue(not self.registry.is_shown(name))
 
     def test_hide_unbound_is_fine(self) -> None:
-        name = 'increase'
+        name = "increase"
         self.assertTrue(not self.registry.is_bound(name))
         self.registry.hide(name)
         self.assertTrue(not self.registry.is_shown(name))
 
     def test_unbind_hides(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.registry.show(name)
         self.assertTrue(self.registry.is_bound(name))
@@ -427,7 +419,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_activate_calls_bound_callback(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.registry.show(name)
         self.assertTrue(self.registry.is_bound(name))
@@ -437,7 +429,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_activate_implicitly_hides(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.registry.show(name)
         self.assertTrue(self.registry.is_bound(name))
@@ -446,14 +438,14 @@ class TestRegistry(unittest.TestCase):
         self.assertTrue(not self.registry.is_shown(name))
 
     def test_activate_raises_if_unbound(self) -> None:
-        name = 'increase'
+        name = "increase"
         self.assertTrue(not self.registry.is_bound(name))
         with self.assertRaises(phile.trigger.Registry.NotBound):
             self.registry.activate(name)
 
     def test_activate_raises_if_hidden(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(self.registry.is_bound(name))
         self.assertTrue(not self.registry.is_shown(name))
@@ -462,14 +454,14 @@ class TestRegistry(unittest.TestCase):
 
     def test_activate_if_shown_ignores_hidden(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertTrue(self.registry.is_bound(name))
         self.assertTrue(not self.registry.is_shown(name))
         self.registry.activate_if_shown(name)
 
     def test_activate_if_shown_raises_if_unbound(self) -> None:
-        name = 'increase'
+        name = "increase"
         self.assertTrue(not self.registry.is_bound(name))
         with self.assertRaises(phile.trigger.Registry.NotBound):
             self.registry.activate_if_shown(name)
@@ -478,7 +470,7 @@ class TestRegistry(unittest.TestCase):
         event_callback = unittest.mock.Mock()
         self.registry.event_callback_map.append(event_callback)
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
 
         self.registry.bind(name, callback)
         event_callback.assert_called_once_with(
@@ -512,7 +504,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_visible_trigger_is_updated_by_events(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'increase'
+        name = "increase"
         self.registry.bind(name, callback)
         self.assertNotIn(name, self.registry.visible_triggers)
         self.registry.show(name)
@@ -530,12 +522,11 @@ class TestRegistry(unittest.TestCase):
 
 
 class TestProvider(unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.callback_map: dict[str, phile.trigger.NullaryCallable] = {
-            'open': unittest.mock.Mock(),
-            'close': unittest.mock.Mock(),
+            "open": unittest.mock.Mock(),
+            "close": unittest.mock.Mock(),
         }
         self.registry = phile.trigger.Registry()
         self.provider = phile.trigger.Provider(
@@ -565,7 +556,7 @@ class TestProvider(unittest.TestCase):
 
     def test_bind_that_fails_unbinds_for_invariance(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'close'
+        name = "close"
         self.registry.bind(name, callback)
         with self.assertRaises(phile.trigger.Registry.AlreadyBound):
             self.provider.bind()
@@ -598,7 +589,7 @@ class TestProvider(unittest.TestCase):
         self.assertTrue(not self.provider.is_bound())
 
     def test_show_shows(self) -> None:
-        name = 'open'
+        name = "open"
         self.provider.bind()
         self.assertTrue(not self.registry.is_shown(name))
         self.provider.show(name)
@@ -606,13 +597,13 @@ class TestProvider(unittest.TestCase):
 
     def test_show_not_bound_by_provider_raises(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'clopen'
+        name = "clopen"
         self.registry.bind(name, callback)
         with self.assertRaises(phile.trigger.Provider.NotBound):
             self.provider.show(name)
 
     def test_hide_after_show(self) -> None:
-        name = 'open'
+        name = "open"
         self.provider.bind()
         self.provider.show(name)
         self.assertTrue(self.registry.is_shown(name))
@@ -621,7 +612,7 @@ class TestProvider(unittest.TestCase):
 
     def test_hide_not_bound_by_provider_raises(self) -> None:
         callback = unittest.mock.Mock()
-        name = 'clopen'
+        name = "clopen"
         self.registry.bind(name, callback)
         self.registry.show(name)
         with self.assertRaises(phile.trigger.Provider.NotBound):

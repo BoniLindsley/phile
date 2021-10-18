@@ -6,7 +6,7 @@ import phile.tray
 import phile.tray.watchdog
 
 default_tray_entry = phile.tray.Entry(
-    name='30-phile-notify-tray', text_icon=' N'
+    name="30-phile-notify-tray", text_icon=" N"
 )
 
 

@@ -22,11 +22,10 @@ from test_phile.test_watchdog.test_asyncio import UsesObserver
 class TestRun(
     UsesObserver, UsesConfiguration, unittest.IsolatedAsyncioTestCase
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.default_tray_entry = phile.tray.Entry(
-            name='not', text_icon=' M'
+            name="not", text_icon=" M"
         )
         self.notify_entry: phile.notify.Entry
         self.notify_registry: phile.notify.Registry
@@ -42,12 +41,12 @@ class TestRun(
             configuration=self.configuration
         )
         notify_directory = (
-            self.state_directory_path /
-            self.configuration.notify_directory
+            self.state_directory_path
+            / self.configuration.notify_directory
         )
         notify_directory.mkdir()
         self.notify_entry = phile.notify.Entry(
-            name='a', text='c', modified_at=datetime.datetime.now()
+            name="a", text="c", modified_at=datetime.datetime.now()
         )
         self.notify_registry = phile.notify.Registry()
         tray_directory = (
@@ -68,7 +67,7 @@ class TestRun(
         )
         self.addAsyncCleanup(
             phile.asyncio.wait_for,
-            phile.asyncio.cancel_and_wait(worker_task)
+            phile.asyncio.cancel_and_wait(worker_task),
         )
         await asyncio.sleep(0)  # Give worker a chance to start.
 
@@ -79,10 +78,11 @@ class TestRun(
             source_view=self.watchdog_view,
             expected_event=watchdog.events.FileCreatedEvent(
                 str(
-                    self.state_directory_path /
-                    self.configuration.tray_directory / (
-                        self.default_tray_entry.name +
-                        self.configuration.tray_suffix
+                    self.state_directory_path
+                    / self.configuration.tray_directory
+                    / (
+                        self.default_tray_entry.name
+                        + self.configuration.tray_suffix
                     )
                 )
             ),
@@ -95,10 +95,11 @@ class TestRun(
             source_view=self.watchdog_view,
             expected_event=watchdog.events.FileCreatedEvent(
                 str(
-                    self.state_directory_path /
-                    self.configuration.tray_directory / (
-                        self.default_tray_entry.name +
-                        self.configuration.tray_suffix
+                    self.state_directory_path
+                    / self.configuration.tray_directory
+                    / (
+                        self.default_tray_entry.name
+                        + self.configuration.tray_suffix
                     )
                 )
             ),
@@ -111,17 +112,18 @@ class TestRun(
             source_view=self.watchdog_view,
             expected_event=watchdog.events.FileDeletedEvent(
                 str(
-                    self.state_directory_path /
-                    self.configuration.tray_directory / (
-                        self.default_tray_entry.name +
-                        self.configuration.tray_suffix
+                    self.state_directory_path
+                    / self.configuration.tray_directory
+                    / (
+                        self.default_tray_entry.name
+                        + self.configuration.tray_suffix
                     )
                 )
             ),
         )
 
     async def test_stops_gracefully_if_notify_registry_closes(
-        self
+        self,
     ) -> None:
         await self.set_up_worker()
         self.notify_registry.close()

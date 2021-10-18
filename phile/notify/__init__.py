@@ -17,11 +17,10 @@ import phile.data
 @dataclasses.dataclass
 class Entry:
     name: str
-    text: str = ''
+    text: str = ""
     modified_at: typing.Optional[datetime.datetime] = None
 
 
 class Registry(phile.data.Registry[str, Entry]):
-
     def add_entry(self, entry: Entry) -> None:
         super().set(entry.name, entry)

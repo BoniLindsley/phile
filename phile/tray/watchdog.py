@@ -40,13 +40,14 @@ def load(path: pathlib.Path, tray_suffix: str) -> phile.tray.Entry:
     name = path_name.removesuffix(tray_suffix)
     if name == path_name and tray_suffix:
         warnings.warn(
-            'Expected file suffix "{tray_suffix}". File was "{path}"'.
-            format(path=path, tray_suffix=tray_suffix)
+            'Expected file suffix "{tray_suffix}". File was "{path}"'.format(
+                path=path, tray_suffix=tray_suffix
+            )
         )
     entry = phile.tray.Entry(name=name)
     del name
     # First line is the text icon.
-    entry.text_icon = content_stream.readline().rstrip('\r\n')
+    entry.text_icon = content_stream.readline().rstrip("\r\n")
     # Make sure there are content to read by reading one byte
     # and then resetting the offset before decoding.
     current_offset = content_stream.tell()
@@ -54,8 +55,8 @@ def load(path: pathlib.Path, tray_suffix: str) -> phile.tray.Entry:
         content_stream.seek(current_offset)
         json_content = json.load(content_stream)
         # Get properties from the decoded structure.
-        entry.icon_name = json_content.get('icon_name')
-        icon_path = json_content.get('icon_path')
+        entry.icon_name = json_content.get("icon_name")
+        icon_path = json_content.get("icon_path")
         if icon_path is not None:
             entry.icon_path = pathlib.Path(icon_path)
     return entry
@@ -73,25 +74,24 @@ def save(
         content_stream.write(entry.text_icon)
     # Only copy over values that are filled in.
     json_content: typing.Dict[str, str] = {}
-    for key in ['icon_name', 'icon_path']:
+    for key in ["icon_name", "icon_path"]:
         value = getattr(entry, key, None)
         if value is not None:
             json_content[key] = str(value)
     # If there is content to write, end the text icon line
     # before writing the JSON string.
     if json_content:
-        content_stream.write('\n')
+        content_stream.write("\n")
         json.dump(json_content, content_stream)
     # Copy over the buffer.
     entry_path = get_path(entry.name, tray_directory, tray_suffix)
     entry_path.parent.mkdir(parents=True, exist_ok=True)
-    with entry_path.open('w+') as file_stream:
+    with entry_path.open("w+") as file_stream:
         content_stream.seek(0)
         shutil.copyfileobj(content_stream, file_stream)
 
 
 class Target:
-
     def __init__(
         self,
         *args: typing.Any,
@@ -102,8 +102,8 @@ class Target:
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._current_names = set[str]()
         self._tray_directory = (
-            configuration.state_directory_path /
-            configuration.tray_directory
+            configuration.state_directory_path
+            / configuration.tray_directory
         )
         self._tray_suffix = configuration.tray_suffix
 
@@ -122,13 +122,12 @@ class Target:
         save(
             entry=entry,
             tray_directory=self._tray_directory,
-            tray_suffix=self._tray_suffix
+            tray_suffix=self._tray_suffix,
         )
         self._current_names.add(entry.name)
 
 
 class Source:
-
     def __init__(
         self,
         *args: typing.Any,
@@ -167,7 +166,7 @@ class Source:
         except (FileNotFoundError, NotADirectoryError):
             pass
         except json.decoder.JSONDecodeError:
-            _logger.debug('Tray file JSON is ill-formed: %s', path)
+            _logger.debug("Tray file JSON is ill-formed: %s", path)
         entry_name = path.name.removesuffix(self._tray_suffix)
         if tray_entry is None:
             self._tray_registry.discard(entry_name)

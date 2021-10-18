@@ -9,7 +9,6 @@ import phile.capability
 
 
 class TestEventType(unittest.TestCase):
-
     def test_members_exist(self) -> None:
         members = {
             phile.capability.EventType.DEL,
@@ -19,7 +18,6 @@ class TestEventType(unittest.TestCase):
 
 
 class TestEvent(unittest.TestCase):
-
     def test_initialisation(self) -> None:
         phile.capability.Event(
             type=phile.capability.EventType.DEL,
@@ -36,7 +34,6 @@ class TestEvent(unittest.TestCase):
 
 
 class TestAlreadyEnabled(unittest.TestCase):
-
     def test_check_is_runtime_error(self) -> None:
         self.assertIsInstance(
             phile.capability.AlreadyEnabled(), RuntimeError
@@ -44,7 +41,6 @@ class TestAlreadyEnabled(unittest.TestCase):
 
 
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.capability_registry = phile.capability.Registry()
@@ -126,7 +122,7 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(event_view.__anext__())
 
     async def test_pop__does_not_emit_event_if_missing_and_no_default(
-        self
+        self,
     ) -> None:
         event_view = self.capability_registry.event_queue.__aiter__()
         with self.assertRaises(KeyError):

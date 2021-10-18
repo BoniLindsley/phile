@@ -17,7 +17,6 @@ from .test_QtCore import UsesPySide2
 
 
 class UsesQGuiApplication(UsesPySide2, unittest.TestCase):
-
     def setUp(self) -> None:
         """Starts a ``QApplication`` that will be cleaned up."""
         super().setUp()
@@ -32,7 +31,7 @@ class TestQIconFromSpecifiedTheme(
     """
 
     def test_can_default_construct(self) -> None:
-        icon = phile.PySide2.QtGui.q_icon_from_specified_theme('a', 'b')
+        icon = phile.PySide2.QtGui.q_icon_from_specified_theme("a", "b")
 
 
 class TestQIconFromTheme(UsesQGuiApplication, unittest.TestCase):
@@ -41,4 +40,4 @@ class TestQIconFromTheme(UsesQGuiApplication, unittest.TestCase):
     """
 
     def test_can_default_construct(self) -> None:
-        icon = phile.PySide2.QtGui.q_icon_from_theme('a')
+        icon = phile.PySide2.QtGui.q_icon_from_theme("a")

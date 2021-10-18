@@ -32,8 +32,10 @@ class UnseenNotifier(phile.imapclient.FlagTracker):
     """Create a notification to indicate unread emails."""
 
     def __init__(
-        self, *args: typing.Any, notify_path: pathlib.Path,
-        **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        notify_path: pathlib.Path,
+        **kwargs: typing.Any,
     ):
         self._notify_path = notify_path
         _logger.info("Using notification path: %s", self._notify_path)
@@ -52,8 +54,8 @@ class UnseenNotifier(phile.imapclient.FlagTracker):
 
     def update_notify_file(self) -> None:
         message_counts = self.message_counts
-        unknown_count = message_counts['unknown']
-        unseen_count = message_counts['unseen']
+        unknown_count = message_counts["unknown"]
+        unseen_count = message_counts["unseen"]
         _logger.debug("Message status: %s", message_counts)
         if unknown_count or unseen_count:
             _logger.debug("Creating notification file.")
@@ -81,21 +83,21 @@ async def load_configuration(
     imap_configuration = configuration.imap
     if imap_configuration is None:
         raise MissingCredential(
-            'Unable to find imap credentials in configuration'
+            "Unable to find imap credentials in configuration"
         )
     imap_configuration = imap_configuration.copy()
     del configuration
     if imap_configuration.password is not None:
         if imap_configuration.username is None:
-            raise MissingCredential('Unable to find imap username.')
+            raise MissingCredential("Unable to find imap username.")
     else:
         credential = await asyncio.to_thread(
             keyring_backend.get_credential,
-            'imap',
+            "imap",
             imap_configuration.username,
         )
         if credential is None:
-            raise MissingCredential('Unable to load imap password.')
+            raise MissingCredential("Unable to load imap password.")
         imap_configuration.password = credential.password
         imap_configuration.username = credential.username
     return imap_configuration
@@ -106,18 +108,18 @@ def create_client(
 ) -> tuple[imapclient.IMAPClient, phile.imapclient.SelectResponse]:
     assert imap_configuration.username is not None
     assert imap_configuration.password is not None
-    _logger.info('Connecting to %s', imap_configuration.host)
+    _logger.info("Connecting to %s", imap_configuration.host)
     imap_client = imapclient.IMAPClient(
         host=imap_configuration.host,
         timeout=imap_configuration.connect_timeout.total_seconds(),
     )
-    _logger.info('Logging in to %s', imap_configuration.username)
+    _logger.info("Logging in to %s", imap_configuration.username)
     response = imap_client.login(
         imap_configuration.username,
         imap_configuration.password,
     )
-    _logger.debug('Login response: %s', response.decode())
-    _logger.info('Selecting folder: %s', imap_configuration.folder)
+    _logger.debug("Login response: %s", response.decode())
+    _logger.info("Selecting folder: %s", imap_configuration.folder)
     select_response = imap_client.select_folder(
         imap_configuration.folder
     )
@@ -200,9 +202,9 @@ def read_from_server(
             },
         )
         _logger.info("Connecting in %s.", reconnect_delay)
-        rlist, wlist, xlist = select.select([
-            stop_socket
-        ], [], [], reconnect_delay.total_seconds())
+        rlist, wlist, xlist = select.select(
+            [stop_socket], [], [], reconnect_delay.total_seconds()
+        )
         if rlist:
             _logger.info("Received stop request. Not connecting.")
             break
@@ -237,7 +239,9 @@ def read_from_server(
         # Listing all socket errors individually is not a good idea,
         # so a blanket catch of `OSError` is done here instead.
         except (
-            imaplib.IMAP4.abort, imaplib.IMAP4.error, OSError
+            imaplib.IMAP4.abort,
+            imaplib.IMAP4.error,
+            OSError,
         ) as error:
             _logger.info(error)
             # Double the delay.
@@ -291,8 +295,8 @@ async def run(
 
         worker_thread = phile.asyncio.Thread(target=handle_event)
         notify_directory = (
-            configuration.state_directory_path /
-            configuration.notify_directory
+            configuration.state_directory_path
+            / configuration.notify_directory
         )
         notify_directory.mkdir(parents=True, exist_ok=True)
         imap_response_handler = UnseenNotifier(
@@ -308,24 +312,24 @@ async def run(
             # Specifically, propagation of connection error.
             # So ignoring this branch report for now,
             async for event in event_reader:  # pragma: no branch
-                event_type = event['type']
+                event_type = event["type"]
                 if event_type == EventType.ADD:
                     await loop.run_in_executor(
                         None,
                         imap_response_handler.add,
-                        event['add_response'],
+                        event["add_response"],
                     )
                 elif event_type == EventType.SELECT:
                     await loop.run_in_executor(
                         None,
                         imap_response_handler.select,
-                        event['select_response'],
+                        event["select_response"],
                     )
                 else:  # pragma: no cover  # Defensive.
-                    assert False, 'Unreadable.'
+                    assert False, "Unreadable."
         finally:
             _logger.info("Sending stop request. To not connect.")
-            stop_writer.sendall(b'\0')
+            stop_writer.sendall(b"\0")
             await worker_thread.async_join()
     finally:
         try:

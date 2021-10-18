@@ -29,8 +29,8 @@ def get_directory(
     configuration: phile.configuration.Entries,
 ) -> pathlib.Path:
     return (
-        configuration.state_directory_path /
-        configuration.notify_directory
+        configuration.state_directory_path
+        / configuration.notify_directory
     )
 
 
@@ -38,9 +38,8 @@ def get_path(
     name: str,
     configuration: phile.configuration.Entries,
 ) -> pathlib.Path:
-    return (
-        get_directory(configuration=configuration) /
-        (name + configuration.notify_suffix)
+    return get_directory(configuration=configuration) / (
+        name + configuration.notify_suffix
     )
 
 
@@ -85,7 +84,6 @@ def save(
 # They likely should subclass from a common base?
 # But they might also be simple enough to not be worth refactoring.
 class Target:
-
     def __init__(
         self,
         *args: typing.Any,
@@ -128,10 +126,10 @@ async def update_path(
         pass
     entry_name = path.name.removesuffix(configuration.notify_suffix)
     if notify_entry is None:
-        _logger.debug('Lost notification %s', entry_name)
+        _logger.debug("Lost notification %s", entry_name)
         notify_registry.discard(entry_name)
         return False
-    _logger.debug('Found notification %s', entry_name)
+    _logger.debug("Found notification %s", entry_name)
     notify_registry.add_entry(notify_entry)
     return True
 
@@ -143,7 +141,7 @@ async def update_existing_paths(
     paths_found = set[pathlib.Path]()
     notify_directory = get_directory(configuration=configuration)
     notify_suffix = configuration.notify_suffix
-    for path in notify_directory.glob('*' + notify_suffix):
+    for path in notify_directory.glob("*" + notify_suffix):
         try:
             added = await update_path(
                 configuration=configuration,

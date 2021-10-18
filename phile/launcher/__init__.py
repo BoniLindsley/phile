@@ -28,9 +28,9 @@ import phile.asyncio.pubsub
 import phile.builtins
 import phile.capability
 
-_KeyT = typing.TypeVar('_KeyT')
-_T = typing.TypeVar('_T')
-_ValueT = typing.TypeVar('_ValueT')
+_KeyT = typing.TypeVar("_KeyT")
+_T = typing.TypeVar("_T")
+_ValueT = typing.TypeVar("_ValueT")
 
 Awaitable = collections.abc.Awaitable[typing.Any]
 NullaryAsyncCallable = collections.abc.Callable[[], Awaitable]
@@ -61,6 +61,7 @@ class Type(enum.IntEnum):
     When the main subroutine returns, after being cancelled or otherwise,
     the unit is considered to have stopped.
     """
+
     SIMPLE = enum.auto()
     """
     A simple :class:`Descriptor` startes
@@ -124,10 +125,9 @@ class NameInUse(RuntimeError):
 
 
 class OneToManyTwoWayDict(dict[_KeyT, set[_ValueT]]):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        self._inverses = (
-            collections.defaultdict[_ValueT, set[_KeyT]](set)
+        self._inverses = collections.defaultdict[_ValueT, set[_KeyT]](
+            set
         )
         super().__init__(*args, **kwargs)
 
@@ -175,7 +175,6 @@ class OneToManyTwoWayDict(dict[_KeyT, set[_ValueT]]):
 
 
 class Database:
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -235,25 +234,25 @@ class Database:
                     )
                 )
 
-            provide_option('after', set[str]())
-            provide_option('before', set[str]())
-            provide_option('binds_to', set[str]())
-            provide_option('capability_name', '')
-            provide_option('conflicts', set[str]())
-            provide_option('default_dependencies', True)
-            provide_option('exec_start', None)
-            provide_option('exec_stop', [])
+            provide_option("after", set[str]())
+            provide_option("before", set[str]())
+            provide_option("binds_to", set[str]())
+            provide_option("capability_name", "")
+            provide_option("conflicts", set[str]())
+            provide_option("default_dependencies", True)
+            provide_option("exec_start", None)
+            provide_option("exec_stop", [])
             default_type = Type.SIMPLE
             if self.capability_name[entry_name]:
                 default_type = Type.CAPABILITY
-            provide_option('type', default_type)
+            provide_option("type", default_type)
             del default_type
             if self.default_dependencies[entry_name]:
                 before = self.before[entry_name].copy()
-                before.add('phile_shutdown.target')
+                before.add("phile_shutdown.target")
                 self.before[entry_name] = before
                 conflicts = self.conflicts[entry_name].copy()
-                conflicts.add('phile_shutdown.target')
+                conflicts.add("phile_shutdown.target")
                 self.conflicts[entry_name] = conflicts
 
             self.remover[entry_name] = functools.partial(
@@ -265,16 +264,16 @@ class Database:
     ) -> None:
         if entry_name in self.known_descriptors:
             raise NameInUse(
-                'Launchers cannot be added with the same name.'
-                ' The following given name is already in use:'
-                ' {entry_name}'.format(entry_name=entry_name)
+                "Launchers cannot be added with the same name."
+                " The following given name is already in use:"
+                " {entry_name}".format(entry_name=entry_name)
             )
-        if 'exec_start' not in descriptor:
+        if "exec_start" not in descriptor:
             raise MissingDescriptorData(
-                'A launcher.Descriptor must provide'
-                ' a exec_start coroutine to be added.'
-                ' It is missing from the unit named'
-                ' {entry_name}'.format(entry_name=entry_name)
+                "A launcher.Descriptor must provide"
+                " a exec_start coroutine to be added."
+                " It is missing from the unit named"
+                " {entry_name}".format(entry_name=entry_name)
             )
 
     def remove(self, entry_name: str) -> None:
@@ -300,7 +299,6 @@ class Event:
 
 
 class Registry:
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -321,7 +319,7 @@ class Registry:
         return self._database
 
     @property
-    def state_machine(self) -> 'Registry':
+    def state_machine(self) -> "Registry":
         return self
 
     async def add(self, entry_name: str, descriptor: Descriptor) -> None:
@@ -344,7 +342,7 @@ class Registry:
         if not self._database.contains(entry_name):
             return
         if self.is_running(entry_name=entry_name):
-            raise RuntimeError('Cannot remove a running launcher.')
+            raise RuntimeError("Cannot remove a running launcher.")
         self._database.remove(entry_name=entry_name)
         self.event_queue.put(
             Event(type=EventType.REMOVE, entry_name=entry_name)
@@ -361,9 +359,9 @@ class Registry:
         try:
             entry_start_task = start_tasks[entry_name]
         except KeyError:
-            entry_start_task = start_tasks[entry_name] = (
-                asyncio.create_task(self._do_start(entry_name))
-            )
+            entry_start_task = start_tasks[
+                entry_name
+            ] = asyncio.create_task(self._do_start(entry_name))
             entry_start_task.add_done_callback(
                 functools.partial(start_tasks.pop, entry_name)
             )
@@ -377,9 +375,9 @@ class Registry:
         try:
             entry_stop_task = stop_tasks[entry_name]
         except KeyError:
-            entry_stop_task = stop_tasks[entry_name] = (
-                asyncio.create_task(self._do_stop(entry_name))
-            )
+            entry_stop_task = stop_tasks[
+                entry_name
+            ] = asyncio.create_task(self._do_stop(entry_name))
             entry_stop_task.add_done_callback(
                 functools.partial(stop_tasks.pop, entry_name)
             )
@@ -397,13 +395,11 @@ class Registry:
             return
         running_tasks = self._running_tasks
         await self._ensure_ready_to_start(entry_name)
-        _logger.debug('Launcher %s is starting.', entry_name)
+        _logger.debug("Launcher %s is starting.", entry_name)
         main_task = await self._start_main_task(entry_name)
-        _logger.debug('Launcher %s has started.', entry_name)
-        running_tasks[entry_name] = runner_task = (
-            asyncio.create_task(
-                self._clean_up_on_stop(entry_name, main_task)
-            )
+        _logger.debug("Launcher %s has started.", entry_name)
+        running_tasks[entry_name] = runner_task = asyncio.create_task(
+            self._clean_up_on_stop(entry_name, main_task)
         )
         runner_task.add_done_callback(
             functools.partial(running_tasks.pop, entry_name)
@@ -413,8 +409,9 @@ class Registry:
         )
         runner_task.add_done_callback(
             lambda _task: (
-                self.event_queue.
-                put(Event(type=EventType.STOP, entry_name=entry_name))
+                self.event_queue.put(
+                    Event(type=EventType.STOP, entry_name=entry_name)
+                )
             )
         )
 
@@ -439,48 +436,45 @@ class Registry:
                 await self._ensure_ready_to_stop(entry_name)
             finally:
                 try:
-                    _logger.debug('Launcher %s is stopping.', entry_name)
+                    _logger.debug("Launcher %s is stopping.", entry_name)
                     await self._run_command_lines(
                         self._database.exec_stop[entry_name]
                     )
                 finally:
                     # TODO(BoniLindsley): What to do with exceptions?
                     await phile.asyncio.cancel_and_wait(main_task)
-                    _logger.debug('Launcher %s has stopped.', entry_name)
+                    _logger.debug("Launcher %s has stopped.", entry_name)
 
     async def _ensure_ready_to_start(self, entry_name: str) -> None:
         database = self._database
         stop = self.stop
-        _logger.debug('Launcher %s is stopping conflicts.', entry_name)
-        for conflict in (
-            database.conflicts.get(entry_name, set())
-            | database.conflicts.inverses.get(entry_name, set())
-        ):
+        _logger.debug("Launcher %s is stopping conflicts.", entry_name)
+        for conflict in database.conflicts.get(
+            entry_name, set()
+        ) | database.conflicts.inverses.get(entry_name, set()):
             stop(conflict)
         _logger.debug(
-            'Launcher %s is starting dependencies.', entry_name
+            "Launcher %s is starting dependencies.", entry_name
         )
         start = self.start
         for dependency in database.binds_to[entry_name]:
             start(dependency)
         _logger.debug(
-            'Launcher %s is waiting on dependencies.', entry_name
+            "Launcher %s is waiting on dependencies.", entry_name
         )
-        after = (
-            database.after.get(entry_name, set())
-            | database.before.inverses.get(entry_name, set())
-        )
-        before = (
-            database.before.get(entry_name, set())
-            | database.after.inverses.get(entry_name, set())
-        )
+        after = database.after.get(
+            entry_name, set()
+        ) | database.before.inverses.get(entry_name, set())
+        before = database.before.get(
+            entry_name, set()
+        ) | database.after.inverses.get(entry_name, set())
         pending_tasks = set(
             filter(
                 None,
                 itertools.chain(
                     map(self._stop_tasks.get, after | before),
                     map(self._start_tasks.get, after),
-                )
+                ),
             )
         )
         if pending_tasks:
@@ -488,21 +482,20 @@ class Registry:
 
     async def _ensure_ready_to_stop(self, entry_name: str) -> None:
         database = self._database
-        _logger.debug('Launcher %s is stopping dependents.', entry_name)
+        _logger.debug("Launcher %s is stopping dependents.", entry_name)
         for dependent in database.binds_to.inverses.get(
             entry_name, set()
         ):
             self.stop(dependent)
-        before = (
-            database.before.get(entry_name, set())
-            | database.after.inverses.get(entry_name, set())
-        )
+        before = database.before.get(
+            entry_name, set()
+        ) | database.after.inverses.get(entry_name, set())
         pending_tasks = set(
             filter(None, map(self._stop_tasks.get, before))
         )
         if pending_tasks:
             _logger.debug(
-                'Launcher %s is waiting on %s dependent(s).',
+                "Launcher %s is waiting on %s dependent(s).",
                 entry_name,
                 len(pending_tasks),
             )
@@ -523,9 +516,9 @@ class Registry:
                 main_task = await main_task
                 assert isinstance(main_task, asyncio.Future)
             elif unit_type is Type.CAPABILITY:
-                expected_capability_name = (
-                    database.capability_name[entry_name]
-                )
+                expected_capability_name = database.capability_name[
+                    entry_name
+                ]
                 # TODO(BoniLindsley): Stop on capability unregistering.
                 # Need to use the same event_view as here
                 # to not miss any events.
@@ -539,8 +532,9 @@ class Registry:
                     ):
                         continue
                     capability_name = (
-                        event.capability.__module__ + '.' +
-                        event.capability.__qualname__
+                        event.capability.__module__
+                        + "."
+                        + event.capability.__qualname__
                     )
                     capabilities_set.append(capability_name)
                     if capability_name == expected_capability_name:
@@ -549,8 +543,8 @@ class Registry:
                     capabilities_set[-1] != expected_capability_name
                 ):
                     raise CapabilityNotSet(
-                        'Launcher {} did not set capability {}.\n'
-                        'Only detected the following: {}'.format(
+                        "Launcher {} did not set capability {}.\n"
+                        "Only detected the following: {}".format(
                             entry_name,
                             expected_capability_name,
                             capabilities_set,
@@ -575,9 +569,9 @@ class Registry:
 
     def add_default_launchers(self) -> None:
         self.add_nowait(
-            'phile_shutdown.target',
+            "phile_shutdown.target",
             phile.launcher.Descriptor(
                 default_dependencies=False,
                 exec_start=[asyncio.get_event_loop().create_future],
-            )
+            ),
         )

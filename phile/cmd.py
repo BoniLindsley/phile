@@ -101,6 +101,6 @@ async def async_cmdloop_threaded_stdin(looping_cmd: cmd.Cmd) -> None:
         try:
             next_command = await stdin.readline()
         except (EOFError, ValueError):
-            next_command = 'EOF\n'
+            next_command = "EOF\n"
         is_stopping = process_command(looping_cmd, next_command)
     looping_cmd.postloop()

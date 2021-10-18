@@ -60,7 +60,7 @@ class PidLock:
     def __del__(self) -> None:
         """Make sure the file was unlocked, and warn if not."""
         if self.locked():
-            warnings.warn('File not unlocked before exiting.')
+            warnings.warn("File not unlocked before exiting.")
             self.release()
 
     def acquire(self) -> None:
@@ -75,7 +75,7 @@ class PidLock:
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
         # Open with "append" which creates the file if missing.
         file_handle = open(  # pylint: disable=consider-using-with
-            self._lock_path, 'a'
+            self._lock_path, "a"
         )
         try:
             portalocker.lock(
@@ -163,8 +163,9 @@ class EntryPoint:
             :attr:`~phile.Configuration.trigger_root`.
         """
         self.trigger_directory = (
-            configuration.state_directory_path /
-            configuration.trigger_directory / trigger_directory
+            configuration.state_directory_path
+            / configuration.trigger_directory
+            / trigger_directory
         )
         """The directory containing trigger files."""
         self._trigger_suffix = configuration.trigger_suffix
@@ -185,7 +186,7 @@ class EntryPoint:
                 for trigger_name in available_triggers:
                     self.add_trigger(trigger_name)
 
-    def __enter__(self) -> 'EntryPoint':
+    def __enter__(self) -> "EntryPoint":
         self.bind()
         return self
 
@@ -235,7 +236,7 @@ class EntryPoint:
         """
         if not self.is_bound():
             raise ResourceWarning(
-                'Not adding trigger. Entry point not bound.'
+                "Not adding trigger. Entry point not bound."
             )
         assert trigger_name in self.callback_map
         self.available_triggers.add(trigger_name)
@@ -252,7 +253,7 @@ class EntryPoint:
         """
         if not self.is_bound():
             raise ResourceWarning(
-                'Not removing trigger. Entry point not bound.'
+                "Not removing trigger. Entry point not bound."
             )
         self.available_triggers.discard(trigger_name)
         self.get_trigger_path(trigger_name).unlink(missing_ok=True)
@@ -305,23 +306,24 @@ class EntryPoint:
         if not self.is_bound():
             return
         for trigger_path in self.trigger_directory.glob(
-            '*' + self._trigger_suffix
+            "*" + self._trigger_suffix
         ):
             trigger_path.unlink(missing_ok=True)
         self._pid_lock.release()
 
 
 _Decorated = typing.TypeVar(
-    '_Decorated', bound=collections.abc.Callable[..., None]
+    "_Decorated", bound=collections.abc.Callable[..., None]
 )
 
 
 def _dispatch_registry_event(method: _Decorated) -> _Decorated:
-
     @functools.wraps(method)
     def dispatch_and_call(
-        registry: 'Registry', name: str, *args: typing.Any,
-        **kwargs: typing.Any
+        registry: "Registry",
+        name: str,
+        *args: typing.Any,
+        **kwargs: typing.Any,
     ) -> None:
         for callback in registry.event_callback_map:
             callback(dispatch_and_call, registry, name)
@@ -334,7 +336,7 @@ class Registry:
 
     # TODO[Python 3.10]: Change string to identifier.
     # Annotations are stored as strings and evalated later in 3.10.
-    __Self = typing.TypeVar('__Self', bound='Registry')
+    __Self = typing.TypeVar("__Self", bound="Registry")
 
     class AlreadyBound(ValueError):
         """A trigger was expected to not be bound."""
@@ -348,7 +350,7 @@ class Registry:
     # TODO[Python 3.10]: Change string to identifier.
     # Annotations are stored as strings and evalated later in 3.10.
     EventHandler = collections.abc.Callable[
-        [collections.abc.Callable[..., typing.Any], 'Registry', str],
+        [collections.abc.Callable[..., typing.Any], "Registry", str],
         typing.Any,
     ]
 
@@ -364,7 +366,7 @@ class Registry:
     def bind(self, name: str, callback: NullaryCallable) -> None:
         actual_callback = self._callback_map.setdefault(name, callback)
         if actual_callback is not callback:
-            raise self.AlreadyBound('Unable to bind trigger: ' + name)
+            raise self.AlreadyBound("Unable to bind trigger: " + name)
 
     @_dispatch_registry_event
     def unbind(self, name: str) -> None:
@@ -380,7 +382,7 @@ class Registry:
     def show(self, name: str) -> None:
         if name not in self._callback_map:
             raise self.NotBound(
-                'Unable to show unbound trigger: ' + name
+                "Unable to show unbound trigger: " + name
             )
         self.visible_triggers.add(name)
 
@@ -402,25 +404,24 @@ class Registry:
             callback = self._callback_map[name]
         except KeyError as error:
             raise self.NotBound(
-                'Unable to activate unbound trigger: ' + name
+                "Unable to activate unbound trigger: " + name
             ) from error
         try:
             self.visible_triggers.remove(name)
         except KeyError as error:
             raise self.NotShown(
-                'Unable to activate hidden trigger: ' + name
+                "Unable to activate hidden trigger: " + name
             ) from error
         callback()
 
 
 class Provider:
-
     class NotBound(ValueError):
         """A trigger was expected to be bound by a specific provider."""
 
     # TODO[Python 3.10]: Change string to identifier.
     # Annotations are stored as strings and evalated later in 3.10.
-    __Self = typing.TypeVar('__Self', bound='Provider')
+    __Self = typing.TypeVar("__Self", bound="Provider")
 
     def __init__(
         self,
@@ -471,7 +472,7 @@ class Provider:
     def is_bound(self) -> bool:
         assert not self._bound_names or (
             len(self._bound_names) == len(self._callback_map)
-        ), 'Provider callbacks are partially bound.'
+        ), "Provider callbacks are partially bound."
         return len(self._bound_names) == len(self._callback_map)
 
     def show_all(self) -> None:
@@ -481,13 +482,13 @@ class Provider:
     def show(self, name: str) -> None:
         if name not in self._bound_names:
             raise self.NotBound(
-                'Unable to show trigger not bound by provider: ' + name
+                "Unable to show trigger not bound by provider: " + name
             )
         self._registry.show(name)
 
     def hide(self, name: str) -> None:
         if name not in self._bound_names:
             raise self.NotBound(
-                'Unable to hide trigger not bound by provider: ' + name
+                "Unable to hide trigger not bound by provider: " + name
             )
         self._registry.hide(name)

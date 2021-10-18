@@ -25,7 +25,6 @@ import phile.signal
 
 
 class UsesPySide2(unittest.TestCase):
-
     def setUp(self) -> None:
         """
         Set up ``PySide2`` to not use user settings.
@@ -43,7 +42,7 @@ class UsesPySide2(unittest.TestCase):
         self.addCleanup(environ.restore)
         environ.set(
             XDG_RUNTIME_DIR=xdg_runtime_dir.name,
-            QT_QPA_PLATFORM='offscreen',
+            QT_QPA_PLATFORM="offscreen",
         )
 
         def cleanup_qapplication() -> None:
@@ -60,7 +59,6 @@ class UsesPySide2(unittest.TestCase):
 
 
 class TestProcessDeferredDeleteEvents(UsesPySide2, unittest.TestCase):
-
     def test_deletion_are_triggered(self) -> None:
         application = PySide2.QtCore.QCoreApplication()
         self.addCleanup(application.shutdown)
@@ -73,7 +71,6 @@ class TestProcessDeferredDeleteEvents(UsesPySide2, unittest.TestCase):
 
 
 class TestProcessEvents(UsesPySide2, unittest.TestCase):
-
     def test_timer_events_are_triggered(self) -> None:
         application = PySide2.QtCore.QCoreApplication()
         self.addCleanup(application.shutdown)
@@ -82,7 +79,6 @@ class TestProcessEvents(UsesPySide2, unittest.TestCase):
         )
 
         class TimedObject(PySide2.QtCore.QObject):
-
             def __init__(
                 self, *args: typing.Any, **kwargs: typing.Any
             ) -> None:
@@ -103,7 +99,6 @@ class TestProcessEvents(UsesPySide2, unittest.TestCase):
 
 
 class UsesQCoreApplication(UsesPySide2, unittest.TestCase):
-
     def setUp(self) -> None:
         """Starts a ``QCoreApplication`` that will be cleaned up."""
         super().setUp()
@@ -111,7 +106,6 @@ class UsesQCoreApplication(UsesPySide2, unittest.TestCase):
 
 
 class TestCallRequest(unittest.TestCase):
-
     def test_requires_callback_argument(self) -> None:
         self.assertRaises(TypeError, phile.PySide2.QtCore.CallRequest)
 
@@ -124,7 +118,6 @@ class TestCallRequest(unittest.TestCase):
 
 
 class TestCaller(UsesQCoreApplication, unittest.TestCase):
-
     def test_calls_callback_in_call_requests(self) -> None:
         callback = unittest.mock.Mock()
         caller = phile.PySide2.QtCore.Caller()
@@ -167,7 +160,6 @@ class TestCaller(UsesQCoreApplication, unittest.TestCase):
 
 
 class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
-
     def test_calls_callback_eventually(self) -> None:
         callback = unittest.mock.Mock()
         phile.PySide2.QtCore.call_soon_threadsafe(callback)
@@ -185,8 +177,9 @@ class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
     def test_calls_from_different_thread_defaults_to_main(self) -> None:
         callback = unittest.mock.Mock()
         worker = threading.Thread(
-            target=functools.
-            partial(phile.PySide2.QtCore.call_soon_threadsafe, callback)
+            target=functools.partial(
+                phile.PySide2.QtCore.call_soon_threadsafe, callback
+            )
         )
         worker.start()
         worker.join()
@@ -202,7 +195,7 @@ class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
                 callback,
                 thread=(
                     PySide2.QtCore.QCoreApplication.instance().thread()
-                )
+                ),
             )
         )
         worker.start()
@@ -217,12 +210,11 @@ class TestCallSoonThreadsafe(UsesQCoreApplication, unittest.TestCase):
             TypeError,
             phile.PySide2.QtCore.call_soon_threadsafe,
             unittest.mock.Mock(),
-            thread=0
+            thread=0,
         )
 
 
 class TestFuture(unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.done = False
@@ -245,9 +237,7 @@ class UserBaseException(BaseException):
 
 
 class TestTask(unittest.TestCase):
-
     def test_run_sets_result(self) -> None:
-
         def zero() -> int:
             return 0
 
@@ -256,7 +246,6 @@ class TestTask(unittest.TestCase):
         self.assertEqual(task.result(), zero())
 
     def test_run_propagates_base_exception(self) -> None:
-
         def bad() -> int:
             raise UserBaseException()
 
@@ -267,7 +256,6 @@ class TestTask(unittest.TestCase):
         self.assertIsInstance(task.exception(), UserBaseException)
 
     def test_run_respects_cancellation_before_run_call(self) -> None:
-
         def zero() -> int:
             return 0
 
@@ -279,7 +267,6 @@ class TestTask(unittest.TestCase):
 
 
 class TestExecutor(UsesQCoreApplication, unittest.TestCase):
-
     def test_calls_submitted_callable(self) -> None:
         callback_mock = unittest.mock.Mock()
         with phile.PySide2.QtCore.Executor() as executor:

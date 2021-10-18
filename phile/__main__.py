@@ -17,15 +17,14 @@ async def async_run(
     launcher_registry: phile.launcher.Registry,
 ) -> int:  # pragma: no cover
     start = launcher_registry.start
-    await start('phile.configuration')
-    configurations = (
-        launcher_registry.capability_registry[phile.configuration.Entries
-                                              ]
-    )
+    await start("phile.configuration")
+    configurations = launcher_registry.capability_registry[
+        phile.configuration.Entries
+    ]
     event_view = launcher_registry.event_queue.__aiter__()
     await asyncio.gather(
         *(start(name) for name in configurations.main_autostart),
-        start(cmd_name := 'phile.launcher.cmd'),
+        start(cmd_name := "phile.launcher.cmd"),
         return_exceptions=True,
     )
     if not launcher_registry.is_running(cmd_name):
@@ -45,17 +44,16 @@ def main() -> int:  # pragma: no cover
     return 0
 
 
-if __name__ == '__main__':  # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     if __debug__:
         log_level = logging.DEBUG
         handler = logging.StreamHandler(sys.stderr)
         formatter = logging.Formatter(
-            '[%(asctime)s] [%(levelno)03d] %(name)s:'
-            ' %(message)s',
+            "[%(asctime)s] [%(levelno)03d] %(name)s:" " %(message)s",
         )
         handler.setFormatter(formatter)
         handler.setLevel(log_level)
-        package_logger = logging.getLogger('phile')
+        package_logger = logging.getLogger("phile")
         package_logger.addHandler(handler)
         package_logger.setLevel(1)
     sys.exit(main())

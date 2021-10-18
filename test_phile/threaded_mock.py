@@ -135,10 +135,9 @@ class ThreadedMock(unittest.mock.Mock):
             self._call_found.clear()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     class TestThreadedMock(unittest.TestCase):
-
         def setUp(self) -> None:
             self.callee = ThreadedMock(
                 timeout=datetime.timedelta(milliseconds=250),
@@ -156,9 +155,7 @@ if __name__ == '__main__':
 
         def test_assert_called_with_soon_example(self) -> None:
             """Successful assert from example."""
-            bad_thread = threading.Thread(
-                target=self.callee, args=(42, )
-            )
+            bad_thread = threading.Thread(target=self.callee, args=(42,))
             bad_thread.start()
             self.call_thread.start()
             self.callee.assert_called_with_soon()

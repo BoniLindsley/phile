@@ -11,7 +11,6 @@ import phile.unittest
 class TestUsesTemporaryDirectory(
     phile.unittest.UsesTemporaryDirectory, unittest.TestCase
 ):
-
     def test_available_attributes(self) -> None:
         self.assertIsInstance(self.temporary_directory, pathlib.Path)
 
@@ -19,6 +18,6 @@ class TestUsesTemporaryDirectory(
         self.assertTrue(self.temporary_directory.is_dir())
 
     def test_directory_is_writable(self) -> None:
-        file_path = self.temporary_directory / 'file.name'
+        file_path = self.temporary_directory / "file.name"
         file_path.touch()
         self.assertTrue(file_path.is_file())

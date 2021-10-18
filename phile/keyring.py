@@ -9,10 +9,10 @@ import keyring.credentials
 
 
 class MemoryKeyring(keyring.backend.KeyringBackend):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super(  # type: ignore[call-arg]
-        ).__init__(*args, **kwargs)  # type: ignore[no-untyped-call]
+        super().__init__(  # type: ignore[call-arg]
+            *args, **kwargs
+        )  # type: ignore[no-untyped-call]
         self.data: dict[str, dict[str, str]] = {}
 
     priority = 2

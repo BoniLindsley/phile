@@ -21,7 +21,7 @@ import phile.unittest
 import phile.watchdog.asyncio
 import phile.watchdog.observers
 
-_T = typing.TypeVar('_T')
+_T = typing.TypeVar("_T")
 
 
 class StartFailed(Exception):
@@ -29,7 +29,6 @@ class StartFailed(Exception):
 
 
 class TestEventView(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.called: asyncio.Event
@@ -41,9 +40,9 @@ class TestEventView(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.called = called = asyncio.Event()
-        self.next_node = (
-            phile.asyncio.pubsub.Node[watchdog.events.FileSystemEvent]()
-        )
+        self.next_node = phile.asyncio.pubsub.Node[
+            watchdog.events.FileSystemEvent
+        ]()
         self.event_view = phile.watchdog.asyncio.EventView(
             next_node=self.next_node
         )
@@ -73,15 +72,14 @@ class TestEventView(unittest.IsolatedAsyncioTestCase):
 
 
 class TestEventQueue(unittest.IsolatedAsyncioTestCase):
-
     async def test_put__puts_event(self) -> None:
         event_queue = phile.watchdog.asyncio.EventQueue()
         view = event_queue.__aiter__()
-        expected_event = watchdog.events.FileCreatedEvent('')
+        expected_event = watchdog.events.FileCreatedEvent("")
         event_queue.put(
             event_data=(
                 expected_event,
-                watchdog.observers.api.ObservedWatch('', False)
+                watchdog.observers.api.ObservedWatch("", False),
             )
         )
         event = await phile.asyncio.wait_for(view.__anext__())
@@ -89,7 +87,6 @@ class TestEventQueue(unittest.IsolatedAsyncioTestCase):
 
 
 class EventEmitterMock:
-
     def __init__(  # pylint: disable=keyword-arg-before-vararg
         self,
         event_queue: watchdog.observers.api.EventQueue,
@@ -97,16 +94,17 @@ class EventEmitterMock:
         timeout: float = 1,
         *args: typing.Any,
         source_events: collections.abc.Iterable[
-            watchdog.events.FileSystemEvent] = [],
+            watchdog.events.FileSystemEvent
+        ] = [],
         **kwargs: typing.Any
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._event_queue = event_queue
         self._loop = asyncio.get_running_loop()
-        self._source_events = (
-            queue.SimpleQueue[watchdog.events.FileSystemEvent]()
-        )
+        self._source_events = queue.SimpleQueue[
+            watchdog.events.FileSystemEvent
+        ]()
         self._started = False
         self._stopped = False
         self._stopped_event = asyncio.Event()
@@ -120,12 +118,16 @@ class EventEmitterMock:
     def create_emitter_class(
         cls,
         source_events: collections.abc.Iterable[
-            watchdog.events.FileSystemEvent],
-    ) -> collections.abc.Callable[[
-        watchdog.observers.api.EventQueue,
-        watchdog.observers.api.ObservedWatch,
-        float,
-    ], phile.watchdog.asyncio.EventEmitter]:
+            watchdog.events.FileSystemEvent
+        ],
+    ) -> collections.abc.Callable[
+        [
+            watchdog.observers.api.EventQueue,
+            watchdog.observers.api.ObservedWatch,
+            float,
+        ],
+        phile.watchdog.asyncio.EventEmitter,
+    ]:
         return functools.partial(  # type: ignore[return-value]
             cls, source_events=source_events
         )
@@ -163,7 +165,6 @@ class TestEventEmitterMock(
     phile.unittest.UsesTemporaryDirectory,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.emitter: EventEmitterMock
@@ -208,7 +209,7 @@ class TestEventEmitterMock(
         )
 
     async def test_queue_event__does_not__queue_if_not_started(
-        self
+        self,
     ) -> None:
         self.emitter.queue_event(self.expected_event)
         self.assertTrue(self.event_queue.empty())
@@ -231,7 +232,7 @@ class TestEventEmitterMock(
         # It acts as a class.
         Emitter = (  # pylint: disable=invalid-name
             EventEmitterMock.create_emitter_class(
-                source_events=(self.expected_event, )
+                source_events=(self.expected_event,)
             )
         )
         emitter = Emitter(self.event_queue, self.watch, 1)
@@ -247,7 +248,6 @@ class TestBaseObserver(
     phile.unittest.UsesTemporaryDirectory,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.event_emitter_class_mock: unittest.mock.Mock
@@ -256,7 +256,7 @@ class TestBaseObserver(
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         emitter_patcher = unittest.mock.patch(
-            'phile.watchdog.asyncio.EventEmitter',
+            "phile.watchdog.asyncio.EventEmitter",
             autospec=True,
         )
         self.event_emitter_class_mock = emitter_patcher.start()
@@ -268,11 +268,11 @@ class TestBaseObserver(
     def test_has_expected_attributes(self) -> None:
         self.assertEqual(
             self.observer.timeout,
-            watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT
+            watchdog.observers.api.DEFAULT_OBSERVER_TIMEOUT,
         )
 
     async def test_schedule_starts_and_unschedule_stops_emitter(
-        self
+        self,
     ) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
         emitter_mock.is_alive.return_value = False
@@ -289,7 +289,7 @@ class TestBaseObserver(
             emitter_mock.stop.assert_called_once()
 
     async def test_schedule_returns_queue_and_unschedule_stops_it(
-        self
+        self,
     ) -> None:
         event_view = await phile.asyncio.wait_for(
             self.observer.schedule(self.temporary_directory)
@@ -306,7 +306,7 @@ class TestBaseObserver(
                 await phile.asyncio.wait_for(event_view.__anext__())
 
     async def test_schedule__returns_cm_that_starts_and_stops_emitter(
-        self
+        self,
     ) -> None:
         emitter_mock = self.event_emitter_class_mock.return_value
         async with await phile.asyncio.wait_for(
@@ -336,12 +336,12 @@ class TestBaseObserver(
         emitter_mock.stop.assert_not_called()
 
     async def test_schedule_not_stopping_queue_if_start_fails(
-        self
+        self,
     ) -> None:
         # Cannot really ensure it is not called.
         # Test for coverage.
         queue_patcher = unittest.mock.patch(
-            'phile.watchdog.asyncio.EventQueue',
+            "phile.watchdog.asyncio.EventQueue",
             autospec=True,
         )
         event_queue_class_mock = queue_patcher.start()
@@ -382,7 +382,6 @@ class TestObserver(
     phile.unittest.UsesTemporaryDirectory,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.observer: phile.watchdog.asyncio.Observer
@@ -401,7 +400,7 @@ class TestObserver(
         async with await phile.asyncio.wait_for(
             self.observer.schedule(self.temporary_directory)
         ) as event_view:
-            file_path = self.temporary_directory / 'touched.txt'
+            file_path = self.temporary_directory / "touched.txt"
             file_path.touch()
             event = await phile.asyncio.wait_for(event_view.__anext__())
             self.assertEqual(
@@ -411,7 +410,6 @@ class TestObserver(
 
 
 class UsesObserver(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.observer: phile.watchdog.asyncio.BaseObserver
         super().__init__(*args, **kwargs)
@@ -439,8 +437,8 @@ class UsesObserver(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(run())
         except BaseException as error:
             message = (
-                '{expected_event} not found.\n'
-                'Received: {received_events}'.format(
+                "{expected_event} not found.\n"
+                "Received: {received_events}".format(
                     expected_event=expected_event,
                     received_events=received_events,
                 )
@@ -460,9 +458,8 @@ class UsesObserver(unittest.IsolatedAsyncioTestCase):
 class TestSplitFileMoveEvent(
     phile.unittest.UsesTemporaryDirectory, unittest.TestCase
 ):
-
     def test_ignores_directory_event(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
+        event_path = self.temporary_directory / "something.file"
         source_event = watchdog.events.DirCreatedEvent(str(event_path))
         self.assertEqual(
             phile.watchdog.asyncio.split_file_move_event(source_event),
@@ -470,16 +467,16 @@ class TestSplitFileMoveEvent(
         )
 
     def test_returns_src_path_of_non_move_file_event(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
+        event_path = self.temporary_directory / "something.file"
         source_event = watchdog.events.FileCreatedEvent(str(event_path))
         self.assertEqual(
             phile.watchdog.asyncio.split_file_move_event(source_event),
-            (source_event, ),
+            (source_event,),
         )
 
     def test_returns_src_and_dest_paths_of_move_file_event(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
-        target_path = (self.temporary_directory / 'something.file_2')
+        event_path = self.temporary_directory / "something.file"
+        target_path = self.temporary_directory / "something.file_2"
         source_event = watchdog.events.FileMovedEvent(
             str(event_path), str(target_path)
         )
@@ -495,9 +492,8 @@ class TestSplitFileMoveEvent(
 class TestEventToFilePaths(
     phile.unittest.UsesTemporaryDirectory, unittest.TestCase
 ):
-
     def test_ignores_directory_event(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
+        event_path = self.temporary_directory / "something.file"
         source_event = watchdog.events.DirCreatedEvent(str(event_path))
         self.assertEqual(
             phile.watchdog.asyncio.event_to_file_paths(source_event),
@@ -505,16 +501,16 @@ class TestEventToFilePaths(
         )
 
     def test_returns_src_path_of_non_move_file_event(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
+        event_path = self.temporary_directory / "something.file"
         source_event = watchdog.events.FileCreatedEvent(str(event_path))
         self.assertEqual(
             phile.watchdog.asyncio.event_to_file_paths(source_event),
-            (event_path, ),
+            (event_path,),
         )
 
     def test_returns_src_and_dest_paths_of_move_file_event(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
-        target_path = (self.temporary_directory / 'something.file_2')
+        event_path = self.temporary_directory / "something.file"
+        target_path = self.temporary_directory / "something.file_2"
         source_event = watchdog.events.FileMovedEvent(
             str(event_path), str(target_path)
         )
@@ -527,46 +523,45 @@ class TestEventToFilePaths(
 class TestFilterPath(
     phile.unittest.UsesTemporaryDirectory, unittest.TestCase
 ):
-
     def test_returns_true_if_passes_filter(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
+        event_path = self.temporary_directory / "something.file"
         passes_filter = phile.watchdog.asyncio.filter_path(
             event_path,
             expected_parent=self.temporary_directory,
-            expected_suffix='.file'
+            expected_suffix=".file",
         )
         self.assertTrue(passes_filter)
 
     def test_returns_false_if_parent_directory_unexpected(self) -> None:
-        event_path = (self.temporary_directory / 'something.file')
+        event_path = self.temporary_directory / "something.file"
         passes_filter = phile.watchdog.asyncio.filter_path(
             event_path,
-            expected_parent=self.temporary_directory / 's',
-            expected_suffix='.file'
+            expected_parent=self.temporary_directory / "s",
+            expected_suffix=".file",
         )
         self.assertFalse(passes_filter)
 
     def test_returns_false_if_suffix_unexpected(self) -> None:
-        event_path = (self.temporary_directory / 'something.file_wrong')
+        event_path = self.temporary_directory / "something.file_wrong"
         passes_filter = phile.watchdog.asyncio.filter_path(
             event_path,
             expected_parent=self.temporary_directory,
-            expected_suffix='.file'
+            expected_suffix=".file",
         )
         self.assertFalse(passes_filter)
 
     def test_returns_true_if_expected_suffix_is_blank(self) -> None:
-        event_path = (self.temporary_directory / 'something.file_wrong')
+        event_path = self.temporary_directory / "something.file_wrong"
         passes_filter = phile.watchdog.asyncio.filter_path(
             event_path,
             expected_parent=self.temporary_directory,
-            expected_suffix=''
+            expected_suffix="",
         )
         self.assertTrue(passes_filter)
 
 
 async def to_async_iter(
-    source: collections.abc.Iterable[_T]
+    source: collections.abc.Iterable[_T],
 ) -> collections.abc.AsyncIterable[_T]:
     for item in source:
         yield item
@@ -577,16 +572,17 @@ class TestMonitorFileExistence(
     phile.unittest.UsesTemporaryDirectory,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.expected_files: (
             list[tuple[pathlib.Path, typing.Optional[str]]]
         )
-        self.loader: collections.abc.AsyncIterator[tuple[
-            pathlib.Path, typing.Optional[str]]]
+        self.loader: collections.abc.AsyncIterator[
+            tuple[pathlib.Path, typing.Optional[str]]
+        ]
         self.watchdog_view: collections.abc.AsyncIterator[
-            watchdog.events.FileSystemEvent]
+            watchdog.events.FileSystemEvent
+        ]
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
@@ -596,11 +592,13 @@ class TestMonitorFileExistence(
         )
         self.loader = phile.watchdog.asyncio.load_changed_files(
             directory_path=self.temporary_directory,
-            expected_suffix='.suf',
+            expected_suffix=".suf",
             watchdog_view=self.watchdog_view,
         )
 
-    async def assert_returns(self, ) -> None:
+    async def assert_returns(
+        self,
+    ) -> None:
         received_files: (
             list[tuple[pathlib.Path, typing.Optional[str]]]
         ) = []
@@ -611,11 +609,11 @@ class TestMonitorFileExistence(
                 while not found:
                     received_file = await load_aiter.__anext__()
                     received_files.append(received_file)
-                    found = (received_file == expected_file)
+                    found = received_file == expected_file
         except BaseException as error:
             message = (
-                'Did not receive\n{expected_files}\n'
-                'Received\n{received_files}'.format(
+                "Did not receive\n{expected_files}\n"
+                "Received\n{received_files}".format(
                     expected_files=self.expected_files,
                     received_files=received_files,
                 )
@@ -623,48 +621,46 @@ class TestMonitorFileExistence(
             raise self.failureException(message) from error
 
     async def test_true_for_creation(self) -> None:
-        src_path = self.temporary_directory / 'a.suf'
+        src_path = self.temporary_directory / "a.suf"
         source_events: list[watchdog.events.FileSystemEvent] = [
             watchdog.events.FileCreatedEvent(str(src_path))
         ]
         existences: list[tuple[pathlib.Path, bool]] = [
-            (path, existence) async for path, existence in
-            phile.watchdog.asyncio.monitor_file_existence(
+            (path, existence)
+            async for path, existence in phile.watchdog.asyncio.monitor_file_existence(
                 directory_path=self.temporary_directory,
-                expected_suffix='.suf',
+                expected_suffix=".suf",
                 watchdog_view=to_async_iter(source_events),
             )
         ]
         self.assertEqual(existences, [(src_path, True)])
 
     async def test_false_for_deletion(self) -> None:
-        src_path = self.temporary_directory / 'a.suf'
+        src_path = self.temporary_directory / "a.suf"
         source_events: list[watchdog.events.FileSystemEvent] = [
             watchdog.events.FileDeletedEvent(str(src_path))
         ]
         existences: list[tuple[pathlib.Path, bool]] = [
-            (path, existence) async for path, existence in
-            phile.watchdog.asyncio.monitor_file_existence(
+            (path, existence)
+            async for path, existence in phile.watchdog.asyncio.monitor_file_existence(
                 directory_path=self.temporary_directory,
-                expected_suffix='.suf',
+                expected_suffix=".suf",
                 watchdog_view=to_async_iter(source_events),
             )
         ]
         self.assertEqual(existences, [(src_path, False)])
 
     async def test_returns_two_items_for_move(self) -> None:
-        src_path = self.temporary_directory / 'a.suf'
-        dest_path = self.temporary_directory / 'b.suf'
+        src_path = self.temporary_directory / "a.suf"
+        dest_path = self.temporary_directory / "b.suf"
         source_events: list[watchdog.events.FileSystemEvent] = [
-            watchdog.events.FileMovedEvent(
-                str(src_path), str(dest_path)
-            )
+            watchdog.events.FileMovedEvent(str(src_path), str(dest_path))
         ]
         existences: list[tuple[pathlib.Path, bool]] = [
-            (path, existence) async for path, existence in
-            phile.watchdog.asyncio.monitor_file_existence(
+            (path, existence)
+            async for path, existence in phile.watchdog.asyncio.monitor_file_existence(
                 directory_path=self.temporary_directory,
-                expected_suffix='.suf',
+                expected_suffix=".suf",
                 watchdog_view=to_async_iter(source_events),
             )
         ]
@@ -673,15 +669,15 @@ class TestMonitorFileExistence(
         )
 
     async def test_ignores_wrong_suffix(self) -> None:
-        src_path = self.temporary_directory / 'a.suf_wrong'
+        src_path = self.temporary_directory / "a.suf_wrong"
         source_events: list[watchdog.events.FileSystemEvent] = [
             watchdog.events.FileCreatedEvent(str(src_path))
         ]
         existences: list[tuple[pathlib.Path, bool]] = [
-            (path, existence) async for path, existence in
-            phile.watchdog.asyncio.monitor_file_existence(
+            (path, existence)
+            async for path, existence in phile.watchdog.asyncio.monitor_file_existence(
                 directory_path=self.temporary_directory,
-                expected_suffix='.suf',
+                expected_suffix=".suf",
                 watchdog_view=to_async_iter(source_events),
             )
         ]
@@ -693,16 +689,17 @@ class TestLoadChangedFiles(
     phile.unittest.UsesTemporaryDirectory,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.expected_files: (
             list[tuple[pathlib.Path, typing.Optional[str]]]
         )
-        self.loader: collections.abc.AsyncIterator[tuple[
-            pathlib.Path, typing.Optional[str]]]
+        self.loader: collections.abc.AsyncIterator[
+            tuple[pathlib.Path, typing.Optional[str]]
+        ]
         self.watchdog_view: collections.abc.AsyncIterator[
-            watchdog.events.FileSystemEvent]
+            watchdog.events.FileSystemEvent
+        ]
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
@@ -712,11 +709,13 @@ class TestLoadChangedFiles(
         )
         self.loader = phile.watchdog.asyncio.load_changed_files(
             directory_path=self.temporary_directory,
-            expected_suffix='.suf',
+            expected_suffix=".suf",
             watchdog_view=self.watchdog_view,
         )
 
-    async def assert_returns(self, ) -> None:
+    async def assert_returns(
+        self,
+    ) -> None:
         received_files: (
             list[tuple[pathlib.Path, typing.Optional[str]]]
         ) = []
@@ -727,11 +726,11 @@ class TestLoadChangedFiles(
                 while not found:
                     received_file = await load_aiter.__anext__()
                     received_files.append(received_file)
-                    found = (received_file == expected_file)
+                    found = received_file == expected_file
         except BaseException as error:
             message = (
-                'Did not receive\n{expected_files}\n'
-                'Received\n{received_files}'.format(
+                "Did not receive\n{expected_files}\n"
+                "Received\n{received_files}".format(
                     expected_files=self.expected_files,
                     received_files=received_files,
                 )
@@ -740,18 +739,18 @@ class TestLoadChangedFiles(
 
     async def test_loads_readable_file(self) -> None:
         self.expected_files.append(
-            (self.temporary_directory / 'a.suf', 'b')
+            (self.temporary_directory / "a.suf", "b")
         )
         load_task = asyncio.create_task(self.assert_returns())
         await asyncio.sleep(0)  # Give the task time to start.
-        self.expected_files[0][0].write_text('b')
+        self.expected_files[0][0].write_text("b")
         await phile.asyncio.wait_for(load_task)
 
     async def test_returns_none_for_deletion(self) -> None:
         await self.test_loads_readable_file()
         self.expected_files.clear()
         self.expected_files.append(
-            (self.temporary_directory / 'a.suf', None)
+            (self.temporary_directory / "a.suf", None)
         )
         load_task = asyncio.create_task(self.assert_returns())
         await asyncio.sleep(0)
@@ -760,10 +759,10 @@ class TestLoadChangedFiles(
 
     async def test_ignores_wrong_suffix(self) -> None:
         self.expected_files.append(
-            (self.temporary_directory / 'a.suf', 'b')
+            (self.temporary_directory / "a.suf", "b")
         )
         load_task = asyncio.create_task(self.assert_returns())
         await asyncio.sleep(0)
-        (self.temporary_directory / 'b.suf_bad').write_text('no')
-        self.expected_files[0][0].write_text('b')
+        (self.temporary_directory / "b.suf_bad").write_text("no")
+        self.expected_files[0][0].write_text("b")
         await phile.asyncio.wait_for(load_task)

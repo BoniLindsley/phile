@@ -34,9 +34,9 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        self.launcher_registry = launcher_registry = (
-            phile.launcher.Registry()
-        )
+        self.launcher_registry = (
+            launcher_registry
+        ) = phile.launcher.Registry()
         self.stdin = io.StringIO()
         self.stdout = io.StringIO()
         self.cmd = phile.launcher.cmd.Cmd(
@@ -47,39 +47,38 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         self.add_launchers()
 
     def add_launchers(self) -> None:
-
         def add(launcher_name: str) -> None:
             self.launcher_registry.add_nowait(
                 entry_name=launcher_name,
                 descriptor=phile.launcher.Descriptor(
                     exec_start=[asyncio.get_event_loop().create_future],
-                )
+                ),
             )
 
-        self.launcher_name_1 = 'launcher_cmd_runner'
+        self.launcher_name_1 = "launcher_cmd_runner"
         add(self.launcher_name_1)
-        self.launcher_name_2 = 'launcher_cmd_tester'
+        self.launcher_name_2 = "launcher_cmd_tester"
         add(self.launcher_name_2)
 
     def test_do_eof_stops_cmd(self) -> None:
-        self.assertTrue(self.cmd.onecmd('EOF'))
+        self.assertTrue(self.cmd.onecmd("EOF"))
 
     async def test_do_reset_reuses_id(self) -> None:
         self.test_do_list_sorts_output_of_new_launchers()
         self.launcher_registry.remove_nowait(self.launcher_name_1)
-        self.assertFalse(self.cmd.onecmd('reset'))
+        self.assertFalse(self.cmd.onecmd("reset"))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 3 launchers.\n'
-            '[stopped] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'
-            'Listing IDs and states of 2 launchers.\n'
-            '[stopped] 0: {launcher_name_2}\n'
-            '[stopped] 1: phile_shutdown.target\n'.format(
+            "Listing IDs and states of 3 launchers.\n"
+            "[stopped] 0: {launcher_name_1}\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n"
+            "Listing IDs and states of 2 launchers.\n"
+            "[stopped] 0: {launcher_name_2}\n"
+            "[stopped] 1: phile_shutdown.target\n".format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
-            )
+            ),
         )
 
     async def assert_get_event_soon(
@@ -99,8 +98,8 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(run())
         except BaseException as error:
             message = (
-                'Did not receive {expected_event}\n'
-                'Received\n{received_events}'.format(
+                "Did not receive {expected_event}\n"
+                "Received\n{received_events}".format(
                     expected_event=expected_event,
                     received_events=received_events,
                 )
@@ -108,12 +107,12 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
             raise self.failureException(message) from error
 
     async def test_do_start_starts_launcher(self) -> None:
-        self.assertFalse(self.cmd.onecmd('list'))
+        self.assertFalse(self.cmd.onecmd("list"))
         self.assertFalse(
             self.launcher_registry.is_running(self.launcher_name_1)
         )
         event_view = self.launcher_registry.event_queue.__aiter__()
-        self.assertFalse(self.cmd.onecmd('start 0'))
+        self.assertFalse(self.cmd.onecmd("start 0"))
         await self.assert_get_event_soon(
             event_view,
             phile.launcher.Event(
@@ -126,42 +125,42 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_do_start_writes_to_stdout(self) -> None:
-        self.assertFalse(self.cmd.onecmd('reset'))
-        self.assertFalse(self.cmd.onecmd('start 1'))
+        self.assertFalse(self.cmd.onecmd("reset"))
+        self.assertFalse(self.cmd.onecmd("start 1"))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 3 launchers.\n'
-            '[stopped] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'
-            'Started 1 launchers.\n'.format(
+            "Listing IDs and states of 3 launchers.\n"
+            "[stopped] 0: {launcher_name_1}\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n"
+            "Started 1 launchers.\n".format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
-            )
+            ),
         )
 
     def test_do_start_warns_wrong_argument(self) -> None:
-        self.assertFalse(self.cmd.onecmd('start a'))
+        self.assertFalse(self.cmd.onecmd("start a"))
         self.assertEqual(
-            self.stdout.getvalue(), 'Unable to parse given launcher: a\n'
+            self.stdout.getvalue(), "Unable to parse given launcher: a\n"
         )
 
     def test_do_start_informs_unknown_launchers(self) -> None:
-        self.assertFalse(self.cmd.onecmd('start 0'))
+        self.assertFalse(self.cmd.onecmd("start 0"))
         self.assertEqual(
-            self.stdout.getvalue(), 'Unknown launcher ID 0.\n'
+            self.stdout.getvalue(), "Unknown launcher ID 0.\n"
         )
 
     async def test_do_stop_stops_launcher(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_registry.start(self.launcher_name_1)
         )
-        self.assertFalse(self.cmd.onecmd('list'))
+        self.assertFalse(self.cmd.onecmd("list"))
         self.assertTrue(
             self.launcher_registry.is_running(self.launcher_name_1)
         )
         event_view = self.launcher_registry.event_queue.__aiter__()
-        self.assertFalse(self.cmd.onecmd('stop 0'))
+        self.assertFalse(self.cmd.onecmd("stop 0"))
         await self.assert_get_event_soon(
             event_view,
             phile.launcher.Event(
@@ -177,75 +176,75 @@ class TestCmd(unittest.IsolatedAsyncioTestCase):
         await phile.asyncio.wait_for(
             self.launcher_registry.start(self.launcher_name_1)
         )
-        self.assertFalse(self.cmd.onecmd('list'))
-        self.assertFalse(self.cmd.onecmd('stop 0'))
+        self.assertFalse(self.cmd.onecmd("list"))
+        self.assertFalse(self.cmd.onecmd("stop 0"))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 3 launchers.\n'
-            '[running] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'
-            'Stopped 1 launchers.\n'.format(
+            "Listing IDs and states of 3 launchers.\n"
+            "[running] 0: {launcher_name_1}\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n"
+            "Stopped 1 launchers.\n".format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
-            )
+            ),
         )
 
     def test_do_stop_warns_wrong_argument(self) -> None:
-        self.assertFalse(self.cmd.onecmd('stop a'))
+        self.assertFalse(self.cmd.onecmd("stop a"))
         self.assertEqual(
-            self.stdout.getvalue(), 'Unable to parse given launcher: a\n'
+            self.stdout.getvalue(), "Unable to parse given launcher: a\n"
         )
 
     def test_do_stop_informs_unknown_launchers(self) -> None:
-        self.assertFalse(self.cmd.onecmd('stop 0'))
+        self.assertFalse(self.cmd.onecmd("stop 0"))
         self.assertEqual(
-            self.stdout.getvalue(), 'Unknown launcher ID 0.\n'
+            self.stdout.getvalue(), "Unknown launcher ID 0.\n"
         )
 
     def test_do_list_sorts_output_of_new_launchers(self) -> None:
-        self.assertFalse(self.cmd.onecmd('list'))
+        self.assertFalse(self.cmd.onecmd("list"))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 3 launchers.\n'
-            '[stopped] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'.format(
+            "Listing IDs and states of 3 launchers.\n"
+            "[stopped] 0: {launcher_name_1}\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n".format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
-            )
+            ),
         )
 
     async def test_do_list_prints_running_launchers(self) -> None:
         await phile.asyncio.wait_for(
             self.launcher_registry.start(self.launcher_name_1)
         )
-        self.assertFalse(self.cmd.onecmd('list'))
+        self.assertFalse(self.cmd.onecmd("list"))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 3 launchers.\n'
-            '[running] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'.format(
+            "Listing IDs and states of 3 launchers.\n"
+            "[running] 0: {launcher_name_1}\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n".format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
-            )
+            ),
         )
 
     async def test_do_list_ignores_removed_launchers(self) -> None:
-        self.assertFalse(self.cmd.onecmd('list'))
+        self.assertFalse(self.cmd.onecmd("list"))
         self.launcher_registry.remove_nowait(self.launcher_name_1)
-        self.assertFalse(self.cmd.onecmd('list'))
+        self.assertFalse(self.cmd.onecmd("list"))
         self.assertEqual(
             self.stdout.getvalue(),
-            'Listing IDs and states of 3 launchers.\n'
-            '[stopped] 0: {launcher_name_1}\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'
-            'Listing IDs and states of 2 launchers.\n'
-            '[stopped] 1: {launcher_name_2}\n'
-            '[stopped] 2: phile_shutdown.target\n'.format(
+            "Listing IDs and states of 3 launchers.\n"
+            "[stopped] 0: {launcher_name_1}\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n"
+            "Listing IDs and states of 2 launchers.\n"
+            "[stopped] 1: {launcher_name_2}\n"
+            "[stopped] 2: phile_shutdown.target\n".format(
                 launcher_name_1=self.launcher_name_1,
                 launcher_name_2=self.launcher_name_2,
-            )
+            ),
         )

@@ -18,7 +18,6 @@ import phile.cmd
 
 
 class _Cmd(cmd.Cmd):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.postcmd_called = False
@@ -48,7 +47,6 @@ class _Cmd(cmd.Cmd):
 
 
 class _UsesCmd(unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.stdin: io.StringIO
@@ -66,24 +64,23 @@ class TestProcessCommand(_UsesCmd, unittest.TestCase):
     """Tests :func:`~phile.cmd.process_command`."""
 
     def test_exits_without_command(self) -> None:
-        self.assertTrue(phile.cmd.process_command(self.cmd, ''))
+        self.assertTrue(phile.cmd.process_command(self.cmd, ""))
 
     def test_exits_with_eof(self) -> None:
-        self.assertTrue(phile.cmd.process_command(self.cmd, 'EOF'))
+        self.assertTrue(phile.cmd.process_command(self.cmd, "EOF"))
 
     def test_run_precmd(self) -> None:
         self.assertFalse(self.cmd.precmd_called)
-        phile.cmd.process_command(self.cmd, 'EOF')
+        phile.cmd.process_command(self.cmd, "EOF")
         self.assertTrue(self.cmd.precmd_called)
 
     def test_run_postcmd(self) -> None:
         self.assertFalse(self.cmd.postcmd_called)
-        phile.cmd.process_command(self.cmd, 'EOF')
+        phile.cmd.process_command(self.cmd, "EOF")
         self.assertTrue(self.cmd.postcmd_called)
 
 
 class TestAsyncCmdloopThreadedStdin(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.cmd: _Cmd
@@ -108,14 +105,14 @@ class TestAsyncCmdloopThreadedStdin(unittest.IsolatedAsyncioTestCase):
         )
         self.addCleanup(self.stdin.close)
         self.stdin_writer = open(  # pylint: disable=consider-using-with
-            writer_fd, mode='w', buffering=1
+            writer_fd, mode="w", buffering=1
         )
         self.addCleanup(self.stdin_writer.close)
         self.stdout = io.StringIO()
         self.cmd = _Cmd(stdin=self.stdin, stdout=self.stdout)
 
     async def test_exits_with_eof(self) -> None:
-        self.stdin_writer.write('EOF\n')
+        self.stdin_writer.write("EOF\n")
         await phile.asyncio.wait_for(
             phile.cmd.async_cmdloop_threaded_stdin(
                 looping_cmd=self.cmd,
@@ -131,9 +128,9 @@ class TestAsyncCmdloopThreadedStdin(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_respects_intro(self) -> None:
-        self.cmd.intro = 'Hello\n'
+        self.cmd.intro = "Hello\n"
         await self.test_exits_if_eof_reached()
-        self.assertEqual(self.stdout.getvalue(), 'Hello\n(Cmd) ')
+        self.assertEqual(self.stdout.getvalue(), "Hello\n(Cmd) ")
 
     async def test_run_preloop(self) -> None:
         self.assertFalse(self.cmd.preloop_called)

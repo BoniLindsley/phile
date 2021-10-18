@@ -20,7 +20,8 @@ class TestTimedeltaToSeconds(unittest.TestCase):
         self.assertEqual(
             phile.datetime.timedelta_to_seconds(
                 datetime.timedelta(minutes=1)
-            ), 60
+            ),
+            60,
         )
 
     def test_none_to_none(self) -> None:

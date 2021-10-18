@@ -22,9 +22,9 @@ import phile.trigger
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
 
 Button = typing.Union[pynput.keyboard.Key, pynput.keyboard.KeyCode]
-ButtonCallback = (
-    collections.abc.Callable[[typing.Optional[Button]], typing.Any]
-)
+ButtonCallback = collections.abc.Callable[
+    [typing.Optional[Button]], typing.Any
+]
 
 
 class _Listener(

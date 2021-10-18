@@ -23,7 +23,7 @@ import phile.asyncio
 
 @dataclasses.dataclass
 class Arguments:
-    session_name: str = 'ctrl'
+    session_name: str = "ctrl"
     tmux_configuration_path: typing.Optional[pathlib.Path] = None
 
     def to_list(self) -> typing.List[str]:
@@ -34,22 +34,23 @@ class Arguments:
         In particular, the returned list
         does not specify the program to be called.
         """
-        arguments = ['-CC', '-u']
+        arguments = ["-CC", "-u"]
         """Command arguments for creating control mode client."""
         if self.tmux_configuration_path is not None:
-            arguments.extend(('-f', str(self.tmux_configuration_path)))
+            arguments.extend(("-f", str(self.tmux_configuration_path)))
         if self.session_name:
-            arguments.extend((
-                'new-session',
-                '-A',
-                '-s',
-                self.session_name,
-            ))
+            arguments.extend(
+                (
+                    "new-session",
+                    "-A",
+                    "-s",
+                    self.session_name,
+                )
+            )
         return arguments
 
 
 class Protocol(asyncio.Protocol):
-
     class PrefixNotFound(RuntimeError):
         pass
 
@@ -57,7 +58,7 @@ class Protocol(asyncio.Protocol):
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self.lines: typing.List[bytes] = []
-        self.buffer = b''
+        self.buffer = b""
         self.new_line_received = asyncio.Event()
         self.new_data_received = asyncio.Event()
         """
@@ -68,14 +69,14 @@ class Protocol(asyncio.Protocol):
         self._next_line: typing.Optional[bytes] = None
 
     def data_received(self, data: bytes) -> None:
-        newline = b'\r\n'
+        newline = b"\r\n"
         separator = newline  # Loop entry condition
         while separator:
             content, separator, data = data.partition(newline)
             self.buffer += content + separator
             if separator:
                 self.lines.append(self.buffer)
-                self.buffer = b''
+                self.buffer = b""
                 self.new_line_received.set()
         self.new_data_received.set()
 
@@ -102,7 +103,7 @@ class Protocol(asyncio.Protocol):
 
     async def remove_prefix(self, prefix: bytes) -> None:
         """New line ``\r\n`` is not allowed in ``prefix``."""
-        assert prefix.find(b'\r\n') == -1
+        assert prefix.find(b"\r\n") == -1
         found = False
         prefix_length = len(prefix)
         try:
@@ -112,7 +113,7 @@ class Protocol(asyncio.Protocol):
                     line = await self.peek_line()
                     if line[0:prefix_length] != prefix:
                         raise Protocol.PrefixNotFound()
-                    self.lines[0] = line[len(prefix):]
+                    self.lines[0] = line[len(prefix) :]
                     found = True
                 else:
                     if len(self.buffer) >= prefix_length:
@@ -123,7 +124,7 @@ class Protocol(asyncio.Protocol):
                         if not result:
                             self.new_data_received.clear()
                         found = True
-                    elif self.buffer != prefix[0:len(self.buffer)]:
+                    elif self.buffer != prefix[0 : len(self.buffer)]:
                         raise Protocol.PrefixNotFound()
                     # Breaks invariant of having data but cleared event.
                     # This is needed to detect incoming data.
@@ -166,9 +167,9 @@ class Protocol(asyncio.Protocol):
         return lines
 
     async def read_block(self) -> typing.List[str]:
-        begin_line = await self.drop_lines_until_starts_with('%begin ')
+        begin_line = await self.drop_lines_until_starts_with("%begin ")
         content_lines = await self.read_lines_until_starts_with(
-            ('%end ', '%error ')
+            ("%end ", "%error ")
         )
         content_lines.insert(0, begin_line)
         return content_lines
@@ -192,8 +193,8 @@ class Client:
         self._commands.put_nowait(command)
 
     async def run_message_loop(self) -> None:
-        await self.protocol.remove_prefix(b'\x1bP' b'1000p')
-        command = 'NotCommand-EnterLoop'
+        await self.protocol.remove_prefix(b"\x1bP" b"1000p")
+        command = "NotCommand-EnterLoop"
         # Exit command is an empty line.
         while command:
             # The server sends one block at the beginniing.
@@ -201,7 +202,7 @@ class Client:
             # TODO[python/mypy#9922]: Remove type declaration.
             command_task: asyncio.Task[str]
             async with phile.asyncio.open_task(
-                self.protocol.drop_lines_not_starting_with('%exit'),
+                self.protocol.drop_lines_not_starting_with("%exit"),
                 suppress_cancelled_error_if_not_done=True,
             ) as exit_task, phile.asyncio.open_task(
                 self._commands.get(),
@@ -215,11 +216,11 @@ class Client:
                     break
                 command = await command_task
             self._commands.task_done()
-            self.transport.write(command.encode() + b'\n')
+            self.transport.write(command.encode() + b"\n")
         # This is for graceful shutdown. Not really needed.
         # Left here for documentation purposes on shutdown responses.
         if False:  # pragma: no cover
-            exit_response = '%exit\r\n' '\x1b\\'
+            exit_response = "%exit\r\n" "\x1b\\"
             await self.protocol.drop_lines_until_starts_with(
                 exit_response
             )
@@ -244,7 +245,7 @@ class Client:
 
 @contextlib.asynccontextmanager
 async def open(
-    control_mode_arguments: Arguments
+    control_mode_arguments: Arguments,
 ) -> typing.AsyncIterator[Client]:
     async with contextlib.AsyncExitStack() as stack:
         tty_fd, subprocess_tty_fd = pty.openpty()
@@ -254,7 +255,7 @@ async def open(
         try:
             # Since stdout is parsed, stderr has to be sent elsewhere.
             subprocess = await asyncio.create_subprocess_exec(
-                'tmux',
+                "tmux",
                 *control_mode_arguments.to_list(),
                 stdin=subprocess_tty_fd,
                 stdout=subprocess_tty_fd,
@@ -267,27 +268,23 @@ async def open(
             os.close(subprocess_tty_fd)
         loop = asyncio.get_running_loop()
         transport: asyncio.WriteTransport
-        transport, _ = (  # Variable type.
-            await loop.connect_write_pipe(  # type: ignore[assignment]
-                asyncio.Protocol,
-                builtins.open(
-                    tty_fd, buffering=0, mode='wb', closefd=False
-                ),
-            )
+        (
+            transport,
+            _,
+        ) = await loop.connect_write_pipe(  # type: ignore[assignment]
+            asyncio.Protocol,
+            builtins.open(tty_fd, buffering=0, mode="wb", closefd=False),
         )
         stack.callback(transport.close)
         protocol: Protocol
-        read_transport, protocol = (  # Variable type.
-            await loop.connect_read_pipe(  # type: ignore[assignment]
-                Protocol,
-                builtins.open(
-                    tty_fd, buffering=0, mode='rb', closefd=False
-                ),
-            )
+        (
+            read_transport,
+            protocol,
+        ) = await loop.connect_read_pipe(  # type: ignore[assignment]
+            Protocol,
+            builtins.open(tty_fd, buffering=0, mode="rb", closefd=False),
         )
         stack.callback(read_transport.close)
         yield Client(
-            transport=transport,
-            protocol=protocol,
-            subprocess=subprocess
+            transport=transport, protocol=protocol, subprocess=subprocess
         )

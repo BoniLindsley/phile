@@ -15,7 +15,6 @@ import phile.builtins
 
 
 class TestProvideItem(unittest.TestCase):
-
     def test_assigns_item(self) -> None:
         target_map: dict[int, int] = {}
         phile.builtins.provide_item(target_map, 0, 1)

@@ -13,9 +13,10 @@ import typing
 import phile.launcher
 import phile.launcher.defaults
 
-_T = typing.TypeVar('_T')
-AsyncTarget = collections.abc.Callable[[phile.launcher.Registry],
-                                       collections.abc.Awaitable[_T]]
+_T = typing.TypeVar("_T")
+AsyncTarget = collections.abc.Callable[
+    [phile.launcher.Registry], collections.abc.Awaitable[_T]
+]
 
 # TODO[mypy issue #1422]: __loader__ not defined
 _loader_name: str = __loader__.name  # type: ignore[name-defined]
@@ -33,13 +34,13 @@ async def _async_run(data: _InverseDependencyData[_T]) -> _T:
     try:
         phile.launcher.defaults.add(launcher_registry=launcher_registry)
         data.launcher_registry = launcher_registry
-        _logger.debug('Target of asyncio loop is starting.')
+        _logger.debug("Target of asyncio loop is starting.")
         try:
             return await data.async_target(launcher_registry)
         finally:
-            _logger.debug('Target of asyncio loop has stopped.')
+            _logger.debug("Target of asyncio loop has stopped.")
     finally:
-        await launcher_registry.start('phile_shutdown.target')
+        await launcher_registry.start("phile_shutdown.target")
 
 
 def run(async_target: AsyncTarget[_T]) -> _T:
@@ -59,16 +60,17 @@ def run(async_target: AsyncTarget[_T]) -> _T:
             launcher_registry = data.launcher_registry
             # pylint: disable=protected-access
             if (launcher_registry is not None) and (
-                'pyside2' in launcher_registry.state_machine._start_tasks
+                "pyside2" in launcher_registry.state_machine._start_tasks
             ):
                 # pylint: disable=import-outside-toplevel
                 import PySide2.QtWidgets
+
                 qt_app = PySide2.QtWidgets.QApplication()
                 qt_app.aboutToQuit.connect(
                     functools.partial(
                         loop.call_soon_threadsafe,
                         launcher_registry.state_machine.stop,
-                        'pyside2',
+                        "pyside2",
                     )
                 )
                 qt_app.setQuitLockEnabled(False)

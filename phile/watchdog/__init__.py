@@ -20,8 +20,8 @@ import watchdog.observers
 # Internal packages.
 import phile.watchdog.observers
 
-_D_co = typing.TypeVar('_D_co', covariant=True)
-_D_contra = typing.TypeVar('_D_contra', contravariant=True)
+_D_co = typing.TypeVar("_D_co", covariant=True)
+_D_contra = typing.TypeVar("_D_contra", contravariant=True)
 
 
 class SingleParameterCallback(typing.Protocol[_D_contra, _D_co]):
@@ -38,9 +38,9 @@ class SingleParameterCallback(typing.Protocol[_D_contra, _D_co]):
         ...
 
 
-EventHandler = (
-    SingleParameterCallback[watchdog.events.FileSystemEvent, typing.Any]
-)
+EventHandler = SingleParameterCallback[
+    watchdog.events.FileSystemEvent, typing.Any
+]
 """
 Signature of callables
 receiveing :class:`~watchdog.events.FileSystemEvent`-s.
@@ -125,17 +125,19 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
         to which ``path_handler`` is to be scheduled in.
         """
         self.watchdog_watch: typing.Optional[
-            watchdog.observers.api.ObservedWatch] = None
+            watchdog.observers.api.ObservedWatch
+        ] = None
         """Description of watch data from :mod:`watchdog`."""
 
-    def __enter__(self) -> 'Scheduler':
+    def __enter__(self) -> "Scheduler":
         self.schedule()
         return self
 
     def __exit__(
-        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
         exc_value: typing.Optional[BaseException],
-        traceback: typing.Optional[types.TracebackType]
+        traceback: typing.Optional[types.TracebackType],
     ) -> typing.Optional[bool]:
         self.unschedule()
         return None
@@ -167,7 +169,7 @@ class Scheduler(watchdog.events.FileSystemEventHandler):
         phile.watchdog.observers.remove_handler(
             observer=self.watching_observer,
             event_handler=self,
-            watch=self.watchdog_watch
+            watch=self.watchdog_watch,
         )
         self.watchdog_watch = None
 

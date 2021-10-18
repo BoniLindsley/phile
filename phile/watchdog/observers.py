@@ -18,7 +18,7 @@ import watchdog.observers
 
 
 def was_start_called(
-    observer: watchdog.observers.api.BaseObserver
+    observer: watchdog.observers.api.BaseObserver,
 ) -> bool:
     """
     Returns whether
@@ -34,7 +34,7 @@ def was_start_called(
 
 
 def was_stop_called(
-    observer: watchdog.observers.api.BaseObserver
+    observer: watchdog.observers.api.BaseObserver,
 ) -> bool:
     """
     Returns whether
@@ -71,8 +71,9 @@ def was_stop_called(
 
 @contextlib.contextmanager
 def open(  # pylint: disable=redefined-builtin
-    opener: typing.Callable[[], watchdog.observers.api.
-                            BaseObserver] = watchdog.observers.Observer,
+    opener: typing.Callable[
+        [], watchdog.observers.api.BaseObserver
+    ] = watchdog.observers.Observer,
 ) -> collections.abc.Iterator[watchdog.observers.api.BaseObserver]:
     observer = opener()
     try:
@@ -84,8 +85,9 @@ def open(  # pylint: disable=redefined-builtin
 
 @contextlib.asynccontextmanager
 async def async_open(
-    opener: typing.Callable[[], watchdog.observers.api.
-                            BaseObserver] = watchdog.observers.Observer,
+    opener: typing.Callable[
+        [], watchdog.observers.api.BaseObserver
+    ] = watchdog.observers.Observer,
 ) -> collections.abc.AsyncIterator[watchdog.observers.api.BaseObserver]:
     loop = asyncio.get_running_loop()
     observer = opener()
@@ -98,7 +100,7 @@ async def async_open(
 
 def has_handlers(
     observer: watchdog.observers.api.BaseObserver,
-    watch: watchdog.observers.api.ObservedWatch
+    watch: watchdog.observers.api.ObservedWatch,
 ) -> bool:
     """
     Returns whether any handlers are monitoring ``watch``.
@@ -163,7 +165,7 @@ def remove_handler(
     event_handler: watchdog.events.FileSystemEventHandler,
     watch: watchdog.observers.api.ObservedWatch,
 ) -> None:
-    """  # pylint: disable=line-too-long
+    """# pylint: disable=line-too-long
     Stop notifying ``event_handler`` of changes in ``watch``.
 
     It merges

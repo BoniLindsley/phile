@@ -17,7 +17,7 @@ import imapclient
 # Internal modules.
 import phile.imapclient
 
-_T_co = typing.TypeVar('_T_co', covariant=True)
+_T_co = typing.TypeVar("_T_co", covariant=True)
 
 
 class IMAP4Mock:
@@ -30,13 +30,14 @@ class IMAP4Mock:
         host: str,
         port: int = 143,
         timeout: typing.Union[  # Stop formatting moving this.
-            None, float, imapclient.SocketTimeout] = None,
+            None, float, imapclient.SocketTimeout
+        ] = None,
         *args: typing.Any,
-        **kwargs: typing.Any
+        **kwargs: typing.Any,
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
-        del host,
+        del (host,)
         del port
         del timeout
         self.sock, self._server_socket = socket.socketpair()
@@ -56,7 +57,6 @@ class IMAP4Mock:
 
 
 class IMAPClientMock(unittest.mock.MagicMock):
-
     def __init__(
         self,
         host: str,
@@ -66,7 +66,8 @@ class IMAPClientMock(unittest.mock.MagicMock):
         stream: bool = False,
         ssl_context: typing.Optional[_ssl.SSLContext] = None,
         timeout: typing.Union[  # Stop formatting moving this.
-            None, float, imapclient.SocketTimeout] = None,
+            None, float, imapclient.SocketTimeout
+        ] = None,
         *args: typing.Any,
         **kwargs: typing.Any,
     ) -> None:
@@ -74,7 +75,7 @@ class IMAPClientMock(unittest.mock.MagicMock):
         if stream:
             assert port is None
             assert not ssl
-        assert not stream, 'Unable to mock it.'
+        assert not stream, "Unable to mock it."
         if not stream and port is None:
             port = 993 if ssl else 143
         if ssl:
@@ -100,24 +101,24 @@ class IMAPClientMock(unittest.mock.MagicMock):
         return self
 
     def __exit__(
-        self, exc_type: typing.Optional[typing.Type[BaseException]],
+        self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
         exc_value: typing.Optional[BaseException],
-        traceback: typing.Optional[types.TracebackType]
+        traceback: typing.Optional[types.TracebackType],
     ) -> None:
         self.shutdown()
 
     def login(self, username: str, password: str) -> bytes:
         del password
         del username
-        return b''
+        return b""
 
     def _create_IMAP4(  # pylint: disable=invalid-name
-        self
+        self,
     ) -> imaplib.IMAP4:
         assert isinstance(self.port, int)
         return imaplib.IMAP4(
-            self.host, self.port,
-            getattr(self._timeout, "connect", None)
+            self.host, self.port, getattr(self._timeout, "connect", None)
         )
 
     def _set_read_timeout(self) -> None:
@@ -130,13 +131,12 @@ class IMAPClientMock(unittest.mock.MagicMock):
 
     def idle(self) -> None:
         if self._idle_tag is None:
-            self._idle_tag = b''
+            self._idle_tag = b""
         assert isinstance(self._idle_tag, bytes)
         self._imap.tagged_commands[self._idle_tag] = []
 
     def idle_check(
-        self,
-        timeout: typing.Optional[float] = None
+        self, timeout: typing.Optional[float] = None
     ) -> list[typing.Any]:
         if self._sock.fileno() == -1:
             raise OSError()
@@ -148,21 +148,19 @@ class IMAPClientMock(unittest.mock.MagicMock):
             raise OSError()
         assert self._idle_tag is not None
         self._imap.tagged_commands.pop(self._idle_tag)
-        return [None, [(0, b'')]]
+        return [None, [(0, b"")]]
 
     def logout(self) -> bytes:
         if self._sock.fileno() == -1:
             raise OSError()
         self.shutdown()
-        return b''
+        return b""
 
     def shutdown(self) -> None:
         self._imap.shutdown()
 
     def select_folder(
-        self,
-        folder: str,
-        readonly: bool = False
+        self, folder: str, readonly: bool = False
     ) -> phile.imapclient.SelectResponse:
         del folder
         del readonly
@@ -175,20 +173,18 @@ class IMAPClientMock(unittest.mock.MagicMock):
 
 
 class PreparesIMAP4(unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
-        patcher = unittest.mock.patch('imaplib.IMAP4', new=IMAP4Mock)
+        patcher = unittest.mock.patch("imaplib.IMAP4", new=IMAP4Mock)
         self.addCleanup(patcher.stop)
         patcher.start()
 
 
 class PreparesIMAPClient(PreparesIMAP4, unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         patcher = unittest.mock.patch(
-            'imapclient.IMAPClient', new=IMAPClientMock
+            "imapclient.IMAPClient", new=IMAPClientMock
         )
         self.addCleanup(patcher.stop)
         patcher.start()
@@ -198,7 +194,6 @@ class UsesIMAPClient(
     PreparesIMAPClient,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.imap_clients: list[IMAPClientMock]
@@ -215,27 +210,25 @@ class UsesIMAPClient(
             return new_client
 
         patcher = unittest.mock.patch(
-            'imapclient.IMAPClient', new=create_imap_client
+            "imapclient.IMAPClient", new=create_imap_client
         )
         self.addCleanup(patcher.stop)
         patcher.start()
 
 
 class TestGetSocket(PreparesIMAPClient, unittest.TestCase):
-
     def test_retrieves_implementation_socket(self) -> None:
-        imap_client = imapclient.IMAPClient(host='get_socket://')
+        imap_client = imapclient.IMAPClient(host="get_socket://")
         self.addCleanup(imap_client.shutdown)
         self.assertEqual(
             phile.imapclient.get_socket(imap_client),
-            imap_client._imap.sock  # pylint: disable=protected-access
+            imap_client._imap.sock,  # pylint: disable=protected-access
         )
 
 
 class TestIsIdle(PreparesIMAPClient, unittest.TestCase):
-
     def test_before_and_after_idle_state(self) -> None:
-        imap_client = imapclient.IMAPClient(host='is_idle://')
+        imap_client = imapclient.IMAPClient(host="is_idle://")
         self.addCleanup(imap_client.shutdown)
         is_idle = phile.imapclient.is_idle
         self.assertFalse(is_idle(imap_client))
@@ -246,15 +239,15 @@ class TestIsIdle(PreparesIMAPClient, unittest.TestCase):
 
 
 class TestFlagTracker(unittest.TestCase):
-
     def test_constructor_default(self) -> None:
         flag_tracker = phile.imapclient.FlagTracker()
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 0,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
     def test_constructor_with_smallest_response(self) -> None:
@@ -272,11 +265,8 @@ class TestFlagTracker(unittest.TestCase):
         flag_tracker = phile.imapclient.FlagTracker(select_response)
 
         self.assertDictEqual(
-            flag_tracker.message_counts, {
-                "total": 0,
-                "unknown": 0,
-                "unseen": 0
-            }
+            flag_tracker.message_counts,
+            {"total": 0, "unknown": 0, "unseen": 0},
         )
 
     def test_constructor_with_documentation_response(self) -> None:
@@ -305,11 +295,12 @@ class TestFlagTracker(unittest.TestCase):
         flag_tracker = phile.imapclient.FlagTracker(select_response)
 
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
     def test_create_using_response_with_unseen_messages(self) -> None:
@@ -329,11 +320,12 @@ class TestFlagTracker(unittest.TestCase):
         flag_tracker = phile.imapclient.FlagTracker(select_response)
 
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 2,
                 "unknown": 0,
                 "unseen": 1,
-            }
+            },
         )
 
     def test_select_empty_folder_after_non_empty_folder(self) -> None:
@@ -355,11 +347,12 @@ class TestFlagTracker(unittest.TestCase):
         flag_tracker.select(select_response)
 
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 0,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
     def test_add_with_untagged_expunge_response(self) -> None:
@@ -372,14 +365,15 @@ class TestFlagTracker(unittest.TestCase):
         }
         flag_tracker = phile.imapclient.FlagTracker(select_response)
         # The second message has been removed.
-        flag_tracker.add([(2, b'EXPUNGE')])
+        flag_tracker.add([(2, b"EXPUNGE")])
 
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 1,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
     def test_fetch_can_flag_as_seen(self) -> None:
@@ -392,11 +386,12 @@ class TestFlagTracker(unittest.TestCase):
         flag_tracker = phile.imapclient.FlagTracker(select_response)
         flag_tracker.add([(2, b"FETCH", (b"FLAGS", (b"\\Seen")))])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 0,
                 "unseen": 1,
-            }
+            },
         )
 
     def test_fetch_can_flag_as_unseen(self) -> None:
@@ -409,22 +404,24 @@ class TestFlagTracker(unittest.TestCase):
         flag_tracker = phile.imapclient.FlagTracker(select_response)
         flag_tracker.add([(2, b"FETCH", (b"FLAGS", ()))])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 0,
                 "unseen": 2,
-            }
+            },
         )
 
     def test_fetch_does_nothing_without_flags(self) -> None:
         flag_tracker = phile.imapclient.FlagTracker()
         flag_tracker.add([(2, b"FETCH", ())])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 0,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
     def test_add__using_a_real_example(self) -> None:
@@ -460,60 +457,66 @@ class TestFlagTracker(unittest.TestCase):
         }
         flag_tracker = phile.imapclient.FlagTracker(select_response)
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 0,
                 "unseen": 1,
-            }
+            },
         )
 
         flag_tracker.add([])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 0,
                 "unseen": 1,
-            }
+            },
         )
 
         flag_tracker.add([(2, b"EXPUNGE"), (2, b"EXISTS")])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 2,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
         flag_tracker.add([])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 2,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
         flag_tracker.add([(1, b"RECENT"), (3, b"EXISTS")])
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 1,
                 "unseen": 0,
-            }
+            },
         )
 
-        flag_tracker.add([
-            (3, b"FETCH", (b"FLAGS", (b"\\Seen", b"\\Recent")))
-        ])
+        flag_tracker.add(
+            [(3, b"FETCH", (b"FLAGS", (b"\\Seen", b"\\Recent")))]
+        )
         self.assertDictEqual(
-            flag_tracker.message_counts, {
+            flag_tracker.message_counts,
+            {
                 "total": 3,
                 "unknown": 0,
                 "unseen": 0,
-            }
+            },
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

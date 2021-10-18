@@ -47,13 +47,13 @@ modifier_values = set(
 )
 """Keys that do not force a key map check when pressed."""
 key_conversion: dict[str, str] = {
-    'Ctrl': 'Control',
-    'Esc': 'Escape',
+    "Ctrl": "Control",
+    "Esc": "Escape",
 }
 """Alternative print names of some keys"""
 key_display_name: dict[str, str] = {
-    'Control': 'Ctrl',
-    'Escape': 'Esc',
+    "Control": "Ctrl",
+    "Escape": "Esc",
 }
 
 qt_modifier_values: (
@@ -76,33 +76,33 @@ qt_modifier_values: (
 
 
 def key_value_from_string(key_name: str) -> int:
-    key_name = key_name.strip().removeprefix('<').removesuffix('>')
+    key_name = key_name.strip().removeprefix("<").removesuffix(">")
     canonical_name = key_conversion.get(key_name, key_name)
-    return int(getattr(PySide2.QtGui.Qt, 'Key_' + canonical_name))
+    return int(getattr(PySide2.QtGui.Qt, "Key_" + canonical_name))
 
 
 def key_combination_from_string(
-    combination_name: str
+    combination_name: str,
 ) -> tuple[int, ...]:
     return tuple(
         sorted(
             key_value_from_string(key_name)
-            for key_name in combination_name.split('+')
+            for key_name in combination_name.split("+")
         )
     )
 
 
 def key_sequence_from_string(
-    sequence_name: str
+    sequence_name: str,
 ) -> tuple[tuple[int, ...], ...]:
-    combination_names = (key.strip() for key in sequence_name.split(';'))
+    combination_names = (key.strip() for key in sequence_name.split(";"))
     return tuple(
         key_combination_from_string(name) for name in combination_names
     )
 
 
 def order_key_sequence(
-    key_combination: collections.abc.Iterable[int]
+    key_combination: collections.abc.Iterable[int],
 ) -> collections.abc.Iterator[int]:
     key_values = sorted(key_combination)
     return itertools.chain(
@@ -114,15 +114,15 @@ def order_key_sequence(
 def key_value_to_string(value: int) -> str:
     key = Key(value)  # type: ignore[call-arg]
     key_name: bytes = key.name  # type: ignore[attr-defined]
-    as_string = key_name.removeprefix(b'Key_').decode()
+    as_string = key_name.removeprefix(b"Key_").decode()
     as_string = key_display_name.get(as_string, as_string)
     return as_string
 
 
 def key_combination_to_string(
-    combination: collections.abc.Iterable[int]
+    combination: collections.abc.Iterable[int],
 ) -> str:
-    return '+'.join(
+    return "+".join(
         key_value_to_string(value)
         for value in order_key_sequence(combination)
     )
@@ -131,14 +131,13 @@ def key_combination_to_string(
 def key_sequence_to_string(
     sequence: collections.abc.Iterable[tuple[int, ...]]
 ) -> str:
-    return '; '.join(
+    return "; ".join(
         key_combination_to_string(combination)
         for combination in sequence
     )
 
 
 class PressedKeys:
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -215,12 +214,14 @@ class PressedKeys:
         self, event: PySide2.QtGui.QKeyEvent
     ) -> bool:
         key = event.key()
-        return (not event.isAutoRepeat(
-        )) and bool(key) and (key != PySide2.QtCore.Qt.Key_unknown)
+        return (
+            (not event.isAutoRepeat())
+            and bool(key)
+            and (key != PySide2.QtCore.Qt.Key_unknown)
+        )
 
 
 class PressedKeySequence(PressedKeys):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.pressed_sequence: list[tuple[int, ...]] = []
@@ -268,7 +269,6 @@ class PressedKeySequence(PressedKeys):
 
 
 class HotkeyInput(PressedKeySequence, PySide2.QtWidgets.QLabel):
-
     def __init__(
         self,
         *args: typing.Any,
@@ -285,10 +285,10 @@ class HotkeyInput(PressedKeySequence, PySide2.QtWidgets.QLabel):
         shown_text = key_sequence_to_string(self.pressed_sequence)
         target: typing.Optional[str] = None
         if shown_text and bound_value is None:
-            shown_text += ' is undefined.'
+            shown_text += " is undefined."
         elif isinstance(bound_value, str):
             target = bound_value
-            shown_text += ': ' + target
+            shown_text += ": " + target
         self.setText(shown_text)
         if target is not None:
             with contextlib.suppress(phile.trigger.Registry.NotBound):
@@ -302,7 +302,6 @@ class HotkeyInput(PressedKeySequence, PySide2.QtWidgets.QLabel):
 class HotkeyDialog(
     phile.trigger.pyside2.TriggerControlled, PySide2.QtWidgets.QDialog
 ):  # pragma: no cover
-
     def __init__(
         self,
         *args: typing.Any,

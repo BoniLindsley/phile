@@ -10,7 +10,7 @@ import typing
 # External dependencies.
 import psutil
 from psutil import (
-    _common as psutil_common  # pylint: disable=protected-access
+    _common as psutil_common,  # pylint: disable=protected-access
 )
 
 # Internal packages.
@@ -25,6 +25,7 @@ class VirtualMemory(typing.NamedTuple):
     Fake return type of :func:`psutil.virtual_memory`
     for type hints only.
     """
+
     total: int
     available: int
     percent: float
@@ -41,7 +42,7 @@ class Snapshot:
     virtual_memory: VirtualMemory
 
     @classmethod
-    def create(cls) -> 'Snapshot':
+    def create(cls) -> "Snapshot":
         return cls(
             cpu_percentage=psutil.cpu_percent(),
             datetime=datetime.datetime.now(),
@@ -50,8 +51,8 @@ class Snapshot:
             virtual_memory=psutil.virtual_memory(),
         )
 
-    def to_string(self, previous_snapshot: 'Snapshot') -> str:
-        text_icon = ''
+    def to_string(self, previous_snapshot: "Snapshot") -> str:
+        text_icon = ""
         text_icon += self.sensors_battery_to_string()
         text_icon += self.cpu_percent_to_string()
         text_icon += self.virtual_memory_to_string()
@@ -61,10 +62,10 @@ class Snapshot:
         return text_icon
 
     def cpu_percent_to_string(self) -> str:
-        return ' C{self.cpu_percentage:02.0f}'.format(self=self)
+        return " C{self.cpu_percentage:02.0f}".format(self=self)
 
     def network_io_counters_to_string(
-        self, previous_snapshot: 'Snapshot'
+        self, previous_snapshot: "Snapshot"
     ) -> str:
         interval = self.datetime - previous_snapshot.datetime
         counters = self.network_io_counters
@@ -74,19 +75,19 @@ class Snapshot:
         try:
             sent_rate = sent_diff / interval.total_seconds()
             recv_rate = recv_diff / interval.total_seconds()
-            return ' W:{recv_kBps:->4.0f}/{sent_kBps:->4.0f}'.format(
+            return " W:{recv_kBps:->4.0f}/{sent_kBps:->4.0f}".format(
                 recv_kBps=recv_rate / 1000,
                 sent_kBps=sent_rate / 1000,
             )
         except ZeroDivisionError:
-            return ' W:---?/---?'
+            return " W:---?/---?"
 
     def sensors_battery_to_string(self) -> str:
         battery_state = self.sensors_battery
-        percentage_text = '-?'
-        remaining_text = ''
+        percentage_text = "-?"
+        remaining_text = ""
         if battery_state is not None:
-            percentage_text = '{battery_state.percent:02.0f}'.format(
+            percentage_text = "{battery_state.percent:02.0f}".format(
                 battery_state=battery_state,
             )
             if battery_state.secsleft >= 0:
@@ -98,18 +99,19 @@ class Snapshot:
                     time_remaining, timedelta(hours=1)
                 )
                 minute = trailing // timedelta(minutes=1)
-                remaining_text = '={hour}h{minute:02}'.format(
+                remaining_text = "={hour}h{minute:02}".format(
                     hour=hour,
                     minute=minute,
                 )
-        return ' B:{percentage_text}%{remaining_text}'.format(
+        return " B:{percentage_text}%{remaining_text}".format(
             percentage_text=percentage_text,
             remaining_text=remaining_text,
         )
 
     def virtual_memory_to_string(self) -> str:
-        return ' M{memory_available_gB:.0f}'.format(
-            memory_available_gB=self.virtual_memory.available // 1000**3,
+        return " M{memory_available_gB:.0f}".format(
+            memory_available_gB=self.virtual_memory.available
+            // 1000 ** 3,
         )
 
 
@@ -118,7 +120,6 @@ class NotEnoughData(Exception):
 
 
 class History:
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -136,7 +137,7 @@ class History:
 
     def to_strings(self) -> collections.abc.Iterator[str]:
         self.create_snapshot()
-        yield ' psutil...'
+        yield " psutil..."
         while True:
             self.create_snapshot()
             yield self.last_snapshot_to_string()
@@ -145,7 +146,7 @@ class History:
 async def run(
     *,
     refresh_interval: datetime.timedelta = default_refresh_interval,
-    tray_name: str = '70-phile-tray-psutil',
+    tray_name: str = "70-phile-tray-psutil",
     tray_target: phile.tray.watchdog.Target,
 ) -> None:
     tray_entry = phile.tray.Entry(name=tray_name)

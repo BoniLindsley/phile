@@ -17,12 +17,12 @@ import typing
 # External dependencies.
 import PySide2.QtCore
 
-_T = typing.TypeVar('_T')
+_T = typing.TypeVar("_T")
 
-wait_for_timeout: contextvars.ContextVar[datetime.timedelta] = (
-    contextvars.ContextVar(
-        'wait_for_timeout', default=datetime.timedelta(seconds=2)
-    )
+wait_for_timeout: contextvars.ContextVar[
+    datetime.timedelta
+] = contextvars.ContextVar(
+    "wait_for_timeout", default=datetime.timedelta(seconds=2)
 )
 """Default timeout value when processing PySide2 events."""
 
@@ -41,7 +41,7 @@ def process_deferred_delete_events() -> None:
 def process_events() -> None:
     PySide2.QtCore.QCoreApplication.processEvents(
         PySide2.QtCore.QEventLoop.AllEvents,
-        int(wait_for_timeout.get() / datetime.timedelta(milliseconds=1))
+        int(wait_for_timeout.get() / datetime.timedelta(milliseconds=1)),
     )
 
 
@@ -65,7 +65,6 @@ class CallRequest(PySide2.QtCore.QEvent):
 
 
 class Caller(PySide2.QtCore.QObject):
-
     def customEvent(
         self, event_to_handle: PySide2.QtCore.QEvent
     ) -> None:
@@ -104,25 +103,25 @@ class Future(concurrent.futures.Future[_T]):
     """Fixes typing of add_done_callback."""
 
     __Self_contra = typing.TypeVar(
-        '__Self_contra', bound='Future[_T]', contravariant=True
+        "__Self_contra", bound="Future[_T]", contravariant=True
     )
 
     # The name is used by superclass. Keeping it for consistency.
     def add_done_callback(  # pylint: disable=invalid-name
         self: __Self_contra,
-        fn: collections.abc.Callable[[__Self_contra], typing.Any]
+        fn: collections.abc.Callable[[__Self_contra], typing.Any],
     ) -> None:
         super().add_done_callback(
             typing.cast(
                 collections.abc.Callable[
-                    [concurrent.futures.Future[typing.Any]], typing.Any],
+                    [concurrent.futures.Future[typing.Any]], typing.Any
+                ],
                 fn,
             )
         )
 
 
 class Task(Future[_T]):
-
     def __init__(
         self,
         *args: typing.Any,
@@ -147,7 +146,6 @@ class Task(Future[_T]):
 
 
 class Executor(concurrent.futures.Executor):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # See: https://github.com/python/mypy/issues/4001
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -179,16 +177,13 @@ class Executor(concurrent.futures.Executor):
         )
         with self.shutdown_lock:
             if self.is_shutdown:
-                raise RuntimeError('Executor is shut down.')
+                raise RuntimeError("Executor is shut down.")
             call_soon_threadsafe(callback=task.run)
             self.futures.add(task)
         return task
 
     def shutdown(
-        self,
-        wait: bool = True,
-        *,
-        cancel_futures: bool = False
+        self, wait: bool = True, *, cancel_futures: bool = False
     ) -> None:
         with self.shutdown_lock:
             self.is_shutdown = True

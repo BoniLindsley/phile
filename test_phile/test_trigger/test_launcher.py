@@ -10,7 +10,7 @@ import phile.asyncio
 import phile.trigger
 import phile.trigger.launcher
 from test_phile.test_launcher.test_init import (
-    UsesRegistry as UsesLauncherRegistry
+    UsesRegistry as UsesLauncherRegistry,
 )
 
 
@@ -18,7 +18,6 @@ class TestProducer(
     UsesLauncherRegistry,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.entry_name: str
@@ -30,11 +29,11 @@ class TestProducer(
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.trigger_registry = phile.trigger.Registry()
-        self.launcher_triggers = producer = (
-            phile.trigger.launcher.Producer(
-                launcher_registry=self.launcher_registry,
-                trigger_registry=self.trigger_registry,
-            )
+        self.launcher_triggers = (
+            producer
+        ) = phile.trigger.launcher.Producer(
+            launcher_registry=self.launcher_registry,
+            trigger_registry=self.trigger_registry,
         )
         await producer.__aenter__()
         self.addAsyncCleanup(producer.__aexit__, None, None, None)
@@ -46,9 +45,9 @@ class TestProducer(
         )
 
     def set_up_launcher_entry(self) -> None:
-        self.entry_name = entry_name = 'add-launcher'
-        self.start_trigger_name = 'launcher_' + entry_name + '_start'
-        self.stop_trigger_name = 'launcher_' + entry_name + '_stop'
+        self.entry_name = entry_name = "add-launcher"
+        self.start_trigger_name = "launcher_" + entry_name + "_start"
+        self.stop_trigger_name = "launcher_" + entry_name + "_stop"
         self.launcher_registry.add_nowait(
             entry_name,
             descriptor=phile.launcher.Descriptor(

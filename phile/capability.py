@@ -10,8 +10,8 @@ import typing
 # Internal packages.
 import phile.asyncio.pubsub
 
-_T = typing.TypeVar('_T')
-_T_co = typing.TypeVar('_T_co')
+_T = typing.TypeVar("_T")
+_T_co = typing.TypeVar("_T_co")
 
 
 class EventType(enum.Enum):
@@ -42,7 +42,6 @@ _pop_item_default_sentinel = _PopItemDefaultSentinel()
 # The `type` type hint does not accept abstract types.
 # So an ignore is necessary on all uses with abstract types.
 class Registry(dict[type, typing.Any]):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.event_queue = phile.asyncio.pubsub.Queue[Event]()
@@ -78,8 +77,9 @@ class Registry(dict[type, typing.Any]):
     def pop(
         self,
         capability: type[_T_co],
-        default: (typing.Union[_T, _PopItemDefaultSentinel]
-                  ) = _pop_item_default_sentinel,
+        default: (
+            typing.Union[_T, _PopItemDefaultSentinel]
+        ) = _pop_item_default_sentinel,
     ) -> typing.Union[_T_co, _T]:
         try:
             popped_value: _T_co = super().pop(capability)
@@ -112,4 +112,4 @@ class Registry(dict[type, typing.Any]):
         with contextlib.ExitStack() as stack:
             stack.callback(self.pop, capability, None)
             return stack.pop_all()
-        assert False, 'Unreachable'  # pragma: no cover
+        assert False, "Unreachable"  # pragma: no cover

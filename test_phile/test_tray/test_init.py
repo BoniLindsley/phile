@@ -17,31 +17,30 @@ import phile.tray
 
 
 class TestEntry(unittest.TestCase):
-
     def test_construct_signatures(self) -> None:
-        phile.tray.Entry(name='n')
+        phile.tray.Entry(name="n")
         phile.tray.Entry(
-            name='n',
-            icon_name='i',
-            icon_path=pathlib.Path('p'),
-            text_icon='t',
+            name="n",
+            icon_name="i",
+            icon_path=pathlib.Path("p"),
+            text_icon="t",
         )
 
     def test_available_attributes(self) -> None:
         entry = phile.tray.Entry(
-            name='n',
-            icon_name='i',
-            icon_path=pathlib.Path('p'),
-            text_icon='t',
+            name="n",
+            icon_name="i",
+            icon_path=pathlib.Path("p"),
+            text_icon="t",
         )
-        self.assertEqual(entry.name, 'n')
-        self.assertEqual(entry.icon_name, 'i')
-        self.assertEqual(entry.icon_path, pathlib.Path('p'))
-        self.assertEqual(entry.text_icon, 't')
+        self.assertEqual(entry.name, "n")
+        self.assertEqual(entry.icon_name, "i")
+        self.assertEqual(entry.icon_path, pathlib.Path("p"))
+        self.assertEqual(entry.text_icon, "t")
 
     def test_default_attributes(self) -> None:
-        entry = phile.tray.Entry(name='n')
-        self.assertEqual(entry.name, 'n')
+        entry = phile.tray.Entry(name="n")
+        self.assertEqual(entry.name, "n")
         self.assertIsNone(entry.icon_name)
         self.assertIsNone(entry.icon_path)
         self.assertIsNone(entry.text_icon)
@@ -55,18 +54,18 @@ class TestEntriesToText(unittest.TestCase):
         self.assertEqual(
             phile.tray.entries_to_text(
                 entries=[
-                    Entry(name='1', text_icon='Tray'),
-                    Entry(name='2', text_icon='Entries'),
-                    Entry(name='3', text_icon='To'),
-                    Entry(name='4', text_icon='Tray'),
-                    Entry(name='5', text_icon='Text'),
+                    Entry(name="1", text_icon="Tray"),
+                    Entry(name="2", text_icon="Entries"),
+                    Entry(name="3", text_icon="To"),
+                    Entry(name="4", text_icon="Tray"),
+                    Entry(name="5", text_icon="Text"),
                 ]
-            ), 'TrayEntriesToTrayText'
+            ),
+            "TrayEntriesToTrayText",
         )
 
 
 class TestRegistry(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.tray_registry: phile.tray.Registry
         super().__init__(*args, **kwargs)
@@ -84,14 +83,13 @@ class TestRegistry(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_set__with_new_entry_inserts(self) -> None:
-        tray_entry = phile.tray.Entry(name='abc')
+        tray_entry = phile.tray.Entry(name="abc")
         self.tray_registry.add_entry(tray_entry)
         self.assertEqual(self.tray_registry.current_values, [tray_entry])
         self.test_invariants()
 
 
 class TestTextIcons(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.text_icons: phile.tray.TextIcons
@@ -113,15 +111,15 @@ class TestTextIcons(unittest.IsolatedAsyncioTestCase):
     async def test_set_entry_emits_event(self) -> None:
         event_view = self.text_icons.event_queue.__aiter__()
         self.tray_registry.add_entry(
-            phile.tray.Entry(name='n', text_icon='abc')
+            phile.tray.Entry(name="n", text_icon="abc")
         )
         full_text = await phile.asyncio.wait_for(event_view.__anext__())
-        self.assertEqual(full_text, 'abc')
+        self.assertEqual(full_text, "abc")
 
     async def test_set_entry_updates_current_value(self) -> None:
         event_view = self.text_icons.event_queue.__aiter__()
         self.tray_registry.add_entry(
-            phile.tray.Entry(name='n', text_icon='abc')
+            phile.tray.Entry(name="n", text_icon="abc")
         )
         full_text = await phile.asyncio.wait_for(event_view.__anext__())
         self.assertEqual(self.text_icons.current_value, full_text)
@@ -129,12 +127,12 @@ class TestTextIcons(unittest.IsolatedAsyncioTestCase):
     async def test_set_entry_text_to_same_value_is_ignored(self) -> None:
         event_view = self.text_icons.event_queue.__aiter__()
         self.tray_registry.add_entry(
-            phile.tray.Entry(name='n', text_icon='abc')
+            phile.tray.Entry(name="n", text_icon="abc")
         )
         full_text = await phile.asyncio.wait_for(event_view.__anext__())
-        self.assertEqual(full_text, 'abc')
+        self.assertEqual(full_text, "abc")
         self.tray_registry.add_entry(
-            phile.tray.Entry(name='n', icon_name='i', text_icon='abc')
+            phile.tray.Entry(name="n", icon_name="i", text_icon="abc")
         )
         await phile.asyncio.wait_for(self.text_icons.aclose())
         with self.assertRaises(StopAsyncIteration):

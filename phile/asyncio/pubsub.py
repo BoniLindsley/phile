@@ -4,11 +4,10 @@
 import asyncio
 import typing
 
-_T = typing.TypeVar('_T')
+_T = typing.TypeVar("_T")
 
 
 class Node(typing.Generic[_T]):
-
     class AlreadySet(Exception):
         pass
 
@@ -41,7 +40,7 @@ class Node(typing.Generic[_T]):
             raise self.NotSet() from error
 
     def is_end(self) -> bool:
-        return not hasattr(self, '_value') and self._value_set.is_set()
+        return not hasattr(self, "_value") and self._value_set.is_set()
 
     def set(self, new_value: _T) -> None:
         if self._value_set.is_set():
@@ -61,7 +60,6 @@ class Node(typing.Generic[_T]):
 
 
 class View(typing.Generic[_T]):
-
     def __init__(
         self,
         *args: typing.Any,
@@ -72,7 +70,7 @@ class View(typing.Generic[_T]):
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
         self._next_node = next_node
 
-    def __aiter__(self) -> 'View[_T]':
+    def __aiter__(self) -> "View[_T]":
         return self
 
     async def __anext__(self) -> _T:
@@ -89,7 +87,6 @@ class View(typing.Generic[_T]):
 
 
 class Queue(typing.Generic[_T]):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]

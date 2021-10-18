@@ -21,7 +21,6 @@ import phile.tray
 
 
 class TrayDialog(PySide2.QtWidgets.QDialog):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.setLayout(layout := PySide2.QtWidgets.QGridLayout(self))

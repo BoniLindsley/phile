@@ -26,57 +26,60 @@ class TestCommandBuilder(unittest.TestCase):
     """
 
     def test_exit_client(self) -> None:
-        self.assertEqual(phile.tmux.CommandBuilder.exit_client(), '')
+        self.assertEqual(phile.tmux.CommandBuilder.exit_client(), "")
 
     def test_refresh_client(self) -> None:
         self.assertEqual(
-            phile.tmux.CommandBuilder.refresh_client(), 'refresh-client'
+            phile.tmux.CommandBuilder.refresh_client(), "refresh-client"
         )
         self.assertEqual(
             phile.tmux.CommandBuilder.refresh_client(no_output=False),
-            'refresh-client -F \'\''
+            "refresh-client -F ''",
         )
         self.assertEqual(
             phile.tmux.CommandBuilder.refresh_client(no_output=True),
-            'refresh-client -F no-output'
+            "refresh-client -F no-output",
         )
 
     def test_set_destroy_unattached(self) -> None:
         self.assertEqual(
             phile.tmux.CommandBuilder.set_destroy_unattached(False),
-            'set-option destroy-unattached off'
+            "set-option destroy-unattached off",
         )
         self.assertEqual(
             phile.tmux.CommandBuilder.set_destroy_unattached(True),
-            'set-option destroy-unattached on'
+            "set-option destroy-unattached on",
         )
 
     def test_set_global_status_right(self) -> None:
         self.assertEqual(
-            phile.tmux.CommandBuilder.set_global_status_right(''),
-            "set-option -g status-right ''"
+            phile.tmux.CommandBuilder.set_global_status_right(""),
+            "set-option -g status-right ''",
         )
         self.assertEqual(
             phile.tmux.CommandBuilder.set_global_status_right("'"),
             (
-                'set-option -g status-right '
+                "set-option -g status-right "
                 # Not quite what I want,
                 # but it is what `shlex.quote` gives and it is valid.
                 # Empty  open  char  close  empty
                 # `''     "     '     "     ''`
-                + "''" + '"' + "'" + '"' + "''"
-            )
+                + "''"
+                + '"'
+                + "'"
+                + '"'
+                + "''"
+            ),
         )
 
     def test_unset_global_status_right(self) -> None:
         self.assertEqual(
             phile.tmux.CommandBuilder.unset_global_status_right(),
-            "set-option -gu status-right"
+            "set-option -gu status-right",
         )
 
 
 class UsesTmux(unittest.TestCase):
-
     def setUp(self) -> None:
         """
         Set up ``tmux`` to launch an isolated instance if launched.
@@ -103,7 +106,7 @@ class UsesTmux(unittest.TestCase):
         self.addCleanup(tmux_tmpdir.cleanup)
         tmux_tmpdir_path = pathlib.Path(tmux_tmpdir.name)
         self.tmux_configuration_path = tmux_configuration_path = (
-            tmux_tmpdir_path / 'tmux.conf'
+            tmux_tmpdir_path / "tmux.conf"
         )
         tmux_configuration_path.touch()
         environ_backup = phile.os.Environ()
@@ -112,16 +115,15 @@ class UsesTmux(unittest.TestCase):
 
 
 class UsesRunningTmuxServer(UsesTmux, unittest.IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self) -> None:
         """Ensure tmux server has already started."""
         await super().asyncSetUp()
         tmux_client_one = await asyncio.create_subprocess_exec(
-            'tmux',
-            '-f',
+            "tmux",
+            "-f",
             str(self.tmux_configuration_path),
-            'new-session',
-            '-d',
+            "new-session",
+            "-d",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

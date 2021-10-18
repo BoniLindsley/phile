@@ -22,7 +22,6 @@ class TestRun(
     UsesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.observer_event_queue: phile.watchdog.asyncio.EventQueue
@@ -38,14 +37,14 @@ class TestRun(
         await super().asyncSetUp()
         self.refresh_interval = datetime.timedelta(microseconds=10)
         self.tray_directory = (
-            self.configuration.state_directory_path /
-            self.configuration.tray_directory
+            self.configuration.state_directory_path
+            / self.configuration.tray_directory
         )
         self.tray_directory.mkdir()
         self.observer_events = await self.schedule_watchdog_observer(
             path=self.tray_directory
         )
-        self.tray_name = 'dtdt'
+        self.tray_name = "dtdt"
         self.tray_target = phile.tray.watchdog.Target(
             configuration=self.configuration
         )
@@ -63,15 +62,15 @@ class TestRun(
         # Cannot patch method of a built-in type.
         # So we wrap it to make it possible.
         patch = unittest.mock.patch(
-            'datetime.datetime', wraps=datetime.datetime
+            "datetime.datetime", wraps=datetime.datetime
         )
         patch.start()
         self.addCleanup(patch.stop)
         # The actual mocking of `now` value.
         patch = unittest.mock.patch.object(
             datetime.datetime,
-            'now',
-            return_value=datetime.datetime(2222, 11, 1, 00, 59)
+            "now",
+            return_value=datetime.datetime(2222, 11, 1, 00, 59),
         )
         patch.start()
         self.addCleanup(patch.stop)
@@ -84,7 +83,7 @@ class TestRun(
         async for event in self.observer_events:
             if event.src_path == tray_path_string:
                 return tray_path.read_text()
-        assert False, 'Tray file content not found'
+        assert False, "Tray file content not found"
 
     async def wait_for_tray_file_content(
         self, expected_content: str
@@ -96,9 +95,9 @@ class TestRun(
 
     async def test_updates_file_after_refresh_interval(self) -> None:
         await phile.asyncio.wait_for(
-            self.wait_for_tray_file_content(' 2222-11-01w5 00:59')
+            self.wait_for_tray_file_content(" 2222-11-01w5 00:59")
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

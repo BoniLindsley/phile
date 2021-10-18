@@ -17,7 +17,6 @@ import phile.signal
 
 
 class TestGetWakeupFd(unittest.TestCase):
-
     def test_returns_fd(self) -> None:
         file_socket = socket.socket()
         self.addCleanup(file_socket.close)
@@ -30,14 +29,12 @@ class TestGetWakeupFd(unittest.TestCase):
 
 
 class TestHandler(unittest.TestCase):
-
     def test_lambda_can_be_a_handler(self) -> None:
         _handler: phile.signal.Handler = (
             lambda _signal_number, _frame: None
         )
 
     def test_function_can_be_a_handler(self) -> None:
-
         def callback(
             _signal_number: signal.Signals, _frame: types.FrameType
         ) -> int:
@@ -47,7 +44,6 @@ class TestHandler(unittest.TestCase):
 
 
 class TestSignalHandlerParameter(unittest.TestCase):
-
     def test_special_values(self) -> None:
         _default: phile.signal.SignalHandlerParameter = signal.SIG_DFL
         _ignore: phile.signal.SignalHandlerParameter = signal.SIG_IGN
@@ -60,18 +56,18 @@ class TestSignalHandlerParameter(unittest.TestCase):
 
 
 class TestInstallNoopSignalHandler(unittest.TestCase):
-
     def test_replace_sigint_successfully(self) -> None:
         # For coverage. Unable to test whether a noop is installed.
         self.addCleanup(
-            signal.signal, signal.SIGINT,
-            signal.getsignal(signal.SIGINT)
+            signal.signal, signal.SIGINT, signal.getsignal(signal.SIGINT)
         )
         # Install a handler that throws,
         # if the tested function did not install a noop.
         signal.signal(
-            signal.SIGINT, lambda _signal_number, _frame: self.
-            fail('SIGINT handler not replaced.')
+            signal.SIGINT,
+            lambda _signal_number, _frame: self.fail(
+                "SIGINT handler not replaced."
+            ),
         )
         # Call the function.
         # It should replace the lambda above.

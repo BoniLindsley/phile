@@ -17,7 +17,6 @@ _logger = logging.getLogger(_loader_name)
 
 
 class Bisectable(typing.Protocol):
-
     def __eq__(self, other: object) -> bool:
         ...  # pragma: no cover
 
@@ -25,8 +24,8 @@ class Bisectable(typing.Protocol):
         ...  # pragma: no cover
 
 
-_ValueT = typing.TypeVar('_ValueT')
-_KeyT = typing.TypeVar('_KeyT', bound=Bisectable)
+_ValueT = typing.TypeVar("_ValueT")
+_KeyT = typing.TypeVar("_KeyT", bound=Bisectable)
 
 
 class EventType(enum.Enum):
@@ -46,7 +45,6 @@ class Event(typing.Generic[_KeyT, _ValueT]):
 
 
 class Registry(typing.Generic[_KeyT, _ValueT]):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -54,9 +52,9 @@ class Registry(typing.Generic[_KeyT, _ValueT]):
         """Read-only for user."""
         self.current_values: list[_ValueT] = []
         """Read-only for user."""
-        self.event_queue = (
-            phile.asyncio.pubsub.Queue[Event[_KeyT, _ValueT]]()
-        )
+        self.event_queue = phile.asyncio.pubsub.Queue[
+            Event[_KeyT, _ValueT]
+        ]()
 
     def close(self) -> None:
         self.event_queue.close()
@@ -68,7 +66,7 @@ class Registry(typing.Generic[_KeyT, _ValueT]):
                 return
         except IndexError:
             return
-        _logger.debug('Removing notification %s', key)
+        _logger.debug("Removing notification %s", key)
         old_value = self.current_values.pop(index)
         self.current_keys.pop(index)
         self._put_event(
@@ -90,7 +88,7 @@ class Registry(typing.Generic[_KeyT, _ValueT]):
             return
         if self.current_values[index] == value:
             return
-        _logger.debug('Updating notification %s', key)
+        _logger.debug("Updating notification %s", key)
         self.current_values[index] = value
         self._put_event(
             type=EventType.SET,
@@ -100,7 +98,7 @@ class Registry(typing.Generic[_KeyT, _ValueT]):
         )
 
     def _insert(self, index: int, key: _KeyT, value: _ValueT) -> None:
-        _logger.debug('Inserting notification %s', key)
+        _logger.debug("Inserting notification %s", key)
         self.current_values.insert(index, value)
         self.current_keys.insert(index, key)
         self._put_event(
@@ -130,5 +128,5 @@ class Registry(typing.Generic[_KeyT, _ValueT]):
             )
         except phile.asyncio.pubsub.Node.AlreadySet:
             warnings.warn(
-                'Registry should not be changed after closing.'
+                "Registry should not be changed after closing."
             )

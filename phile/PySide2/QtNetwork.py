@@ -244,7 +244,7 @@ class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
         elif socket_type == socket.SOCK_STREAM:  # pragma: no cover
             q_socket_type = PySide2.QtNetwork.QAbstractSocket.TcpSocket
         else:  # pragma: no cover
-            warnings.warn('Unsupported socket type. Attempting TCP.')
+            warnings.warn("Unsupported socket type. Attempting TCP.")
             q_socket_type = PySide2.QtNetwork.QAbstractSocket.TcpSocket
         super().__init__(q_socket_type, parent)  # type: ignore
         # Give PySide2 ownership of the socket.
@@ -262,7 +262,7 @@ class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
             # Restore it.
             signal.set_wakeup_fd(old_wakeup_fd)
             write_socket.close()
-            raise RuntimeError('Signal fd wakeup already enabled.')
+            raise RuntimeError("Signal fd wakeup already enabled.")
         # Give ownership to the signal module.
         # We retrieve ownership to close the socket
         # when this object is destroyed.
@@ -275,8 +275,9 @@ class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
         # close the `wakeup_fd` in use
         # which should be the same one we gave it.
         self.destroyed.connect(
-            lambda _: socket.socket(fileno=signal.set_wakeup_fd(-1)).
-            close()
+            lambda _: socket.socket(
+                fileno=signal.set_wakeup_fd(-1)
+            ).close()
         )
 
     def _emit_signal_from_socket(self) -> None:
@@ -294,7 +295,6 @@ class PosixSignal(PySide2.QtNetwork.QAbstractSocket):
         # Broken typing stub.
         data = self.readData(1)  # type: ignore[arg-type, call-arg]
         signal_number = int.from_bytes(
-            data.encode(),  # type: ignore[attr-defined]
-            sys.byteorder
+            data.encode(), sys.byteorder  # type: ignore[attr-defined]
         )
         self.signal_received.emit(signal_number)

@@ -14,7 +14,7 @@ import unittest.mock
 # External dependencies.
 import psutil
 from psutil import (
-    _common as psutil_common  # pylint: disable=protected-access
+    _common as psutil_common,  # pylint: disable=protected-access
 )
 import watchdog.events
 
@@ -27,7 +27,6 @@ from test_phile.test_watchdog.test_asyncio import UsesObserver
 
 
 class TestVirtualMemory(unittest.TestCase):
-
     def test_available_attributes(self) -> None:
         virtual_memory = phile.tray.psutil.VirtualMemory(
             total=0,
@@ -50,8 +49,7 @@ class PsutilMock(typing.NamedTuple):
     virtual_memory: unittest.mock.MagicMock
 
     @classmethod
-    def create(cls, test_case: unittest.TestCase) -> 'PsutilMock':
-
+    def create(cls, test_case: unittest.TestCase) -> "PsutilMock":
         def create_mock(target: str) -> unittest.mock.Mock:
             patch = unittest.mock.patch(target, autospec=True)
             mock = patch.start()
@@ -59,22 +57,19 @@ class PsutilMock(typing.NamedTuple):
             return mock
 
         targets = {
-            field: getattr(psutil, field)
-            for field in cls._fields
+            field: getattr(psutil, field) for field in cls._fields
         }
         names = {
-            field: target.__module__ + '.' + target.__qualname__
+            field: target.__module__ + "." + target.__qualname__
             for field, target in targets.items()
         }
         mocks = {
-            field: create_mock(name)
-            for field, name in names.items()
+            field: create_mock(name) for field, name in names.items()
         }
         return cls(**mocks)
 
 
 class UsesPsutilMock(unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.datetime_mock: unittest.mock.Mock
         self.psutil_mock: PsutilMock
@@ -86,8 +81,8 @@ class UsesPsutilMock(unittest.TestCase):
         self.set_up_psutil_mock()
 
     def set_up_psutil_mock(self) -> None:
-        self.psutil_mock = psutil_mock = (
-            PsutilMock.create(test_case=self)
+        self.psutil_mock = psutil_mock = PsutilMock.create(
+            test_case=self
         )
         psutil_mock.cpu_percent.return_value = 57
         psutil_mock.net_io_counters.return_value = psutil_common.snetio(
@@ -126,21 +121,21 @@ class UsesPsutilMock(unittest.TestCase):
             microsecond=457_329,
         )
         datetime_patch = unittest.mock.patch(
-            datetime.datetime.__module__ + '.' +
-            datetime.datetime.__qualname__,
+            datetime.datetime.__module__
+            + "."
+            + datetime.datetime.__qualname__,
             autospec=True,
         )
         self.datetime_mock = datetime_patch.start()
         self.addCleanup(datetime_patch.stop)
         self.datetime_mock.now.side_effect = (
             first_now,
-            first_now +
-            datetime.timedelta(seconds=1, microseconds=96_482),
+            first_now
+            + datetime.timedelta(seconds=1, microseconds=96_482),
         )
 
 
 class TestSnapshot(UsesPsutilMock, unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.snapshot: phile.tray.psutil.Snapshot
         super().__init__(*args, **kwargs)
@@ -163,7 +158,7 @@ class TestSnapshot(UsesPsutilMock, unittest.TestCase):
         snapshot.virtual_memory
 
     def test_cpu_percentage_to_string(self) -> None:
-        self.assertEqual(self.snapshot.cpu_percent_to_string(), ' C57')
+        self.assertEqual(self.snapshot.cpu_percent_to_string(), " C57")
 
     def test_network_io_counters_to_string(self) -> None:
         old_snapshot = self.snapshot
@@ -172,27 +167,27 @@ class TestSnapshot(UsesPsutilMock, unittest.TestCase):
             new_snapshot.network_io_counters_to_string(
                 previous_snapshot=old_snapshot
             ),
-            ' W:---0/---0',
+            " W:---0/---0",
         )
 
     def test_network_io_counters_to_string_with_same_datetime(
-        self
+        self,
     ) -> None:
         self.assertEqual(
             self.snapshot.network_io_counters_to_string(
                 previous_snapshot=self.snapshot
             ),
-            ' W:---?/---?',
+            " W:---?/---?",
         )
 
     def test_sensors_battery_to_string(self) -> None:
         self.assertEqual(
             self.snapshot.sensors_battery_to_string(),
-            ' B:42%=0h00',
+            " B:42%=0h00",
         )
 
     def test_sensors_battery_to_string_with_unknown_remaining_time(
-        self
+        self,
     ) -> None:
         self.psutil_mock.sensors_battery.return_value = (
             psutil_common.sbattery(
@@ -204,7 +199,7 @@ class TestSnapshot(UsesPsutilMock, unittest.TestCase):
         self.snapshot = phile.tray.psutil.Snapshot.create()
         self.assertEqual(
             self.snapshot.sensors_battery_to_string(),
-            ' B:42%',
+            " B:42%",
         )
 
     def test_sensors_battery_to_string_without_battery(self) -> None:
@@ -212,23 +207,22 @@ class TestSnapshot(UsesPsutilMock, unittest.TestCase):
         self.snapshot = phile.tray.psutil.Snapshot.create()
         self.assertEqual(
             self.snapshot.sensors_battery_to_string(),
-            ' B:-?%',
+            " B:-?%",
         )
 
     def test_virtual_memory_to_string(self) -> None:
-        self.assertEqual(self.snapshot.virtual_memory_to_string(), ' M2')
+        self.assertEqual(self.snapshot.virtual_memory_to_string(), " M2")
 
     def test_to_string(self) -> None:
         old_snapshot = self.snapshot
         new_snapshot = phile.tray.psutil.Snapshot.create()
         self.assertEqual(
             new_snapshot.to_string(previous_snapshot=old_snapshot),
-            ' B:42%=0h00 C57 M2 W:---0/---0',
+            " B:42%=0h00 C57 M2 W:---0/---0",
         )
 
 
 class TestNotEnoughData(unittest.TestCase):
-
     def test_is_exception(self) -> None:
         with self.assertRaises(phile.tray.psutil.NotEnoughData):
             raise phile.tray.psutil.NotEnoughData()
@@ -237,7 +231,6 @@ class TestNotEnoughData(unittest.TestCase):
 
 
 class TestHistory(UsesPsutilMock, unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.history: phile.tray.psutil.History
         super().__init__(*args, **kwargs)
@@ -259,11 +252,11 @@ class TestHistory(UsesPsutilMock, unittest.TestCase):
         self.history.create_snapshot()
         self.assertEqual(
             self.history.last_snapshot_to_string(),
-            ' B:42%=0h00 C57 M2 W:---0/---0',
+            " B:42%=0h00 C57 M2 W:---0/---0",
         )
 
     def test_last_snapshot_to_string_raises_without_enough_entries(
-        self
+        self,
     ) -> None:
         with self.assertRaises(phile.tray.psutil.NotEnoughData):
             self.history.last_snapshot_to_string()
@@ -273,13 +266,13 @@ class TestHistory(UsesPsutilMock, unittest.TestCase):
 
     def test_to_string_yields_loading_string(self) -> None:
         strings = self.history.to_strings().__iter__()
-        self.assertEqual(strings.__next__(), ' psutil...')
+        self.assertEqual(strings.__next__(), " psutil...")
 
     def test_to_string_yields_merged_string(self) -> None:
         strings = self.history.to_strings().__iter__()
         strings.__next__()
         self.assertEqual(
-            strings.__next__(), ' B:42%=0h00 C57 M2 W:---0/---0'
+            strings.__next__(), " B:42%=0h00 C57 M2 W:---0/---0"
         )
 
 
@@ -289,7 +282,6 @@ class TestRun(
     UsesConfiguration,
     unittest.IsolatedAsyncioTestCase,
 ):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.observer_event_queue: phile.watchdog.asyncio.EventQueue
@@ -305,14 +297,14 @@ class TestRun(
         await super().asyncSetUp()
         self.refresh_interval = datetime.timedelta(microseconds=10)
         self.tray_directory = (
-            self.configuration.state_directory_path /
-            self.configuration.tray_directory
+            self.configuration.state_directory_path
+            / self.configuration.tray_directory
         )
         self.tray_directory.mkdir()
         self.observer_events = await self.schedule_watchdog_observer(
             path=self.tray_directory
         )
-        self.tray_name = 'psps'
+        self.tray_name = "psps"
         self.tray_target = phile.tray.watchdog.Target(
             configuration=self.configuration
         )
@@ -333,7 +325,7 @@ class TestRun(
         async for event in self.observer_events:
             if event.src_path == tray_path_string:
                 return tray_path.read_text()
-        assert False, 'Tray file content not found'
+        assert False, "Tray file content not found"
 
     async def wait_for_tray_file_content(
         self, expected_content: str
@@ -346,6 +338,6 @@ class TestRun(
     async def test_updates_file_after_refresh_interval(self) -> None:
         await phile.asyncio.wait_for(
             self.wait_for_tray_file_content(
-                ' B:42%=0h00 C57 M2 W:---0/---0',
+                " B:42%=0h00 C57 M2 W:---0/---0",
             )
         )

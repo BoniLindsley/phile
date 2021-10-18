@@ -21,7 +21,6 @@ import phile.asyncio
 
 
 class TestWaitForTimeout(unittest.TestCase):
-
     def test_default_value(self) -> None:
         self.assertEqual(
             phile.asyncio.wait_for_timeout.get(),
@@ -39,13 +38,11 @@ class TestWaitForTimeout(unittest.TestCase):
 
 
 class TestNoop(unittest.IsolatedAsyncioTestCase):
-
     async def test_callable(self) -> None:
         await phile.asyncio.wait_for(phile.asyncio.noop())
 
 
 class TestWaitFor(unittest.IsolatedAsyncioTestCase):
-
     async def test_with_timeout(self) -> None:
         with self.assertRaises(asyncio.TimeoutError):
             await phile.asyncio.wait_for(
@@ -63,7 +60,6 @@ class SomethingBadHappened(Exception):
 
 
 class TestCancelAndWait(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self.target: asyncio.Future[int]
         super().__init__(*args, **kwargs)
@@ -107,7 +103,6 @@ class TestCancelAndWait(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCancel(unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.loop: asyncio.AbstractEventLoop
@@ -129,7 +124,7 @@ class TestCancel(unittest.TestCase):
     def test_ignores_if_done(self) -> None:
         task = self.loop.create_task(phile.asyncio.noop())
         self.loop.run_until_complete(task)
-        phile.asyncio.cancel((task, ))
+        phile.asyncio.cancel((task,))
         self.assertFalse(task.cancelled())
 
     def test_ignores_if_already_cancelled_and_done(self) -> None:
@@ -140,10 +135,9 @@ class TestCancel(unittest.TestCase):
         except asyncio.CancelledError:
             pass
         self.assertTrue(task.cancelled())
-        phile.asyncio.cancel((task, ))
+        phile.asyncio.cancel((task,))
 
     def test_ignores_if_raises_and_done(self) -> None:
-
         async def raises() -> None:
             raise RuntimeError()
 
@@ -152,10 +146,9 @@ class TestCancel(unittest.TestCase):
             self.loop.run_until_complete(task)
         except RuntimeError:
             pass
-        phile.asyncio.cancel((task, ))
+        phile.asyncio.cancel((task,))
 
     def test_ignores_if_cancel_intercepted(self) -> None:
-
         async def waits_forever() -> None:
             try:
                 await self.loop.create_future()
@@ -165,13 +158,12 @@ class TestCancel(unittest.TestCase):
         task = self.loop.create_task(waits_forever())
         noop_task = self.loop.create_task(phile.asyncio.noop())
         self.loop.run_until_complete(noop_task)
-        phile.asyncio.cancel((task, ))
+        phile.asyncio.cancel((task,))
         self.assertTrue(task.done())
         self.assertFalse(task.cancelled())
 
 
 class TestHandleExceptions(unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.exception_handler: unittest.mock.Mock
@@ -197,35 +189,35 @@ class TestHandleExceptions(unittest.TestCase):
             self.loop.run_until_complete(task)
         except RuntimeError:
             pass
-        phile.asyncio.handle_exceptions((task, ))
+        phile.asyncio.handle_exceptions((task,))
         self.exception_handler.assert_called_with(
-            self.loop, {
-                'message': 'Unhandled exception during loop shutdown.',
-                'exception': exception_to_raise,
-            }
+            self.loop,
+            {
+                "message": "Unhandled exception during loop shutdown.",
+                "exception": exception_to_raise,
+            },
         )
 
     def test_ignores_cancelled_tasks(self) -> None:
         task = self.loop.create_task(phile.asyncio.noop())
-        phile.asyncio.cancel((task, ))
-        phile.asyncio.handle_exceptions((task, ))
+        phile.asyncio.cancel((task,))
+        phile.asyncio.handle_exceptions((task,))
         self.exception_handler.assert_not_called()
 
     def test_ignores_returned_tasks(self) -> None:
         task = self.loop.create_task(phile.asyncio.noop())
         self.loop.run_until_complete(task)
-        phile.asyncio.handle_exceptions((task, ))
+        phile.asyncio.handle_exceptions((task,))
         self.exception_handler.assert_not_called()
 
     def test_raises_if_not_done(self) -> None:
         task = self.loop.create_task(phile.asyncio.noop())
         self.addCleanup(self.loop.run_until_complete, task)
         with self.assertRaises(asyncio.InvalidStateError):
-            phile.asyncio.handle_exceptions((task, ))
+            phile.asyncio.handle_exceptions((task,))
 
 
 class TestClose(unittest.TestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.loop: asyncio.AbstractEventLoop
@@ -251,7 +243,6 @@ class TestClose(unittest.TestCase):
 
 
 class TestOpenTask(unittest.IsolatedAsyncioTestCase):
-
     async def test_cancels_given_task(self) -> None:
         task: (asyncio.Task[typing.Any]) = asyncio.create_task(
             asyncio.Event().wait()
@@ -280,13 +271,13 @@ class TestOpenTask(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
-
     async def test_terminates_subprocess(self) -> None:
         program = sys.executable
         subprocess = await asyncio.create_subprocess_exec(program)
         self.addCleanup(
             lambda: subprocess.kill()
-            if subprocess.returncode is None else None
+            if subprocess.returncode is None
+            else None
         )
         assert subprocess.returncode is None
         assert subprocess.stdin is None
@@ -307,7 +298,8 @@ class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
         )
         self.addCleanup(
             lambda: subprocess.kill()
-            if subprocess.returncode is None else None
+            if subprocess.returncode is None
+            else None
         )
         assert subprocess.returncode is None
         assert subprocess.stdin is not None
@@ -323,7 +315,6 @@ class TestCloseSubprocess(unittest.IsolatedAsyncioTestCase):
 
 
 class TestOpenReader(unittest.IsolatedAsyncioTestCase):
-
     def setUp(self) -> None:
         self.read_socket, self.write_socket = socket.socketpair()
         self.addCleanup(self.read_socket.close)
@@ -350,12 +341,11 @@ class TestOpenReader(unittest.IsolatedAsyncioTestCase):
         with phile.asyncio.open_reader(
             self.read_socket, callback_checker.set
         ):
-            running_loop.call_soon(self.write_socket.sendall, b'a')
+            running_loop.call_soon(self.write_socket.sendall, b"a")
             await phile.asyncio.wait_for(callback_checker.wait())
 
 
 class TestReadable(unittest.IsolatedAsyncioTestCase):
-
     def setUp(self) -> None:
         self.read_socket, self.write_socket = socket.socketpair()
         self.addCleanup(self.read_socket.close)
@@ -367,7 +357,7 @@ class TestReadable(unittest.IsolatedAsyncioTestCase):
 
     async def test_returns_when_readable(self) -> None:
         running_loop = asyncio.get_running_loop()
-        running_loop.call_soon(self.write_socket.sendall, b'a')
+        running_loop.call_soon(self.write_socket.sendall, b"a")
         self.assertTrue(
             await phile.asyncio.wait_for(
                 phile.asyncio.readable(self.read_socket)
@@ -376,7 +366,6 @@ class TestReadable(unittest.IsolatedAsyncioTestCase):
 
 
 class EventThread(phile.asyncio.Thread):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.event = threading.Event()
@@ -391,7 +380,6 @@ class SomeThreadError(Exception):
 
 
 class TestThread(unittest.IsolatedAsyncioTestCase):
-
     async def test_async_join_returns_after_run(self) -> None:
         event = threading.Event()
         thread = phile.asyncio.Thread(target=event.set, daemon=True)
@@ -406,7 +394,6 @@ class TestThread(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(thread.event.is_set())
 
     async def test_propagates_exception(self) -> None:
-
         def run() -> None:
             raise SomeThreadError()
 
@@ -417,7 +404,6 @@ class TestThread(unittest.IsolatedAsyncioTestCase):
 
 
 class TestQueue(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.queue: phile.asyncio.Queue[int]
@@ -504,7 +490,6 @@ class TestQueue(unittest.IsolatedAsyncioTestCase):
 
 
 class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
-
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.stream_reader: typing.IO[str]
@@ -528,7 +513,7 @@ class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
         )
         self.addCleanup(self.stream_reader.close)
         self.stream_writer = open(  # pylint: disable=consider-using-with
-            writer_fd, mode='w', buffering=1
+            writer_fd, mode="w", buffering=1
         )
         self.addCleanup(self.stream_writer.close)
         self.threaded_stream = phile.asyncio.ThreadedTextIOBase(
@@ -536,7 +521,7 @@ class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_readline__reads_one_line(self) -> None:
-        expected_line = 'One line.\n'
+        expected_line = "One line.\n"
         self.stream_writer.write(expected_line)
         next_line = await phile.asyncio.wait_for(
             self.threaded_stream.readline()
@@ -549,7 +534,7 @@ class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
             await phile.asyncio.wait_for(self.threaded_stream.readline())
 
     async def test_readline__raises_if_closed_while_waiting(
-        self
+        self,
     ) -> None:
         # Send two tasks to wait for more lines.
         # But only give one of them a line.
@@ -557,11 +542,11 @@ class TestThreadedTextIOBase(unittest.IsolatedAsyncioTestCase):
             asyncio.create_task(self.threaded_stream.readline()),
             asyncio.create_task(self.threaded_stream.readline()),
         }
-        self.stream_writer.write('Line before closing.\n')
+        self.stream_writer.write("Line before closing.\n")
         done, pending = await asyncio.wait(
             reading_tasks,
             timeout=phile.asyncio.wait_for_timeout.get().total_seconds(),
-            return_when=asyncio.FIRST_COMPLETED
+            return_when=asyncio.FIRST_COMPLETED,
         )
         del done
         self.assertEqual(len(pending), 1)

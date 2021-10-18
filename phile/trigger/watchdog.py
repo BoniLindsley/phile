@@ -27,7 +27,7 @@ class Producer:
 
     # TODO[Python version 3.10]: Change string to identifier.
     # Annotations are stored as strings and evalated later in 3.10.
-    __Self = typing.TypeVar('__Self', bound='Producer')
+    __Self = typing.TypeVar("__Self", bound="Producer")
 
     def __init__(
         self,
@@ -43,8 +43,8 @@ class Producer:
         self._observer = observer
         self._registry = trigger_registry
         self._trigger_directory = (
-            configuration.state_directory_path /
-            configuration.trigger_directory
+            configuration.state_directory_path
+            / configuration.trigger_directory
         )
         self._trigger_suffix = configuration.trigger_suffix
 
@@ -70,7 +70,7 @@ class Producer:
 
     def _bind_existing_triggers(self) -> None:
         for trigger in sorted(
-            self._trigger_directory.glob('*' + self._trigger_suffix)
+            self._trigger_directory.glob("*" + self._trigger_suffix)
         ):
             self._on_path_change(trigger, True)
 
@@ -109,10 +109,12 @@ class View:
     """Show available triggers as files in a directory."""
 
     def __init__(
-        self, *args: typing.Any,
+        self,
+        *args: typing.Any,
         configuration: phile.configuration.Entries,
         observer: phile.watchdog.asyncio.BaseObserver,
-        trigger_registry: phile.trigger.Registry, **kwargs: typing.Any
+        trigger_registry: phile.trigger.Registry,
+        **kwargs: typing.Any,
     ) -> None:
         # TODO[mypy issue 4001]: Remove type ignore.
         super().__init__(*args, **kwargs)  # type: ignore[call-arg]
@@ -120,8 +122,8 @@ class View:
         self._loop = asyncio.get_event_loop()
         self._observer = observer
         self._trigger_directory = (
-            configuration.state_directory_path /
-            configuration.trigger_directory
+            configuration.state_directory_path
+            / configuration.trigger_directory
         )
         self._trigger_registry = trigger_registry
         self._trigger_suffix = configuration.trigger_suffix
@@ -146,8 +148,7 @@ class View:
         :raises portalocker.LockException:
             If ``trigger_root`` has a locked PID file already.
         """
-        async with self._monitor_directory(
-        ) as watchdog_view, self._monitor_registry_callback():
+        async with self._monitor_directory() as watchdog_view, self._monitor_registry_callback():
             ready.set_result(None)
             async for path, exists in (
                 phile.watchdog.asyncio.monitor_file_existence(
@@ -166,12 +167,12 @@ class View:
 
     @contextlib.asynccontextmanager
     async def _monitor_directory(
-        self
+        self,
     ) -> collections.abc.AsyncIterator[phile.watchdog.asyncio.EventView]:
         await asyncio.to_thread(
             self._trigger_directory.mkdir, parents=True, exist_ok=True
         )
-        pid_lock = phile.trigger.PidLock(self._trigger_directory / 'pid')
+        pid_lock = phile.trigger.PidLock(self._trigger_directory / "pid")
         await asyncio.to_thread(pid_lock.acquire)
         try:
             yield await self._observer.schedule(self._trigger_directory)
@@ -190,15 +191,17 @@ class View:
 
     @contextlib.asynccontextmanager
     async def _monitor_registry_callback(
-        self
+        self,
     ) -> collections.abc.AsyncIterator[None]:
         trigger_registry = self._trigger_registry
 
         callback_map: (
-            dict[collections.abc.Callable[..., typing.Any],
-                 collections.abc.Callable[
-                     [str], collections.abc.Awaitable[typing.Any]],
-                 ]
+            dict[
+                collections.abc.Callable[..., typing.Any],
+                collections.abc.Callable[
+                    [str], collections.abc.Awaitable[typing.Any]
+                ],
+            ]
         ) = {
             phile.trigger.Registry.show: self._show,
             phile.trigger.Registry.hide: self._hide,

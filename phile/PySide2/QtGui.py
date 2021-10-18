@@ -24,10 +24,11 @@ def q_icon_from_specified_theme(
     # when the need to implement this properly is needed.
 
     QIcon = PySide2.QtGui.QIcon
-    for theme_search_path in QIcon.themeSearchPaths(
-    ):  # pragma: no cover
+    for (
+        theme_search_path
+    ) in QIcon.themeSearchPaths():  # pragma: no cover
         theme_directory = pathlib.Path(theme_search_path) / theme_name
-        icon_search_pattern = name + '.png'
+        icon_search_pattern = name + ".png"
         possible_icons = sorted(
             theme_directory.rglob(icon_search_pattern)
         )
@@ -55,7 +56,7 @@ def q_icon_from_theme(name: str) -> PySide2.QtGui.QIcon:
     QIcon = PySide2.QtGui.QIcon
     theme_names_to_try = [
         QIcon.themeName(),
-        'hicolor',
+        "hicolor",
         QIcon.fallbackThemeName(),
     ]
     theme_names_to_try = [

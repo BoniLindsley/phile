@@ -28,23 +28,23 @@ class TestKeyValueFromString(unittest.TestCase):
 
     def test_alphabet_conversion(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_value_from_string('A'),
+            phile.hotkey.pyside2.key_value_from_string("A"),
             PySide2.QtGui.Qt.Key_A,
         )
 
     def test_angle_bracket_removal(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_value_from_string('<Alt>'),
+            phile.hotkey.pyside2.key_value_from_string("<Alt>"),
             PySide2.QtGui.Qt.Key_Alt,
         )
 
     def test_alternative_key_names(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_value_from_string('<Ctrl>'),
+            phile.hotkey.pyside2.key_value_from_string("<Ctrl>"),
             PySide2.QtGui.Qt.Key_Control,
         )
         self.assertEqual(
-            phile.hotkey.pyside2.key_value_from_string('<Esc>'),
+            phile.hotkey.pyside2.key_value_from_string("<Esc>"),
             PySide2.QtGui.Qt.Key_Escape,
         )
 
@@ -56,27 +56,31 @@ class TestKeyCombinationFromString(unittest.TestCase):
 
     def test_single_key(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_combination_from_string('A'),
-            (PySide2.QtGui.Qt.Key_A, ),
+            phile.hotkey.pyside2.key_combination_from_string("A"),
+            (PySide2.QtGui.Qt.Key_A,),
         )
 
     def test_key_names_separated_by_plus(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.
-            key_combination_from_string('<Ctrl>+<Alt>'), (
+            phile.hotkey.pyside2.key_combination_from_string(
+                "<Ctrl>+<Alt>"
+            ),
+            (
                 PySide2.QtGui.Qt.Key_Control,
                 PySide2.QtGui.Qt.Key_Alt,
-            )
+            ),
         )
 
     def test_sorts_by_value(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.
-            key_combination_from_string('<Ctrl>+<Alt>+<Shift>'), (
+            phile.hotkey.pyside2.key_combination_from_string(
+                "<Ctrl>+<Alt>+<Shift>"
+            ),
+            (
                 PySide2.QtGui.Qt.Key_Shift,
                 PySide2.QtGui.Qt.Key_Control,
                 PySide2.QtGui.Qt.Key_Alt,
-            )
+            ),
         )
 
 
@@ -85,22 +89,31 @@ class TestKeySequenceFromString(unittest.TestCase):
 
     def test_single_combination(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.
-            key_sequence_from_string('<Ctrl>+<Alt>+<Shift>'), ((
-                PySide2.QtGui.Qt.Key_Shift,
-                PySide2.QtGui.Qt.Key_Control,
-                PySide2.QtGui.Qt.Key_Alt,
-            ), )
+            phile.hotkey.pyside2.key_sequence_from_string(
+                "<Ctrl>+<Alt>+<Shift>"
+            ),
+            (
+                (
+                    PySide2.QtGui.Qt.Key_Shift,
+                    PySide2.QtGui.Qt.Key_Control,
+                    PySide2.QtGui.Qt.Key_Alt,
+                ),
+            ),
         )
 
     def test_combinations_separated_by_semi_colon(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.
-            key_sequence_from_string('<Ctrl>+<Alt>+<Shift>; <Meta>'), ((
-                PySide2.QtGui.Qt.Key_Shift,
-                PySide2.QtGui.Qt.Key_Control,
-                PySide2.QtGui.Qt.Key_Alt,
-            ), (PySide2.QtGui.Qt.Key_Meta, ))
+            phile.hotkey.pyside2.key_sequence_from_string(
+                "<Ctrl>+<Alt>+<Shift>; <Meta>"
+            ),
+            (
+                (
+                    PySide2.QtGui.Qt.Key_Shift,
+                    PySide2.QtGui.Qt.Key_Control,
+                    PySide2.QtGui.Qt.Key_Alt,
+                ),
+                (PySide2.QtGui.Qt.Key_Meta,),
+            ),
         )
 
 
@@ -112,15 +125,16 @@ class TestOrderKeySequence(unittest.TestCase):
             tuple(
                 phile.hotkey.pyside2.order_key_sequence(
                     phile.hotkey.pyside2.key_combination_from_string(
-                        '<Alt>+<Ctrl>+<Meta>+<Shift>'
+                        "<Alt>+<Ctrl>+<Meta>+<Shift>"
                     )
                 )
-            ), (
+            ),
+            (
                 PySide2.QtGui.Qt.Key_Meta,
                 PySide2.QtGui.Qt.Key_Control,
                 PySide2.QtGui.Qt.Key_Alt,
                 PySide2.QtGui.Qt.Key_Shift,
-            )
+            ),
         )
 
 
@@ -132,7 +146,7 @@ class TestKeyValueToString(unittest.TestCase):
             phile.hotkey.pyside2.key_value_to_string(
                 PySide2.QtGui.Qt.Key_A
             ),
-            'A',
+            "A",
         )
 
     def test_angle_bracket_removal(self) -> None:
@@ -140,7 +154,7 @@ class TestKeyValueToString(unittest.TestCase):
             phile.hotkey.pyside2.key_value_to_string(
                 PySide2.QtGui.Qt.Key_Alt
             ),
-            'Alt',
+            "Alt",
         )
 
     def test_alternative_key_names(self) -> None:
@@ -148,13 +162,13 @@ class TestKeyValueToString(unittest.TestCase):
             phile.hotkey.pyside2.key_value_to_string(
                 PySide2.QtGui.Qt.Key_Control
             ),
-            'Ctrl',
+            "Ctrl",
         )
         self.assertEqual(
             phile.hotkey.pyside2.key_value_to_string(
                 PySide2.QtGui.Qt.Key_Escape
             ),
-            'Esc',
+            "Esc",
         )
 
     def test_one_way_round_trip_conversion(self) -> None:
@@ -163,7 +177,8 @@ class TestKeyValueToString(unittest.TestCase):
         self.assertEqual(
             phile.hotkey.pyside2.key_value_from_string(
                 phile.hotkey.pyside2.key_value_to_string(key)
-            ), key
+            ),
+            key,
         )
 
 
@@ -173,28 +188,32 @@ class TestKeyCombinationToString(unittest.TestCase):
     def test_single_key(self) -> None:
         self.assertEqual(
             phile.hotkey.pyside2.key_combination_to_string(
-                (PySide2.QtGui.Qt.Key_A, )
+                (PySide2.QtGui.Qt.Key_A,)
             ),
-            'A',
+            "A",
         )
 
     def test_key_names_separated_by_plus(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_combination_to_string((
-                PySide2.QtGui.Qt.Key_Control,
-                PySide2.QtGui.Qt.Key_Alt,
-            )),
-            'Ctrl+Alt',
+            phile.hotkey.pyside2.key_combination_to_string(
+                (
+                    PySide2.QtGui.Qt.Key_Control,
+                    PySide2.QtGui.Qt.Key_Alt,
+                )
+            ),
+            "Ctrl+Alt",
         )
 
     def test_sorts_by_value(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_combination_to_string((
-                PySide2.QtGui.Qt.Key_Shift,
-                PySide2.QtGui.Qt.Key_Control,
-                PySide2.QtGui.Qt.Key_Alt,
-            )),
-            'Ctrl+Alt+Shift',
+            phile.hotkey.pyside2.key_combination_to_string(
+                (
+                    PySide2.QtGui.Qt.Key_Shift,
+                    PySide2.QtGui.Qt.Key_Control,
+                    PySide2.QtGui.Qt.Key_Alt,
+                )
+            ),
+            "Ctrl+Alt+Shift",
         )
 
 
@@ -203,25 +222,31 @@ class TestKeySequenceToString(unittest.TestCase):
 
     def test_single_combination(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_sequence_to_string(((
-                PySide2.QtGui.Qt.Key_Shift,
-                PySide2.QtGui.Qt.Key_Control,
-                PySide2.QtGui.Qt.Key_Alt,
-            ), ), ),
-            'Ctrl+Alt+Shift',
+            phile.hotkey.pyside2.key_sequence_to_string(
+                (
+                    (
+                        PySide2.QtGui.Qt.Key_Shift,
+                        PySide2.QtGui.Qt.Key_Control,
+                        PySide2.QtGui.Qt.Key_Alt,
+                    ),
+                ),
+            ),
+            "Ctrl+Alt+Shift",
         )
 
     def test_combinations_separated_by_semi_colon(self) -> None:
         self.assertEqual(
-            phile.hotkey.pyside2.key_sequence_to_string((
+            phile.hotkey.pyside2.key_sequence_to_string(
                 (
-                    PySide2.QtGui.Qt.Key_Shift,
-                    PySide2.QtGui.Qt.Key_Control,
-                    PySide2.QtGui.Qt.Key_Alt,
-                ),
-                (PySide2.QtGui.Qt.Key_Meta, ),
-            )),
-            'Ctrl+Alt+Shift; Meta',
+                    (
+                        PySide2.QtGui.Qt.Key_Shift,
+                        PySide2.QtGui.Qt.Key_Control,
+                        PySide2.QtGui.Qt.Key_Alt,
+                    ),
+                    (PySide2.QtGui.Qt.Key_Meta,),
+                )
+            ),
+            "Ctrl+Alt+Shift; Meta",
         )
 
 
@@ -234,7 +259,6 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
         class KeysWidget(
             phile.hotkey.pyside2.PressedKeys, PySide2.QtWidgets.QWidget
         ):
-
             def __init__(
                 self, *args: typing.Any, **kwargs: typing.Any
             ) -> None:
@@ -255,7 +279,6 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
             phile.hotkey.pyside2.PressedKeys()
 
     def test_raises_if_not_qwidget(self) -> None:
-
         class NotQWidget(
             phile.hotkey.pyside2.PressedKeys, PySide2.QtCore.QObject
         ):
@@ -279,7 +302,7 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
             PySide2.QtCore.Qt.KeyboardModifiers(),
             0,
             0,
-            0
+            0,
         )
         self.do_process_key_event(event)
 
@@ -331,7 +354,7 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
             0,
             0,
             0,
-            '',
+            "",
             True,
             1,
         )
@@ -346,7 +369,7 @@ class TestPressedKeys(UsesQApplication, unittest.TestCase):
             0,
             0,
             0,
-            '',
+            "",
             True,
             1,
         )
@@ -475,7 +498,6 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
             phile.hotkey.pyside2.PressedKeySequence,
             PySide2.QtWidgets.QWidget,
         ):
-
             def __init__(
                 self, *args: typing.Any, **kwargs: typing.Any
             ) -> None:
@@ -491,10 +513,10 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.key_sequence_widget = KeySequenceWidget()
         self.addCleanup(self.key_sequence_widget.deleteLater)
         self.key_a = int(  # type: ignore[call-overload]
-                PySide2.QtCore.Qt.Key.Key_A
+            PySide2.QtCore.Qt.Key.Key_A
         )
         self.key_b = int(  # type: ignore[call-overload]
-                PySide2.QtCore.Qt.Key.Key_B
+            PySide2.QtCore.Qt.Key.Key_B
         )
 
     def do_process_key_event(
@@ -512,7 +534,7 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
             PySide2.QtCore.Qt.KeyboardModifiers(),
             0,
             0,
-            0
+            0,
         )
         self.do_process_key_event(event)
 
@@ -543,13 +565,14 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         _active_binding: KeyBindings = widget.active_binding
 
     def test_add_key_bindings(self) -> None:
-        self.key_sequence_widget.add_key_bindings({
-            'A; B': 'target_trigger'
-        })
+        self.key_sequence_widget.add_key_bindings(
+            {"A; B": "target_trigger"}
+        )
         self.assertEqual(
-            self.key_sequence_widget.key_bindings, {
-                (self.key_a, ): {(self.key_b, ): 'target_trigger'},
-            }
+            self.key_sequence_widget.key_bindings,
+            {
+                (self.key_a,): {(self.key_b,): "target_trigger"},
+            },
         )
 
     def test_add_empty_key_bindings(self) -> None:
@@ -560,14 +583,15 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.test_add_key_bindings()
         self.do_key(self.key_a)
         self.assertEqual(
-            self.key_sequence_widget.pressed_sequence, [(self.key_a, )]
+            self.key_sequence_widget.pressed_sequence, [(self.key_a,)]
         )
         self.do_key(self.key_b)
         self.assertEqual(
-            self.key_sequence_widget.pressed_sequence, [
-                (self.key_a, ),
-                (self.key_b, ),
-            ]
+            self.key_sequence_widget.pressed_sequence,
+            [
+                (self.key_a,),
+                (self.key_b,),
+            ],
         )
 
     def test_pressing_sequence_changes_active_binding(self) -> None:
@@ -575,7 +599,7 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.do_key(self.key_a)
         self.assertEqual(
             self.key_sequence_widget.active_binding,
-            {(self.key_b, ): 'target_trigger'}
+            {(self.key_b,): "target_trigger"},
         )
         self.do_key(self.key_b)
         self.assertEqual(self.key_sequence_widget.active_binding, {})
@@ -586,7 +610,7 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.do_key(self.key_a)
         self.assertEqual(
             self.key_sequence_widget.active_binding,
-            {(self.key_b, ): 'target_trigger'}
+            {(self.key_b,): "target_trigger"},
         )
         # Use a wrong key. Only `key_b` is bound at this point.
         self.do_key(self.key_a)
@@ -595,7 +619,7 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.do_key(self.key_a)
         self.assertEqual(
             self.key_sequence_widget.active_binding,
-            {(self.key_b, ): 'target_trigger'}
+            {(self.key_b,): "target_trigger"},
         )
 
     def test_unknown_modifier_sequence_is_ignored(self) -> None:
@@ -606,7 +630,7 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.do_key(PySide2.QtCore.Qt.Key.Key_Control)
         self.assertEqual(
             self.key_sequence_widget.active_binding,
-            self.key_sequence_widget.key_bindings
+            self.key_sequence_widget.key_bindings,
         )
 
     def test_calls_on_pressed_keys_changed(self) -> None:
@@ -614,12 +638,12 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
         self.do_key(self.key_a)
         self.assertEqual(
             self.key_sequence_widget.bound_values,
-            [{(self.key_b, ): 'target_trigger'}]
+            [{(self.key_b,): "target_trigger"}],
         )
         self.key_sequence_widget.bound_values.clear()
         self.do_key(self.key_b)
         self.assertEqual(
-            self.key_sequence_widget.bound_values, ['target_trigger']
+            self.key_sequence_widget.bound_values, ["target_trigger"]
         )
 
     def test_reset_clears_pressed_sequence(self) -> None:
@@ -638,19 +662,18 @@ class TestPressedKeySequence(UsesQApplication, unittest.TestCase):
 
 
 class TestHotkeyInput(UsesQApplication, unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.trigger_registry = phile.trigger.Registry()
         self.alphabet_event = threading.Event()
-        self.trigger_registry.bind('alphabet', self.alphabet_event.set)
-        self.addCleanup(self.trigger_registry.unbind, 'alphabet')
-        self.trigger_registry.show('alphabet')
+        self.trigger_registry.bind("alphabet", self.alphabet_event.set)
+        self.addCleanup(self.trigger_registry.unbind, "alphabet")
+        self.trigger_registry.show("alphabet")
         self.input = phile.hotkey.pyside2.HotkeyInput(
             trigger_registry=self.trigger_registry,
         )
         self.addCleanup(self.input.deleteLater)
-        self.input.add_key_bindings({'A; B; C': 'alphabet'})
+        self.input.add_key_bindings({"A; B; C": "alphabet"})
 
     def do_process_key_event(
         self, event: PySide2.QtGui.QKeyEvent
@@ -667,7 +690,7 @@ class TestHotkeyInput(UsesQApplication, unittest.TestCase):
             PySide2.QtCore.Qt.KeyboardModifiers(),
             0,
             0,
-            0
+            0,
         )
         self.do_process_key_event(event)
 
@@ -688,28 +711,28 @@ class TestHotkeyInput(UsesQApplication, unittest.TestCase):
 
     def test_on_changed_prints_sequence(self) -> None:
         self.do_key(PySide2.QtCore.Qt.Key.Key_A)
-        self.assertEqual(self.input.text(), 'A')
+        self.assertEqual(self.input.text(), "A")
         self.do_key(PySide2.QtCore.Qt.Key.Key_B)
-        self.assertEqual(self.input.text(), 'A; B')
+        self.assertEqual(self.input.text(), "A; B")
 
     def test_on_changed_prints_trigger_to_activate_if_any(self) -> None:
         self.do_key(PySide2.QtCore.Qt.Key.Key_A)
         self.do_key(PySide2.QtCore.Qt.Key.Key_B)
         self.do_key(PySide2.QtCore.Qt.Key.Key_C)
-        self.assertEqual(self.input.text(), 'A; B; C: alphabet')
+        self.assertEqual(self.input.text(), "A; B; C: alphabet")
 
     def test_on_changed_prints_undefined_sequence(self) -> None:
         self.do_key(PySide2.QtCore.Qt.Key.Key_B)
-        self.assertEqual(self.input.text(), 'B is undefined.')
+        self.assertEqual(self.input.text(), "B is undefined.")
         self.do_key(PySide2.QtCore.Qt.Key.Key_A)
         self.do_key(PySide2.QtCore.Qt.Key.Key_A)
-        self.assertEqual(self.input.text(), 'A; A is undefined.')
+        self.assertEqual(self.input.text(), "A; A is undefined.")
 
     def test_on_changed_resets_text_on_reset(self) -> None:
         self.do_key(PySide2.QtCore.Qt.Key.Key_B)
-        self.assertEqual(self.input.text(), 'B is undefined.')
+        self.assertEqual(self.input.text(), "B is undefined.")
         self.input.reset_pressed_sequence()
-        self.assertEqual(self.input.text(), '')
+        self.assertEqual(self.input.text(), "")
 
     def test_on_changed_activates_trigger(self) -> None:
         self.do_key(PySide2.QtCore.Qt.Key.Key_A)
@@ -718,9 +741,9 @@ class TestHotkeyInput(UsesQApplication, unittest.TestCase):
         self.assertTrue(self.alphabet_event.is_set())
 
     def test_on_changed_does_not_raise_if_trigger_not_bound(
-        self
+        self,
     ) -> None:
-        self.trigger_registry.unbind('alphabet')
+        self.trigger_registry.unbind("alphabet")
         self.do_key(PySide2.QtCore.Qt.Key.Key_A)
         self.do_key(PySide2.QtCore.Qt.Key.Key_B)
         self.do_key(PySide2.QtCore.Qt.Key.Key_C)

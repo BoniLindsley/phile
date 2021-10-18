@@ -20,7 +20,6 @@ import phile.watchdog.observers
 
 
 class UsesMonitorDirectory(unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         monitor_directory = tempfile.TemporaryDirectory()
@@ -31,7 +30,6 @@ class UsesMonitorDirectory(unittest.TestCase):
 
 
 class UsesObserver(unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.observer = watchdog.observers.Observer()
@@ -191,8 +189,8 @@ class TestRemoveHandler(
         )
         self.assertTrue(
             observer.emitters,
-            'May be resource leak is fixed'
-            ' and `remove_handler` is not needed anymore?',
+            "May be resource leak is fixed"
+            " and `remove_handler` is not needed anymore?",
         )
 
     def test_removing_handler_removes_emitter(self) -> None:

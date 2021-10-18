@@ -12,5 +12,5 @@ def main(argv: typing.List[str] = sys.argv) -> int:
     return phile.notify.cli.main(argv)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

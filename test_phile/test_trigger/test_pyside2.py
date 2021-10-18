@@ -13,7 +13,6 @@ from test_phile.test_PySide2.test_QtWidgets import UsesQApplication
 
 
 class TestTriggerControlled(UsesQApplication, unittest.TestCase):
-
     def setUp(self) -> None:
         super().setUp()
         self.trigger_registry = phile.trigger.Registry()
@@ -27,34 +26,34 @@ class TestTriggerControlled(UsesQApplication, unittest.TestCase):
 
         self.trigger_controlled = TriggerControlledWidget(
             pyside2_executor=self.pyside2_executor,
-            trigger_prefix='ptp',
+            trigger_prefix="ptp",
             trigger_registry=self.trigger_registry,
         )
         self.addCleanup(self.trigger_controlled.deleteLater)
 
     def test_init_binds_triggers(self) -> None:
         registry = self.trigger_registry
-        self.assertTrue(registry.is_shown('ptp.show'))
-        self.assertTrue(registry.is_bound('ptp.hide'))
+        self.assertTrue(registry.is_shown("ptp.show"))
+        self.assertTrue(registry.is_bound("ptp.hide"))
 
     def test_close_unbinds_triggers(self) -> None:
         registry = self.trigger_registry
         self.trigger_controlled.close()
-        self.assertFalse(registry.is_bound('ptp.show'))
-        self.assertFalse(registry.is_bound('ptp.hide'))
+        self.assertFalse(registry.is_bound("ptp.show"))
+        self.assertFalse(registry.is_bound("ptp.hide"))
 
     def test_show_hide_toggles_triggers(self) -> None:
         trigger_controlled = self.trigger_controlled
         registry = self.trigger_registry
         self.assertTrue(trigger_controlled.isHidden())
-        self.assertTrue(registry.is_shown('ptp.show'))
-        self.assertFalse(registry.is_shown('ptp.hide'))
+        self.assertTrue(registry.is_shown("ptp.show"))
+        self.assertFalse(registry.is_shown("ptp.hide"))
         trigger_controlled.show()
-        self.assertFalse(registry.is_shown('ptp.show'))
-        self.assertTrue(registry.is_shown('ptp.hide'))
+        self.assertFalse(registry.is_shown("ptp.show"))
+        self.assertTrue(registry.is_shown("ptp.hide"))
         trigger_controlled.hide()
-        self.assertTrue(registry.is_shown('ptp.show'))
-        self.assertFalse(registry.is_shown('ptp.hide'))
+        self.assertTrue(registry.is_shown("ptp.show"))
+        self.assertFalse(registry.is_shown("ptp.hide"))
 
     def test_show_hide_ignores_if_triggers_unbound(self) -> None:
         # For coverage.
@@ -63,5 +62,5 @@ class TestTriggerControlled(UsesQApplication, unittest.TestCase):
         trigger_controlled.show()
         trigger_controlled.hide()
         registry = self.trigger_registry
-        self.assertFalse(registry.is_shown('ptp.show'))
-        self.assertFalse(registry.is_shown('ptp.hide'))
+        self.assertFalse(registry.is_shown("ptp.show"))
+        self.assertFalse(registry.is_shown("ptp.hide"))
