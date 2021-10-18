@@ -5,3 +5,96 @@ build-backend = "setuptools.build_meta:__legacy__"
 [tool.black]
 #line-length = 88
 line-length = 73
+
+[tool.coverage.run]
+branch = true
+command_line = "-m unittest discover -v test_phile"
+omit = [
+  # Usually requires full-fletched set up to use.
+  "*/__main__.py",
+  # Uses pyninput which requires GUI.
+  "phile/hotkey/pynput.py",
+  # May be covered later. Touches on inner workings of PySide2.
+  "phile/capability/pyside2.py",
+  # Testing it requires setting up all capabilities.
+  # A little too big to test.
+  "phile/launcher/defaults.py",
+  # Uses QtWidgets which prints an error for every sizing event.
+  # "This plugin does not support propagateSizeHints()"
+  "phile/notify/pyside2.py",
+  "phile/tray/pyside2_window.py",
+]
+source = [
+  "phile",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@typing.overload",
+]
+fail_under = 100
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+mypy_path = "stubs"
+show_error_codes = true
+strict = true
+
+[tool.pylint.BASIC]
+# Violation of naming convention that should be accepted.
+good-names = [
+  # Used by convention.
+  "_T_co",  # TypeVar name.
+  # Standard libraries.
+  "asyncSetUp",  # Used by unittest.
+  "do_EOF",  # Used by cmd.
+  "setUp",  # Used by unittest.
+  # PySide2
+  "QtCore",
+  "test_QtCore",
+  # PySide2.QtCore
+  "QCoreApplication",
+  # PySide2.QtCore.QObject
+  "customEvent",
+  # PySide2.QtWidgets.QWidget
+  "changeEvent",
+  "closeEvent",
+  "hideEvent",
+  "keyPressEvent",
+  "keyReleaseEvent",
+  "resizeEvent",
+  "showEvent",
+]
+
+[tool.pylint.FORMAT]
+max-line-length = 73
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+  # Not every TODO is urgent. Especially with no issue tracker.
+  "fixme",
+
+  # Global statements are already explicit.
+  # Not using per-case disables
+  # which will end up being used in every case.
+  # By doing a disable here, finding them when necessary will be easier.
+  "global-statement",
+
+  # It does not always make sense to document.
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "missing-module-docstring",
+
+  # Not used in test classes.
+  # And sometimes having unused self is necessary when subclassing.
+  "no-self-use",
+
+  # Not checking based on numbers.
+  "too-few-public-methods",
+  "too-many-ancestors",
+  "too-many-instance-attributes",
+  "too-many-lines",
+  "too-many-public-methods",
+]
