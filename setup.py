@@ -1,27 +1,20 @@
 #!/usr/bin/env python3
 
-from setuptools import setup  # type: ignore
+# Standard libraries.
+import setuptools  # type: ignore
 
-setup(
+
+setuptools.setup(
     name="phile",
     version="0.0.0.2",
     description="A file-based notification management",
     author="Boni Lindsley",
     author_email="boni.lindsley@gmail.com",
-    packages=[
-        "phile",
-        "phile.PySide2",
-        "phile.asyncio",
-        "phile.configuration",
-        "phile.data",
-        "phile.hotkey",
-        "phile.launcher",
-        "phile.notify",
-        "phile.tmux",
-        "phile.tray",
-        "phile.trigger",
-        "phile.watchdog",
-    ],
+    package_dir={
+        "": "src",
+        "test_phile": "tests",
+    },
+    packages=setuptools.find_packages(where="src"),
     license="MIT",
     install_requires=[
         "appdirs >= 1.4.4",
@@ -51,6 +44,7 @@ setup(
             "black >= 21.9b0",
             "coverage[toml] >= 6.0.2",
             "mypy >= 0.910",
+            "pytest >= 6.2.5",
             "recommonmark >= 0.7.1",
             "Sphinx >= 4.2.0",
             "tox >= 3.24.4",

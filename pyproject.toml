@@ -1,31 +1,27 @@
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta:__legacy__"
-
 [tool.black]
 #line-length = 88
 line-length = 73
 
 [tool.coverage.run]
 branch = true
-command_line = "-m unittest discover -v test_phile"
+command_line = "-m pytest"
 omit = [
   # Usually requires full-fletched set up to use.
   "*/__main__.py",
   # Uses pyninput which requires GUI.
-  "phile/hotkey/pynput.py",
+  "src/phile/hotkey/pynput.py",
   # May be covered later. Touches on inner workings of PySide2.
-  "phile/capability/pyside2.py",
+  "src/phile/capability/pyside2.py",
   # Testing it requires setting up all capabilities.
   # A little too big to test.
-  "phile/launcher/defaults.py",
+  "src/phile/launcher/defaults.py",
   # Uses QtWidgets which prints an error for every sizing event.
   # "This plugin does not support propagateSizeHints()"
-  "phile/notify/pyside2.py",
-  "phile/tray/pyside2_window.py",
+  "src/phile/notify/pyside2.py",
+  "src/phile/tray/pyside2_window.py",
 ]
 source = [
-  "phile",
+  "src",
 ]
 
 [tool.coverage.report]
@@ -38,7 +34,7 @@ show_missing = true
 skip_covered = true
 
 [tool.mypy]
-mypy_path = "stubs"
+mypy_path = "src:stubs:tests"
 show_error_codes = true
 strict = true
 
