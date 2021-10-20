@@ -7,16 +7,22 @@ Configuration management
 
 # Standard library.
 import datetime
+import importlib.metadata
 import json
 import pathlib
 import typing
 
 # External dependencies.
-import appdirs  # type: ignore[import]
 import pydantic
 
-_app_meta_data = {"appname": "phile", "appauthor": "BoniLindsley"}
-"""Descriptions of app. Used to form directory paths."""
+# Internal modules.
+import phile.phill.appdirs
+
+
+# TODO[mypy issue 4145]: Missing global `__spec__` in stub.
+_app_paths = phile.phill.appdirs.AppPaths.from_module_spec(
+    __spec__  # type: ignore[name-defined]
+)
 
 
 class ImapEntries(pydantic.BaseModel):
@@ -31,10 +37,7 @@ class ImapEntries(pydantic.BaseModel):
 
 
 class Entries(pydantic.BaseSettings):
-    configuration_path = (
-        pathlib.Path(appdirs.user_config_dir(**_app_meta_data))
-        / "config.json"
-    )
+    configuration_path = _app_paths.user_config / "config.json"
     hotkey_global_map: dict[str, str] = {}
     hotkey_map: dict[str, str] = {}
     imap: typing.Optional[ImapEntries] = None
@@ -45,9 +48,7 @@ class Entries(pydantic.BaseSettings):
     notify_directory = pathlib.Path("notify")
     notify_suffix = ".notify"
     pid_path = pathlib.Path("pid")
-    state_directory_path = pathlib.Path(
-        appdirs.user_state_dir(**_app_meta_data)
-    )
+    state_directory_path = _app_paths.user_state
     tray_icon_name = "phile-tray-empty"
     tray_directory = pathlib.Path("tray")
     tray_suffix = ".tray"

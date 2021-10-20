@@ -10,10 +10,7 @@ setuptools.setup(
     description="A file-based notification management",
     author="Boni Lindsley",
     author_email="boni.lindsley@gmail.com",
-    package_dir={
-        "": "src",
-        "test_phile": "tests",
-    },
+    package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
     license="MIT",
     install_requires=[
@@ -25,7 +22,7 @@ setuptools.setup(
         "psutil >= 5.8.0",
         "pydantic >= 1.8.2",
         "pynput >= 1.7.4",
-        "PySide2 >= 5.15.2",
+        "PySide2 >= 5.13.2",
         "watchdog >= 2.1.6",
     ],
     entry_points={
@@ -48,6 +45,7 @@ setuptools.setup(
             "recommonmark >= 0.7.1",
             "Sphinx >= 4.2.0",
             "tox >= 3.24.4",
+            "types-appdirs >= 1.4.1",
             "types-pkg_resources >= 0.1.3",
             "types-six >= 1.16.2",
         ],

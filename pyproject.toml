@@ -94,3 +94,6 @@ disable = [
   "too-many-lines",
   "too-many-public-methods",
 ]
+extension-pkg-whitelist = [
+  "pydantic",
+]
