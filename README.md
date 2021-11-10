@@ -1,6 +1,10 @@
 phile
 =====
 
+(Not for public consumption.
+This is an over-engineered mess of a codebase.
+The only reason it is still here is because I use it.)
+
 A file-based notification management.
 
 Based on the idea that "everything is a file",
