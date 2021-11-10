@@ -15,6 +15,7 @@ setuptools.setup(
     license="MIT",
     install_requires=[
         "appdirs >= 1.4.4",
+        "click >= 8.0.3",
         "IMAPClient >= 2.2.0",
         "keyring >= 23.2.1",
         "pathvalidate >= 2.5.0",
