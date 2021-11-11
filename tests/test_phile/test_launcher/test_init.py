@@ -77,7 +77,7 @@ def make_nullary_async(
     /,
     *args: typing.Any,
     **kwargs: typing.Any,
-) -> collections.abc.Callable[[], collections.Awaitable[_T]]:
+) -> collections.abc.Callable[[], collections.abc.Awaitable[_T]]:
     """
     Returns a coroutine function that calls the given function.
 
