@@ -130,7 +130,7 @@ def create_client(
     _logger.debug("Login response: %s", response.decode())
     _logger.info("Selecting folder: %s", imap_configuration.folder)
     select_response = imap_client.select_folder(
-        imap_configuration.folder
+        imap_configuration.folder, readonly=True
     )
     return imap_client, select_response
 
