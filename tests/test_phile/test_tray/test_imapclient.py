@@ -87,9 +87,7 @@ class TestLoadConfiguration(
     PreparesKeyring,
     unittest.IsolatedAsyncioTestCase,
 ):
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.configuration: phile.configuration.Entries
+    configuration: phile.configuration.Entries
 
     def setUp(self) -> None:
         super().setUp()
@@ -156,6 +154,20 @@ class TestLoadConfiguration(
                 username="keyring_user",
             ),
         )
+
+    async def test_raises_if_username_is_unknown(self) -> None:
+        assert self.configuration.imap is not None
+        self.configuration.imap.username = "unknown_user"
+        self.configuration.imap.password = None
+        with unittest.mock.patch.object(
+            phile.keyring.MemoryKeyring,
+            "get_credential",
+            side_effect=phile.tray.imapclient.MissingCredential(),
+        ):
+            with self.assertRaises(
+                phile.tray.imapclient.MissingCredential
+            ):
+                await self.load_configuration()
 
     async def test_raises_if_missing_imap_configuration(self) -> None:
         self.configuration.imap = None
@@ -428,13 +440,11 @@ class TestRun(
     UsesIMAPClient,
     unittest.IsolatedAsyncioTestCase,
 ):
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.configuration: phile.configuration.Entries
-        self.file_event_view: phile.watchdog.asyncio.EventView
-        self.notify_directory: pathlib.Path
-        self.notify_path: pathlib.Path
-        self.observer: phile.watchdog.asyncio.BaseObserver
+    configuration: phile.configuration.Entries
+    file_event_view: phile.watchdog.asyncio.EventView
+    notify_directory: pathlib.Path
+    notify_path: pathlib.Path
+    observer: phile.watchdog.asyncio.BaseObserver
 
     def setUp(self) -> None:
         super().setUp()
@@ -547,6 +557,24 @@ class TestRun(
         runner.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await runner
+
+    async def test_logs_keyring_error(self) -> None:
+        assert self.configuration.imap is not None
+        self.configuration.imap.password = None
+        with self.assertLogs(phile.tray.imapclient.__name__) as logs:
+            await phile.asyncio.wait_for(
+                phile.tray.imapclient.run(
+                    configuration=self.configuration,
+                    keyring_backend=keyring.get_keyring(),
+                )
+            )
+            self.assertEqual(
+                logs.output,
+                [
+                    "WARNING:phile.tray.imapclient:"
+                    "Unable to load imap password."
+                ],
+            )
 
     async def test_propagates_exception_from_connect_error(self) -> None:
         patcher = unittest.mock.patch(

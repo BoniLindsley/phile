@@ -91,10 +91,19 @@ async def load_configuration(
         if imap_configuration.username is None:
             raise MissingCredential("Unable to find imap username.")
     else:
+
+        def get_credential(
+            username: typing.Optional[str],
+        ) -> typing.Optional[keyring.backend.credentials.Credential]:
+            try:
+                return keyring_backend.get_credential("imap", username)
+            # Possible exceptions are based on keyring used.
+            # And keyrings may raise their own exceptions.
+            except Exception as error:  # pylint: disable=broad-except
+                raise MissingCredential(str(error))
+
         credential = await asyncio.to_thread(
-            keyring_backend.get_credential,
-            "imap",
-            imap_configuration.username,
+            get_credential, imap_configuration.username
         )
         if credential is None:
             raise MissingCredential("Unable to load imap password.")
@@ -273,10 +282,14 @@ async def run(
     keyring_backend: keyring.backend.KeyringBackend,
 ) -> None:
     event_queue = phile.asyncio.pubsub.Queue[Event]()
-    imap_configuration = await load_configuration(
-        configuration=configuration,
-        keyring_backend=keyring_backend,
-    )
+    try:
+        imap_configuration = await load_configuration(
+            configuration=configuration,
+            keyring_backend=keyring_backend,
+        )
+    except MissingCredential as error:
+        _logger.warning(error)
+        return
     loop = asyncio.get_running_loop()
     stop_reader, stop_writer = await loop.run_in_executor(
         None, socket.socketpair
